@@ -1,0 +1,81 @@
+import { createBrowserRouter } from 'react-router-dom';
+import RoleRoute from './components/RoleRoute';
+import Layout from './components/Layout';
+
+// Pages
+import Home from './pages/Home';
+import Login from './auth/Login';
+import Register from './auth/Register';
+import UserDashboard from './pages/User/UserDashboard';
+import AuditForm from './pages/User/AuditForm';
+import SubmissionsList from './pages/User/SubmissionsList';
+import SubmissionDetails from './pages/User/SubmissionDetails';
+import ManageQuestions from './pages/Admin/ManageQuestions';
+import EditQuestionForm from './pages/Admin/EditQuestionForm';
+import CreateQuestionForm from './pages/Admin/CreateQuestionForm';
+import AdminDashboard from './pages/Admin/AdminDashboard';
+import AnalyticsDashboard from './pages/Shared/AnalyticsDashboard';
+import NotFound from './pages/NotFound';
+
+const router = createBrowserRouter([
+    {
+        path: '/login',
+        element: <Login />
+    },
+    {
+        path: '/register',
+        element: <Register />
+    },
+    {
+        path: '/',
+        element: <Layout />,
+        children: [
+            {
+                path: '',
+                element: <Home />
+            },
+            {
+                path: 'dashboard',
+                element: <RoleRoute requiredRoles={['user']}><UserDashboard /></RoleRoute>
+            },
+            {
+                path: 'audit',
+                element: <RoleRoute requiredRoles={['user']}><AuditForm /></RoleRoute>
+            },
+            {
+                path: 'submissions',
+                element: <RoleRoute requiredRoles={['user']}><SubmissionsList /></RoleRoute>
+            },
+            {
+                path: 'submissions/:id',
+                element: <RoleRoute requiredRoles={['user']}><SubmissionDetails /></RoleRoute>
+            },
+            {
+                path: 'admin',
+                element: <RoleRoute requiredRoles={['admin']}><AdminDashboard /></RoleRoute>
+            },
+            {
+                path: 'admin/questions',
+                element: <RoleRoute requiredRoles={['admin']}><ManageQuestions /></RoleRoute>
+            },
+            {
+                path: 'admin/questions/create',
+                element: <RoleRoute requiredRoles={['admin']}><CreateQuestionForm /></RoleRoute>
+            },
+            {
+                path: 'admin/questions/:id/edit',
+                element: <RoleRoute requiredRoles={['admin']}><EditQuestionForm /></RoleRoute>
+            },
+            {
+                path: 'analytics',
+                element: <RoleRoute requiredRoles={['user', 'admin']}><AnalyticsDashboard /></RoleRoute>
+            }
+        ]
+    },
+    {
+        path: '*',
+        element: <NotFound />
+    }
+]);
+
+export default router;
