@@ -2,25 +2,38 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\AuditQuestionController;
 use App\Http\Controllers\AuditSubmissionController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\DepartmentController;
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/login', [AuthController::class, 'login']);
 
-// Admin-only routes for managing audit questions
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-    Route::apiResource('questions', AuditQuestionController::class);
-});
-
-// User routes for submissions and analytics
+// Protected routes
 Route::middleware('auth:sanctum')->group(function () {
-    // Submission routes
-    Route::post('/submissions', [AuditSubmissionController::class, 'store']);
-    Route::get('/submissions', [AuditSubmissionController::class, 'index']);
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::get('/user', [AuthController::class, 'user']);
+
+    // Analytics routes (available to all authenticated users)
+    Route::get('/analytics', [AnalyticsController::class, 'index']);
+
+    // Admin routes
+    Route::middleware('role:admin')->group(function () {
+        Route::apiResource('users', UserController::class);
+        Route::apiResource('questions', AuditQuestionController::class);
+        Route::apiResource('departments', DepartmentController::class);
+    });
+
+    // User routes
+    Route::middleware('role:user')->group(function () {
+        Route::get('/questions', [AuditQuestionController::class, 'index']);
+        Route::post('/submissions', [AuditSubmissionController::class, 'store']);
+        Route::get('/submissions', [AuditSubmissionController::class, 'index']);
+    });
+
+    // Common routes for both roles
     Route::get('/submissions/{submission}', [AuditSubmissionController::class, 'show']);
-    
-    // Analytics routes
-    Route::get('/analytics', [AuditSubmissionController::class, 'analytics']);
 });

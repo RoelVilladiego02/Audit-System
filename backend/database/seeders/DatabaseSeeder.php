@@ -12,11 +12,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        // Create admin if it doesn't exist
+        if (!\App\Models\User::where('email', 'admin@admin.com')->exists()) {
+            $this->call(AdminSeeder::class);
+        }
 
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        $this->call([
+            DepartmentSeeder::class,
+            SubmissionSeeder::class,
+            VulnerabilitySeeder::class,
+        ]);
     }
 }

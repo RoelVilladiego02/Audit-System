@@ -1,0 +1,38 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use App\Models\Department;
+use App\Models\Submission;
+use Illuminate\Database\Seeder;
+
+class SubmissionSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $users = User::all();
+        $departments = Department::all();
+        $riskLevels = ['low', 'medium', 'high'];
+
+        // Create 50 sample submissions
+        for ($i = 0; $i < 50; $i++) {
+            $riskLevel = $riskLevels[array_rand($riskLevels)];
+            $riskScore = match($riskLevel) {
+                'low' => fake()->randomFloat(2, 1, 3),
+                'medium' => fake()->randomFloat(2, 3.1, 7),
+                'high' => fake()->randomFloat(2, 7.1, 10),
+            };
+
+            Submission::create([
+                'user_id' => $users->random()->id,
+                'department_id' => $departments->random()->id,
+                'risk_score' => $riskScore,
+                'risk_level' => $riskLevel,
+                'is_resolved' => fake()->boolean(30), // 30% chance of being resolved
+                'created_at' => fake()->dateTimeBetween('-6 months', 'now'),
+                'updated_at' => fake()->dateTimeBetween('-6 months', 'now'),
+            ]);
+        }
+    }
+}
