@@ -6,19 +6,30 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
     {
         Schema::create('audit_questions', function (Blueprint $table) {
             $table->id();
-            $table->string('question');
-            $table->text('description')->nullable();
-            $table->json('possible_answers');
-            $table->json('risk_criteria');
+            $table->text('question'); // The main question text
+            $table->text('description')->nullable(); // Additional context/guidance
+            $table->json('possible_answers'); // Array of possible answer options
+            $table->json('risk_criteria'); // Object with high/medium/low risk criteria
             $table->timestamps();
+            $table->softDeletes(); // For soft deletion to preserve data integrity
+            
+            // Indexes for better performance
+            $table->index('created_at');
+            $table->index('deleted_at');
         });
     }
 
-    public function down()
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
     {
         Schema::dropIfExists('audit_questions');
     }

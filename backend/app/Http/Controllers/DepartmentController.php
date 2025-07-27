@@ -10,7 +10,7 @@ class DepartmentController extends Controller
 {
     public function index(): JsonResponse
     {
-        $departments = Department::all();
+        $departments = Department::withCount('vulnerabilitySubmissions')->get();
         return response()->json($departments);
     }
 
@@ -26,7 +26,7 @@ class DepartmentController extends Controller
 
     public function show(Department $department): JsonResponse
     {
-        return response()->json($department);
+        return response()->json($department->load('vulnerabilitySubmissions.user'));
     }
 
     public function update(Request $request, Department $department): JsonResponse
@@ -41,8 +41,10 @@ class DepartmentController extends Controller
 
     public function destroy(Department $department): JsonResponse
     {
-        if ($department->submissions()->exists()) {
-            return response()->json(['message' => 'Cannot delete department with existing submissions'], 422);
+        if ($department->vulnerabilitySubmissions()->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete department with existing vulnerability submissions'
+            ], 422);
         }
 
         $department->delete();

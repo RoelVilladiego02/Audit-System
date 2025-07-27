@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('audit_answers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('audit_submission_id')->constrained()->onDelete('cascade');
-            $table->foreignId('audit_question_id')->constrained()->onDelete('cascade');
+            $table->foreignId('audit_submission_id')->constrained('audit_submissions')->onDelete('cascade');
+            $table->foreignId('audit_question_id')->constrained('audit_questions')->onDelete('cascade');
             $table->text('answer');
             $table->enum('risk_level', ['low', 'medium', 'high']);
             $table->text('recommendation')->nullable();

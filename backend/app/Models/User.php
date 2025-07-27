@@ -24,14 +24,36 @@ class User extends Authenticatable
         'role',
     ];
 
+    /**
+     * Check if user is an admin
+     */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
     }
 
+    /**
+     * Check if user is a regular user
+     */
     public function isUser(): bool
     {
         return $this->role === 'user';
+    }
+
+    /**
+     * Get vulnerability submissions for this user
+     */
+    public function vulnerabilitySubmissions()
+    {
+        return $this->hasMany(VulnerabilitySubmission::class);
+    }
+
+    /**
+     * Get audit submissions for this user
+     */
+    public function auditSubmissions()
+    {
+        return $this->hasMany(AuditSubmission::class);
     }
 
     /**

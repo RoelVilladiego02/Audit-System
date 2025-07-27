@@ -19,8 +19,10 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             DepartmentSeeder::class,
-            SubmissionSeeder::class,
+            AuditQuestionSeeder::class,
+            VulnerabilitySubmissionSeeder::class,
             VulnerabilitySeeder::class,
+            AuditSubmissionSeeder::class,
         ]);
     }
 }

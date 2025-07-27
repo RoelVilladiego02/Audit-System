@@ -15,7 +15,7 @@ class AuditAnswer extends Model
         'recommendation',
     ];
 
-    public function submission(): BelongsTo
+    public function auditSubmission(): BelongsTo
     {
         return $this->belongsTo(AuditSubmission::class, 'audit_submission_id');
     }
@@ -23,5 +23,11 @@ class AuditAnswer extends Model
     public function question(): BelongsTo
     {
         return $this->belongsTo(AuditQuestion::class, 'audit_question_id');
+    }
+
+    // Alias for backward compatibility
+    public function submission(): BelongsTo
+    {
+        return $this->auditSubmission();
     }
 }

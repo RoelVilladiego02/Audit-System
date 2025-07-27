@@ -11,8 +11,8 @@ class Department extends Model
 
     protected $fillable = ['name'];
 
-    public function submissions()
+    public function vulnerabilitySubmissions()
     {
-        return $this->hasMany(Submission::class);
+        return $this->hasMany(VulnerabilitySubmission::class);
     }
 }
