@@ -14,7 +14,7 @@ import ManageQuestions from './pages/Admin/ManageQuestions';
 import EditQuestionForm from './pages/Admin/EditQuestionForm';
 import CreateQuestionForm from './pages/Admin/CreateQuestionForm';
 import AdminDashboard from './pages/Admin/AdminDashboard';
-import AnalyticsDashboard from './pages/Shared/AnalyticsDashboard';
+import AdminAnalyticsDashboard from './pages/Analytics/AdminAnalyticsDashboard';
 import NotFound from './pages/NotFound';
 
 const router = createBrowserRouter([
@@ -68,7 +68,7 @@ const router = createBrowserRouter([
             },
             {
                 path: 'analytics',
-                element: <RoleRoute requiredRoles={['user', 'admin']}><AnalyticsDashboard /></RoleRoute>
+                element: <RoleRoute requiredRoles={['user', 'admin']}><AdminAnalyticsDashboard /></RoleRoute>
             }
         ]
     },

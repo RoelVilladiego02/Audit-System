@@ -21,9 +21,11 @@ export const AuthProvider = ({ children }) => {
     const checkAuth = async () => {
         try {
             const response = await axios.get('/api/user');
+            console.log('Auth check successful:', response.data);
             setUser(response.data);
             return response.data;
         } catch (error) {
+            console.error('Auth check failed:', error);
             setUser(null);
             localStorage.removeItem('token');
             delete axios.defaults.headers.common['Authorization'];
@@ -42,12 +44,15 @@ export const AuthProvider = ({ children }) => {
                 password 
             });
 
+            console.log('Login response:', response.data);
+
             if (response.data.access_token) {
                 localStorage.setItem('token', response.data.access_token);
                 axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
                 
                 if (response.data.user) {
                     setUser(response.data.user);
+                    console.log('User logged in successfully:', response.data.user);
                     return response.data.user;
                 }
             }
@@ -121,11 +126,19 @@ export const AuthProvider = ({ children }) => {
         logout,
         register,
         checkAuth,
-        isAdmin: user?.role === 'admin'
+        isAdmin: user?.role === 'admin',
+        isUser: user?.role === 'user',
+        hasRole: (role) => user?.role === role
     };
 
     if (loading) {
-        return <div>Loading...</div>;
+        return (
+            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
+                <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -143,5 +156,4 @@ export const useAuth = () => {
     return context;
 };
 
-// ✅ Only one default export
 export default AuthProvider;

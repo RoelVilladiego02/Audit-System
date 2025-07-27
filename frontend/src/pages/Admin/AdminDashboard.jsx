@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
+import axios from '../../api/axios';
 
 const AdminDashboard = () => {
     const { user } = useAuth();
@@ -9,22 +10,46 @@ const AdminDashboard = () => {
         totalQuestions: 0,
         totalSubmissions: 0,
         highRiskSubmissions: 0,
-        recentSubmissions: []
+        recentSubmissions: [],
+        riskDistribution: {
+            high: 0,
+            medium: 0,
+            low: 0
+        }
     });
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                // TODO: Replace with actual API call
-                const response = await fetch('/api/admin/dashboard-stats');
-                const data = await response.json();
-                setStats(data);
-            } catch (err) {
-                setError('Failed to load dashboard statistics');
-            }
-        };
+    const fetchDashboardStats = async () => {
+        try {
+            const [questionsResponse, analyticsResponse] = await Promise.all([
+                axios.get('/api/questions'),
+                axios.get('/api/analytics')
+            ]);
 
-        fetchStats();
+            const questions = questionsResponse.data;
+            const analytics = analyticsResponse.data;
+
+            const lastFiveSubmissions = analytics.submissionTrends?.data?.slice(-5) || [];
+
+            setStats({
+                totalQuestions: questions.length || 0,
+                totalSubmissions: analytics.totalSubmissions || 0,
+                highRiskSubmissions: analytics.riskDistribution?.high || 0,
+                recentSubmissions: lastFiveSubmissions.map((submission, index) => ({
+                    id: index + 1,
+                    user_name: 'User', // Placeholder; replace with real user name if backend supports it
+                    created_at: new Date().toISOString(), // Placeholder; update with real timestamp
+                    risk_level: submission.risk_level || 'low'
+                })),
+                riskDistribution: analytics.riskDistribution || { high: 0, medium: 0, low: 0 }
+            });
+
+        } catch (err) {
+            setError(err.message || 'An error occurred while fetching dashboard stats');
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboardStats();
     }, []);
 
     return (
@@ -193,7 +218,9 @@ const AdminDashboard = () => {
                 </div>
             </div>
         </div>
+    
     );
 };
 
 export default AdminDashboard;
+

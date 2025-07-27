@@ -35,6 +35,7 @@ const AnalyticsDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [timeRange, setTimeRange] = useState('month');
+    const [type, setType] = useState('all');
     const [departmentData, setDepartmentData] = useState([]);
 
     useEffect(() => {
@@ -45,12 +46,14 @@ const AnalyticsDashboard = () => {
                 
                 console.log('Fetching analytics with params:', {
                     timeRange,
-                    userId: user?.isAdmin ? undefined : user.id
+                    userId: user?.isAdmin ? undefined : user.id,
+                    type
                 });
                 
                 const response = await axios.get('/api/analytics', {
                     params: {
                         timeRange,
+                        type,
                         ...(user?.isAdmin ? {} : { userId: user.id })
                     }
                 });
@@ -61,17 +64,50 @@ const AnalyticsDashboard = () => {
                     throw new Error('No data received from the API');
                 }
                 
-                setAnalyticsData(response.data);
-                setDepartmentData(response.data.departmentAnalysis || []);
+                const data = response.data;
                 
-                // Log the received data structure
-                console.log('Processed Data:', {
-                    totalSubmissions: response.data.totalSubmissions,
-                    riskDistribution: response.data.riskDistribution,
-                    submissionTrends: response.data.submissionTrends,
-                    departmentAnalysis: response.data.departmentAnalysis,
-                    commonVulnerabilities: response.data.commonVulnerabilities
-                });
+                // Handle different response types
+                let processedData = {};
+                if (data.type === 'vulnerability') {
+                    // Handle vulnerability type response
+                    processedData = {
+                        ...data,
+                        submissionTrends: {
+                            labels: data.submissionTrends.map(t => t.date),
+                            data: data.submissionTrends.map(t => t.count)
+                        }
+                    };
+                } else if (data.type === 'audit') {
+                    // Handle audit type response
+                    processedData = {
+                        ...data,
+                        submissionTrends: {
+                            labels: data.submissionTrends.map(t => t.date),
+                            data: data.submissionTrends.map(t => t.count)
+                        },
+                        commonVulnerabilities: data.commonHighRisks?.map(item => ({
+                            category: item.question,
+                            count: item.count
+                        })) || []
+                    };
+                } else {
+                    // Handle combined data
+                    const vulnData = data.vulnerability;
+                    processedData = {
+                        ...vulnData,
+                        totalSubmissions: data.summary.totalSubmissions,
+                        auditData: data.audit,
+                        submissionTrends: {
+                            labels: vulnData.submissionTrends.map(t => t.date),
+                            data: vulnData.submissionTrends.map(t => t.count)
+                        }
+                    };
+                }
+                
+                setAnalyticsData(processedData);
+                setDepartmentData(processedData.departmentAnalysis || []);
+                
+                console.log('Processed Data:', processedData);
             } catch (err) {
                 console.error('API Error:', err);
                 setError(err.response?.data?.message || 'Failed to fetch analytics data');
@@ -95,7 +131,7 @@ const AnalyticsDashboard = () => {
         };
 
         fetchAnalytics();
-    }, [timeRange, user]);
+    }, [timeRange, type, user]);
 
     const riskDistributionData = {
         labels: ['High Risk', 'Medium Risk', 'Low Risk'],
@@ -208,17 +244,30 @@ const AnalyticsDashboard = () => {
                             <label htmlFor="timeRange" className="form-label me-2 mb-0 fw-medium">
                                 Time Range:
                             </label>
-                            <select
-                                id="timeRange"
-                                value={timeRange}
-                                onChange={(e) => setTimeRange(e.target.value)}
-                                className="form-select form-select-sm"
-                                style={{ width: '150px' }}
-                            >
-                                <option value="month">Last Month</option>
-                                <option value="quarter">Last Quarter</option>
-                                <option value="year">Last Year</option>
-                            </select>
+                            <div className="d-flex gap-3">
+                                <select
+                                    id="timeRange"
+                                    value={timeRange}
+                                    onChange={(e) => setTimeRange(e.target.value)}
+                                    className="form-select form-select-sm"
+                                    style={{ width: '150px' }}
+                                >
+                                    <option value="month">Last Month</option>
+                                    <option value="quarter">Last Quarter</option>
+                                    <option value="year">Last Year</option>
+                                </select>
+                                <select
+                                    id="type"
+                                    value={type}
+                                    onChange={(e) => setType(e.target.value)}
+                                    className="form-select form-select-sm"
+                                    style={{ width: '150px' }}
+                                >
+                                    <option value="all">All Submissions</option>
+                                    <option value="vulnerability">Vulnerabilities</option>
+                                    <option value="audit">Audits</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>

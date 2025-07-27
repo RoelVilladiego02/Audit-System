@@ -25,11 +25,24 @@ const instance = axios.create({
 // Request interceptor
 instance.interceptors.request.use(
     async (config) => {
+        console.log('Request Config:', {
+            url: config.url,
+            headers: config.headers,
+            method: config.method
+        });
+
+        // Add Bearer token if available
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
         // Skip CSRF cookie request for the csrf-cookie endpoint itself
         if (!config.url?.includes('sanctum/csrf-cookie')) {
             const token = getXsrfToken();
             if (!token) {
                 try {
+                    console.log('Fetching CSRF token...');
                     await axios.get('http://localhost:8000/sanctum/csrf-cookie', {
                         withCredentials: true
                     });
@@ -37,12 +50,14 @@ instance.interceptors.request.use(
                     const newToken = getXsrfToken();
                     if (newToken) {
                         config.headers['X-XSRF-TOKEN'] = newToken;
+                        console.log('New CSRF token set:', newToken);
                     }
                 } catch (err) {
                     console.error('Failed to fetch CSRF token:', err);
                 }
             } else {
                 config.headers['X-XSRF-TOKEN'] = token;
+                console.log('Using existing CSRF token:', token);
             }
         }
 

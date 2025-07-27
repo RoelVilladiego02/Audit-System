@@ -1,34 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import api from '../../api/axios';
+import { useAuth } from '../../auth/useAuth';
 
 const EditQuestionForm = () => {
+    const { user, isAdmin, loading: authLoading } = useAuth();
     const { id } = useParams();
     const navigate = useNavigate();
+
     const [formData, setFormData] = useState({
         text: '',
         hint: '',
         category: '',
         weight: 1
     });
+
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        fetchQuestion();
-    }, [id]);
+        const fetchQuestion = async () => {
+            try {
+                const response = await api.get(`/api/audit-questions/${id}`);
+                setFormData(response.data);
+            } catch (err) {
+                setError(err.response?.data?.message || 'Failed to load question. Please try again later.');
+                if (err.response?.status === 403) {
+                    navigate('/admin/questions');
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    const fetchQuestion = async () => {
-        try {
-            const response = await api.get(`/api/questions/${id}`);
-            setFormData(response.data);
-        } catch (err) {
-            setError('Failed to load question. Please try again later.');
-        } finally {
-            setLoading(false);
+        if (user && isAdmin) {
+            fetchQuestion();
         }
-    };
+    }, [id, user, isAdmin, navigate]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -44,7 +53,7 @@ const EditQuestionForm = () => {
         setError(null);
 
         try {
-            await api.put(`/api/questions/${id}`, formData);
+            await api.put(`/api/audit-questions/${id}`, formData);
             navigate('/admin/questions');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to update question. Please try again.');
@@ -53,7 +62,8 @@ const EditQuestionForm = () => {
         }
     };
 
-    if (loading) {
+    // Show loading spinner while auth or data is loading
+    if (authLoading || loading) {
         return (
             <div className="min-vh-100 d-flex align-items-center justify-content-center">
                 <div className="spinner-border text-primary" role="status">
@@ -63,28 +73,27 @@ const EditQuestionForm = () => {
         );
     }
 
+    // Redirect if not authorized
+    if (!authLoading && (!user || !isAdmin)) {
+        return <Navigate to="/login" replace />;
+    }
+
     return (
         <div className="container py-4">
             <div className="mb-4">
                 <h1 className="display-5">Edit Question</h1>
-                <p className="text-muted">
-                    Modify the existing security audit question.
-                </p>
+                <p className="text-muted">Modify the existing security audit question.</p>
             </div>
 
             {error && (
-                <div className="alert alert-danger mb-4">
-                    {error}
-                </div>
+                <div className="alert alert-danger mb-4">{error}</div>
             )}
 
             <div className="card">
                 <div className="card-body">
                     <form onSubmit={handleSubmit}>
                         <div className="mb-4">
-                            <label htmlFor="text" className="form-label">
-                                Question Text *
-                            </label>
+                            <label htmlFor="text" className="form-label">Question Text *</label>
                             <textarea
                                 id="text"
                                 name="text"
@@ -98,9 +107,7 @@ const EditQuestionForm = () => {
                         </div>
 
                         <div className="mb-4">
-                            <label htmlFor="hint" className="form-label">
-                                Hint/Description
-                            </label>
+                            <label htmlFor="hint" className="form-label">Hint/Description</label>
                             <textarea
                                 id="hint"
                                 name="hint"
@@ -108,14 +115,12 @@ const EditQuestionForm = () => {
                                 value={formData.hint}
                                 onChange={handleChange}
                                 className="form-control"
-                                placeholder="Enter additional context or guidance for answering this question"
+                                placeholder="Enter additional context or guidance"
                             />
                         </div>
 
                         <div className="mb-4">
-                            <label htmlFor="category" className="form-label">
-                                Category
-                            </label>
+                            <label htmlFor="category" className="form-label">Category</label>
                             <select
                                 id="category"
                                 name="category"
@@ -134,9 +139,7 @@ const EditQuestionForm = () => {
                         </div>
 
                         <div className="mb-4">
-                            <label htmlFor="weight" className="form-label">
-                                Risk Weight
-                            </label>
+                            <label htmlFor="weight" className="form-label">Risk Weight</label>
                             <select
                                 id="weight"
                                 name="weight"
@@ -148,9 +151,7 @@ const EditQuestionForm = () => {
                                 <option value="2">Medium (2)</option>
                                 <option value="3">High (3)</option>
                             </select>
-                            <div className="form-text">
-                                Higher weights indicate more critical security concerns.
-                            </div>
+                            <div className="form-text">Higher weights indicate more critical security concerns.</div>
                         </div>
 
                         <div className="d-flex justify-content-end gap-2">

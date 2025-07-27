@@ -27,7 +27,7 @@ const CreateQuestionForm = () => {
         setError(null);
 
         try {
-            await api.post('/api/questions', formData);
+            await api.post('/api/audit-questions', formData);
             navigate('/admin/questions');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to create question. Please try again.');
