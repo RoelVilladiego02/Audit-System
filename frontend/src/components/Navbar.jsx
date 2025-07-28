@@ -28,6 +28,9 @@ const Navbar = () => {
                                 <li className="nav-item">
                                     <Link className="nav-link" to="/admin/questions">Manage Questions</Link>
                                 </li>
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/admin/submissions">Manage Submissions</Link>
+                                </li>
                             </>
                         )}
                         {user?.role === 'user' && (

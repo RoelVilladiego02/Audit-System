@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
+import { useAuth } from '../../auth/useAuth';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -30,7 +31,7 @@ ChartJS.register(
 );
 
 const AnalyticsDashboard = () => {
-    const [user] = useState({ id: 1, isAdmin: true }); // TODO: Replace with useAuth hook
+    const { user, isAdmin } = useAuth(); // Use the auth hook
     const [analyticsData, setAnalyticsData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -44,12 +45,6 @@ const AnalyticsDashboard = () => {
                 setLoading(true);
                 setError(null);
                 
-                console.log('Fetching analytics with params:', {
-                    timeRange,
-                    userId: user?.isAdmin ? undefined : user.id,
-                    type
-                });
-                
                 const response = await axios.get('/api/analytics', {
                     params: {
                         timeRange,
@@ -58,29 +53,35 @@ const AnalyticsDashboard = () => {
                     }
                 });
                 
-                console.log('API Response:', response.data);
-                
                 if (!response.data) {
                     throw new Error('No data received from the API');
                 }
                 
                 const data = response.data;
                 
-                // Handle different response types
+                // Process data based on type
                 let processedData = {};
                 if (data.type === 'vulnerability') {
-                    // Handle vulnerability type response
                     processedData = {
-                        ...data,
+                        type: 'vulnerability',
+                        totalSubmissions: data.totalSubmissions,
+                        riskDistribution: data.riskDistribution,
+                        averageRiskScore: data.averageRiskScore,
+                        statusDistribution: data.statusDistribution,
+                        assignmentStats: data.assignmentStats,
                         submissionTrends: {
                             labels: data.submissionTrends.map(t => t.date),
                             data: data.submissionTrends.map(t => t.count)
-                        }
+                        },
+                        commonVulnerabilities: data.commonVulnerabilities,
+                        severityDistribution: data.severityDistribution
                     };
                 } else if (data.type === 'audit') {
-                    // Handle audit type response
                     processedData = {
-                        ...data,
+                        type: 'audit',
+                        totalSubmissions: data.totalSubmissions,
+                        riskDistribution: data.riskDistribution,
+                        averageRiskScore: data.averageRiskScore,
                         submissionTrends: {
                             labels: data.submissionTrends.map(t => t.date),
                             data: data.submissionTrends.map(t => t.count)
@@ -91,68 +92,80 @@ const AnalyticsDashboard = () => {
                         })) || []
                     };
                 } else {
-                    // Handle combined data
+                    // Combined data
                     const vulnData = data.vulnerability;
+                    const auditData = data.audit;
                     processedData = {
-                        ...vulnData,
+                        type: 'combined',
                         totalSubmissions: data.summary.totalSubmissions,
-                        auditData: data.audit,
+                        vulnSubmissions: data.summary.vulnerabilitySubmissions,
+                        auditSubmissions: data.summary.auditSubmissions,
+                        riskDistribution: vulnData.riskDistribution,
+                        averageRiskScore: vulnData.averageRiskScore,
+                        statusDistribution: vulnData.statusDistribution,
+                        assignmentStats: vulnData.assignmentStats,
                         submissionTrends: {
                             labels: vulnData.submissionTrends.map(t => t.date),
                             data: vulnData.submissionTrends.map(t => t.count)
+                        },
+                        commonVulnerabilities: vulnData.commonVulnerabilities,
+                        severityDistribution: vulnData.severityDistribution,
+                        auditData: {
+                            riskDistribution: auditData.riskDistribution,
+                            averageRiskScore: auditData.averageRiskScore,
+                            commonHighRisks: auditData.commonHighRisks
                         }
                     };
                 }
                 
                 setAnalyticsData(processedData);
-                setDepartmentData(processedData.departmentAnalysis || []);
+                setDepartmentData(data.departmentAnalysis || []);
                 
-                console.log('Processed Data:', processedData);
             } catch (err) {
-                console.error('API Error:', err);
-                setError(err.response?.data?.message || 'Failed to fetch analytics data');
                 console.error('Analytics fetch error:', err);
-                setAnalyticsData({
-                    totalSubmissions: 0,
-                    riskDistribution: { high: 0, medium: 0, low: 0 },
-                    averageRiskScore: 0,
-                    resolvedIssues: 0,
-                    highRiskFindings: 0,
-                    completionRate: 0,
-                    submissionTrends: {
-                        labels: [],
-                        data: []
-                    },
-                    commonVulnerabilities: []
-                });
+                setError(err.response?.data?.message || 'Failed to fetch analytics data');
+                setAnalyticsData(null);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchAnalytics();
+        if (user) {
+            fetchAnalytics();
+        }
     }, [timeRange, type, user]);
 
-    const riskDistributionData = {
-        labels: ['High Risk', 'Medium Risk', 'Low Risk'],
-        datasets: [{
-            data: [
-                analyticsData?.riskDistribution?.high || 0,
-                analyticsData?.riskDistribution?.medium || 0,
-                analyticsData?.riskDistribution?.low || 0
-            ],
-            backgroundColor: [
-                'rgba(220, 53, 69, 0.8)',
-                'rgba(255, 193, 7, 0.8)',
-                'rgba(25, 135, 84, 0.8)'
-            ],
-            borderColor: [
-                'rgb(220, 53, 69)',
-                'rgb(255, 193, 7)',
-                'rgb(25, 135, 84)'
-            ],
-            borderWidth: 2
-        }]
+    const getRiskDistributionData = () => {
+        if (!analyticsData) return null;
+        
+        let riskData;
+        if (analyticsData.type === 'audit') {
+            riskData = analyticsData.riskDistribution;
+        } else {
+            riskData = analyticsData.severityDistribution || analyticsData.riskDistribution;
+        }
+
+        return {
+            labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+            datasets: [{
+                data: [
+                    riskData?.high || 0,
+                    riskData?.medium || 0,
+                    riskData?.low || 0
+                ],
+                backgroundColor: [
+                    'rgba(220, 53, 69, 0.8)',
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(25, 135, 84, 0.8)'
+                ],
+                borderColor: [
+                    'rgb(220, 53, 69)',
+                    'rgb(255, 193, 7)',
+                    'rgb(25, 135, 84)'
+                ],
+                borderWidth: 2
+            }]
+        };
     };
 
     const submissionTrendData = {
@@ -170,28 +183,39 @@ const AnalyticsDashboard = () => {
         }]
     };
 
-    const commonVulnerabilitiesData = {
-        labels: analyticsData?.commonVulnerabilities?.map(v => v.category) || [],
-        datasets: [{
-            label: 'Frequency',
-            data: analyticsData?.commonVulnerabilities?.map(v => v.count) || [],
-            backgroundColor: [
-                'rgba(220, 53, 69, 0.8)',
-                'rgba(255, 193, 7, 0.8)', 
-                'rgba(25, 135, 84, 0.8)',
-                'rgba(13, 110, 253, 0.8)',
-                'rgba(111, 66, 193, 0.8)'
-            ],
-            borderColor: [
-                'rgb(220, 53, 69)',
-                'rgb(255, 193, 7)',
-                'rgb(25, 135, 84)',
-                'rgb(13, 110, 253)',
-                'rgb(111, 66, 193)'
-            ],
-            borderWidth: 1,
-            borderRadius: 4
-        }]
+    const getCommonIssuesData = () => {
+        if (!analyticsData) return null;
+        
+        let issues = [];
+        if (analyticsData.type === 'audit') {
+            issues = analyticsData.commonVulnerabilities || [];
+        } else {
+            issues = analyticsData.commonVulnerabilities?.slice(0, 5) || [];
+        }
+
+        return {
+            labels: issues.map(v => v.category),
+            datasets: [{
+                label: 'Frequency',
+                data: issues.map(v => v.count),
+                backgroundColor: Array(issues.length).fill().map((_, i) => [
+                    'rgba(220, 53, 69, 0.8)',
+                    'rgba(255, 193, 7, 0.8)', 
+                    'rgba(25, 135, 84, 0.8)',
+                    'rgba(13, 110, 253, 0.8)',
+                    'rgba(111, 66, 193, 0.8)'
+                ][i % 5]),
+                borderColor: Array(issues.length).fill().map((_, i) => [
+                    'rgb(220, 53, 69)',
+                    'rgb(255, 193, 7)',
+                    'rgb(25, 135, 84)',
+                    'rgb(13, 110, 253)',
+                    'rgb(111, 66, 193)'
+                ][i % 5]),
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        };
     };
 
     const departmentAnalysisData = {
@@ -204,8 +228,8 @@ const AnalyticsDashboard = () => {
             borderWidth: 1,
             borderRadius: 4
         }, {
-            label: 'Completion Rate',
-            data: departmentData.map(d => d.completionRate) || [],
+            label: 'Resolved Issues',
+            data: departmentData.map(d => d.resolvedCount) || [],
             backgroundColor: 'rgba(25, 135, 84, 0.8)',
             borderColor: 'rgb(25, 135, 84)',
             borderWidth: 1,
@@ -292,6 +316,11 @@ const AnalyticsDashboard = () => {
                                     <div className="flex-grow-1">
                                         <div className="small text-white-50 fw-medium">Total Submissions</div>
                                         <div className="h4 fw-bold mb-0">{analyticsData?.totalSubmissions?.toLocaleString() || 0}</div>
+                                        {analyticsData?.type === 'combined' && (
+                                            <small className="text-white-50">
+                                                {analyticsData.vulnSubmissions} vulnerabilities, {analyticsData.auditSubmissions} audits
+                                            </small>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -307,7 +336,25 @@ const AnalyticsDashboard = () => {
                                     </div>
                                     <div className="flex-grow-1">
                                         <div className="small text-white-50 fw-medium">High Risk Issues</div>
-                                        <div className="h4 fw-bold mb-0">{analyticsData?.riskDistribution?.high || 0}</div>
+                                        {analyticsData?.type === 'vulnerability' ? (
+                                            <>
+                                                <div className="h4 fw-bold mb-0">
+                                                    {analyticsData?.severityDistribution?.high || 0}
+                                                </div>
+                                                <small className="text-white-50">
+                                                    vulnerabilities
+                                                </small>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="h4 fw-bold mb-0">
+                                                    {analyticsData?.riskDistribution?.high || 0}
+                                                </div>
+                                                <small className="text-white-50">
+                                                    {analyticsData?.type === 'audit' ? 'audit findings' : 'total issues'}
+                                                </small>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -324,6 +371,11 @@ const AnalyticsDashboard = () => {
                                     <div className="flex-grow-1">
                                         <div className="small text-white-50 fw-medium">Average Risk Score</div>
                                         <div className="h4 fw-bold mb-0">{analyticsData?.averageRiskScore?.toFixed(1) || 0}</div>
+                                        {analyticsData?.type === 'combined' && analyticsData.auditData && (
+                                            <small className="text-white-50">
+                                                Audit avg: {analyticsData.auditData.averageRiskScore?.toFixed(1)}
+                                            </small>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -338,8 +390,27 @@ const AnalyticsDashboard = () => {
                                         <i className="bi bi-check-circle" style={{ fontSize: '1.5rem' }}></i>
                                     </div>
                                     <div className="flex-grow-1">
-                                        <div className="small text-white-50 fw-medium">Resolved Issues</div>
-                                        <div className="h4 fw-bold mb-0">{analyticsData?.resolvedIssues || 0}</div>
+                                        {analyticsData?.type === 'vulnerability' ? (
+                                            <>
+                                                <div className="small text-white-50 fw-medium">Status Distribution</div>
+                                                <div className="h4 fw-bold mb-0">
+                                                    {analyticsData?.statusDistribution?.resolved || 0}
+                                                </div>
+                                                <small className="text-white-50">
+                                                    resolved out of {analyticsData?.totalSubmissions} issues
+                                                </small>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="small text-white-50 fw-medium">Assignment Rate</div>
+                                                <div className="h4 fw-bold mb-0">
+                                                    {analyticsData?.assignmentStats?.assignmentRate || 0}%
+                                                </div>
+                                                <small className="text-white-50">
+                                                    {analyticsData?.assignmentStats?.assigned || 0} assigned
+                                                </small>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -364,7 +435,7 @@ const AnalyticsDashboard = () => {
                             <div className="card-body">
                                 <div style={{ height: '280px', position: 'relative' }}>
                                     <Doughnut 
-                                        data={riskDistributionData}
+                                        data={getRiskDistributionData()}
                                         options={{
                                             responsive: true,
                                             maintainAspectRatio: false,
@@ -482,7 +553,7 @@ const AnalyticsDashboard = () => {
                             <div className="card-body">
                                 <div style={{ height: '350px', position: 'relative' }}>
                                     <Bar 
-                                        data={commonVulnerabilitiesData}
+                                        data={getCommonIssuesData()}
                                         options={{
                                             indexAxis: 'y',
                                             responsive: true,

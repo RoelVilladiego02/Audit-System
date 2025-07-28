@@ -11,6 +11,7 @@ import AuditForm from './pages/User/AuditForm';
 import SubmissionsList from './pages/User/SubmissionsList';
 import SubmissionDetails from './pages/User/SubmissionDetails';
 import ManageQuestions from './pages/Admin/ManageQuestions';
+import ManageSubmissions from './pages/Admin/ManageSubmissions';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminAnalyticsDashboard from './pages/Analytics/AdminAnalyticsDashboard';
 import NotFound from './pages/NotFound';
@@ -55,6 +56,10 @@ const router = createBrowserRouter([
             {
                 path: 'admin/questions',
                 element: <RoleRoute requiredRoles={['admin']}><ManageQuestions /></RoleRoute>
+            },
+            {
+                path: 'admin/submissions',
+                element: <RoleRoute requiredRoles={['admin']}><ManageSubmissions /></RoleRoute>
             },
             {
                 path: 'analytics',

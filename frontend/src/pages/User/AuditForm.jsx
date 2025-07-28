@@ -11,7 +11,7 @@ const AuditForm = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(false);
+    const [success, setSuccess] = useState(null);
 
     useEffect(() => {
         // Wait for auth to finish loading
@@ -28,9 +28,9 @@ const AuditForm = () => {
             return;
         }
 
-        // Allow both user and admin roles
-        if (!user.role || !['user', 'admin'].includes(user.role)) {
-            setError('You do not have permission to access this form. Required role: user or admin');
+        // Only users can submit audits as per API routes
+        if (!user.role || user.role !== 'user') {
+            setError('You do not have permission to submit audits. Required role: user');
             return;
         }
         
@@ -81,6 +81,21 @@ const AuditForm = () => {
         setError(null);
         setSuccess(false);
 
+        // Verify authentication status
+        const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+        const token = localStorage.getItem('token');
+
+        if (!token || !storedUser) {
+            setError('Your session has expired. Please log in again.');
+            navigate('/login', { 
+                state: { 
+                    from: '/audit-form',
+                    message: 'Please log in to submit the audit form.'
+                }
+            });
+            return;
+        }
+
         try {
             // Format the data properly for the backend
             // Filter out empty answers and format correctly
@@ -98,7 +113,12 @@ const AuditForm = () => {
 
             const submissionData = {
                 title: `Security Audit - ${new Date().toLocaleDateString()}`,
-                answers: validAnswers
+                answers: validAnswers.map(answer => ({
+                    ...answer,
+                    status: 'pending',  // Add required status
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }))
             };
 
             console.log('Submitting audit data:', submissionData);
@@ -109,7 +129,13 @@ const AuditForm = () => {
             const response = await api.post('/api/audit-submissions', submissionData);
             console.log('Submission successful:', response.data);
             
-            setSuccess(true);
+            // Show success message with status info
+            setSuccess({
+                message: response.data.message,
+                status: response.data.status,
+                systemRiskLevel: response.data.system_overall_risk
+            });
+
             // Reset form
             const resetAnswers = {};
             questions.forEach(q => {
@@ -119,8 +145,41 @@ const AuditForm = () => {
         } catch (err) {
             console.error('Error submitting audit:', err);
             
-            if (err.response?.status === 401) {
-                navigate('/login');
+            if (err.response?.status === 401 || err.response?.status === 419) {
+                console.error('Authentication/CSRF error:', err.response);
+                navigate('/login', {
+                    state: {
+                        from: '/audit-form',
+                        message: 'Your session has expired. Please log in again.'
+                    }
+                });
+            } else if (err.response?.status === 403) {
+                setError('You do not have permission to submit audits. Only users can submit audit assessments.');
+            } else if (err.response?.status === 500) {
+                const sqlError = err.response?.data?.error || err.response?.data?.message;
+                if (sqlError?.includes('SQLSTATE')) {
+                    console.error('Database error details:', sqlError);
+                    
+                    // Check for specific SQL errors
+                    if (sqlError.includes('Column not found')) {
+                        setError('The submission could not be processed due to a data format issue. Please contact support.');
+                    } else {
+                        setError('There was a problem saving your submission. Please try again later.');
+                    }
+                } else {
+                    setError('Server error. Please ensure you have the correct permissions and try again.');
+                }
+            } else if (err.response?.status === 403) {
+                setError('You do not have permission to submit audits. Only users can submit audit assessments.');
+                return;
+            } else if (err.response?.status === 500) {
+                if (err.response?.data?.message?.includes('SQLSTATE')) {
+                    setError('There was a problem processing your submission. Please try again later.');
+                    console.error('Database error:', err.response.data);
+                } else {
+                    setError('Server error. Please ensure you have the correct permissions and try again.');
+                }
+                return;
             } else if (err.response?.status === 422) {
                 // Validation errors
                 const errors = err.response?.data?.errors;
@@ -187,9 +246,18 @@ const AuditForm = () => {
 
                             {success && (
                                 <div className="alert alert-success mb-4" role="alert">
-                                    <div className="d-flex align-items-center">
+                                    <div className="d-flex align-items-center mb-2">
                                         <i className="bi bi-check-circle-fill me-2"></i>
-                                        Audit submitted successfully! You can view your results in the submissions page.
+                                        {success.message}
+                                    </div>
+                                    <div className="small mt-2">
+                                        <div><strong>Status:</strong> {success.status}</div>
+                                        <div>
+                                            <strong>System Risk Assessment:</strong>{' '}
+                                            <span className={`badge bg-${success.systemRiskLevel === 'high' ? 'danger' : success.systemRiskLevel === 'medium' ? 'warning' : 'success'}`}>
+                                                {success.systemRiskLevel?.toUpperCase()}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             )}

@@ -40,7 +40,7 @@ const SubmissionDetails = () => {
     const fetchSubmissionDetails = async () => {
         try {
             // Enhanced logging for debugging
-            const url = `/api/audit-submissions/${id}`;
+            const url = `/audit-submissions/${id}`; // Updated to match Laravel routes
             console.log('Fetching submission details:', {
                 url: url,
                 id: id,
