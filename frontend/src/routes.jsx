@@ -11,8 +11,6 @@ import AuditForm from './pages/User/AuditForm';
 import SubmissionsList from './pages/User/SubmissionsList';
 import SubmissionDetails from './pages/User/SubmissionDetails';
 import ManageQuestions from './pages/Admin/ManageQuestions';
-import EditQuestionForm from './pages/Admin/EditQuestionForm';
-import CreateQuestionForm from './pages/Admin/CreateQuestionForm';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminAnalyticsDashboard from './pages/Analytics/AdminAnalyticsDashboard';
 import NotFound from './pages/NotFound';
@@ -57,14 +55,6 @@ const router = createBrowserRouter([
             {
                 path: 'admin/questions',
                 element: <RoleRoute requiredRoles={['admin']}><ManageQuestions /></RoleRoute>
-            },
-            {
-                path: 'admin/questions/create',
-                element: <RoleRoute requiredRoles={['admin']}><CreateQuestionForm /></RoleRoute>
-            },
-            {
-                path: 'admin/questions/:id/edit',
-                element: <RoleRoute requiredRoles={['admin']}><EditQuestionForm /></RoleRoute>
             },
             {
                 path: 'analytics',

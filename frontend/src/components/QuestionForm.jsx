@@ -20,6 +20,7 @@ const QuestionForm = ({
     });
     const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+    const [newAnswer, setNewAnswer] = useState('');
 
     useEffect(() => {
         if (isEdit && questionData) {
@@ -45,10 +46,41 @@ const QuestionForm = ({
         }));
     };
 
+    const addPossibleAnswer = () => {
+        if (newAnswer.trim() && !formData.possible_answers.includes(newAnswer.trim())) {
+            setFormData(prev => ({
+                ...prev,
+                possible_answers: [...prev.possible_answers, newAnswer.trim()]
+            }));
+            setNewAnswer('');
+        }
+    };
+
+    const removePossibleAnswer = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            possible_answers: prev.possible_answers.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addPossibleAnswer();
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError(null);
+
+        // Validation
+        if (formData.possible_answers.length === 0) {
+            setError('At least one possible answer is required.');
+            setSubmitting(false);
+            return;
+        }
 
         try {
             // Ensure token exists
@@ -91,7 +123,7 @@ const QuestionForm = ({
 
     return (
         <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-            <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-dialog modal-dialog-centered modal-lg">
                 <div className="modal-content">
                     <div className="modal-header">
                         <h5 className="modal-title">{title}</h5>
@@ -134,33 +166,56 @@ const QuestionForm = ({
                             </div>
 
                             <div className="mb-3">
-                                <label htmlFor="possible_answers" className="form-label">Possible Answers *</label>
-                                <div className="input-group">
-                                    <select
-                                        id="possible_answers"
-                                        name="possible_answers"
-                                        value={formData.possible_answers}
-                                        onChange={(e) => {
-                                            const value = Array.from(e.target.selectedOptions, option => option.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                possible_answers: value
-                                            }));
-                                        }}
-                                        className="form-select"
-                                        multiple
-                                        required
+                                <label className="form-label">Possible Answers *</label>
+                                
+                                {/* Add new answer input */}
+                                <div className="input-group mb-2">
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Type a possible answer"
+                                        value={newAnswer}
+                                        onChange={(e) => setNewAnswer(e.target.value)}
+                                        onKeyPress={handleKeyPress}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary"
+                                        onClick={addPossibleAnswer}
+                                        disabled={!newAnswer.trim() || formData.possible_answers.includes(newAnswer.trim())}
                                     >
-                                        <option value="Yes">Yes</option>
-                                        <option value="No">No</option>
-                                        <option value="N/A">N/A</option>
-                                    </select>
+                                        Add
+                                    </button>
                                 </div>
-                                <div className="form-text">Hold Ctrl/Cmd to select multiple options</div>
+
+                                {/* Display current answers */}
+                                <div className="border rounded p-2" style={{ minHeight: '60px', backgroundColor: '#f8f9fa' }}>
+                                    {formData.possible_answers.length === 0 ? (
+                                        <span className="text-muted">No possible answers added yet</span>
+                                    ) : (
+                                        <div className="d-flex flex-wrap gap-2">
+                                            {formData.possible_answers.map((answer, index) => (
+                                                <span key={index} className="badge bg-primary d-flex align-items-center gap-1" style={{ fontSize: '0.875rem' }}>
+                                                    {answer}
+                                                    <button
+                                                        type="button"
+                                                        className="btn-close btn-close-white"
+                                                        style={{ fontSize: '0.65rem' }}
+                                                        onClick={() => removePossibleAnswer(index)}
+                                                        aria-label="Remove answer"
+                                                    ></button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="form-text">
+                                    Type an answer and click "Add" or press Enter. Click the ✕ on a badge to remove it.
+                                </div>
                             </div>
 
                             <div className="mb-3">
-                                <label className="form-label">Risk Criteria *</label>
+                                <label className="form-label">Risk Criteria</label>
                                 <div className="mb-2">
                                     <label htmlFor="risk_criteria_high" className="form-label text-danger">High Risk Criteria</label>
                                     <textarea

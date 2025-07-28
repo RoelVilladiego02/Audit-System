@@ -9,26 +9,48 @@ export const AuthProvider = ({ children }) => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            checkAuth();
-        } else {
+        const initAuth = async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    const response = await axios.get('/api/user', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    setUser(response.data);
+                } catch (err) {
+                    console.error('Auth initialization failed:', err);
+                    localStorage.removeItem('token');
+                    setUser(null);
+                }
+            }
             setLoading(false);
-        }
+        };
+        
+        initAuth();
     }, []);
 
     const checkAuth = async () => {
         try {
-            const response = await axios.get('/api/user');
+            const token = localStorage.getItem('token');
+            const response = await axios.get('/api/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             console.log('Auth check successful:', response.data);
-            setUser(response.data);
-            return response.data;
+            
+            // Store user data including role
+            const userData = response.data;
+            localStorage.setItem('user', JSON.stringify(userData));
+            setUser(userData);
+            return userData;
         } catch (error) {
             console.error('Auth check failed:', error);
             setUser(null);
             localStorage.removeItem('token');
-            delete axios.defaults.headers.common['Authorization'];
+            localStorage.removeItem('user');
             return null;
         } finally {
             setLoading(false);
@@ -47,13 +69,33 @@ export const AuthProvider = ({ children }) => {
             console.log('Login response:', response.data);
 
             if (response.data.access_token) {
+                // Store the token
                 localStorage.setItem('token', response.data.access_token);
-                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
                 
+                // Store user data including role
                 if (response.data.user) {
-                    setUser(response.data.user);
-                    console.log('User logged in successfully:', response.data.user);
-                    return response.data.user;
+                    const userData = response.data.user;
+                    
+                    // Make sure we have the required role information
+                    if (!userData.role) {
+                        console.error('No role information in user data:', userData);
+                        throw new Error('User role information missing');
+                    }
+                    
+                    // Store complete user data
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    setUser(userData);
+                    
+                    console.log('User logged in successfully:', {
+                        id: userData.id,
+                        email: userData.email,
+                        role: userData.role
+                    });
+                    
+                    // Also set the authorization header for subsequent requests
+                    axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+                    
+                    return userData;
                 }
             }
 
@@ -128,7 +170,14 @@ export const AuthProvider = ({ children }) => {
         checkAuth,
         isAdmin: user?.role === 'admin',
         isUser: user?.role === 'user',
-        hasRole: (role) => user?.role === role
+        hasRole: (role) => {
+            // Handle comma-separated roles
+            if (role.includes(',')) {
+                const allowedRoles = role.split(',').map(r => r.trim());
+                return user?.role && allowedRoles.includes(user.role);
+            }
+            return user?.role === role;
+        }
     };
 
     if (loading) {
