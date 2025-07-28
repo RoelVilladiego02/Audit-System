@@ -11,7 +11,7 @@ class CheckRole
 {
     public function handle(Request $request, Closure $next, string $roles): Response
     {
-        $allowedRoles = explode(',', $roles);
+        $allowedRoles = explode('|', $roles); // Changed from comma to pipe separator
 
         // Log the middleware execution for debugging
         Log::info('CheckRole middleware executed', [
@@ -32,20 +32,21 @@ class CheckRole
         }
 
         // Check if user has any of the required roles
-        if (!in_array($request->user()->role, $allowedRoles)) {
+        $userRole = $request->user()->role;
+        
+        // Allow access if user role matches any of the allowed roles
+        if (!in_array($userRole, $allowedRoles, true)) {
+            Log::warning('Role access denied', [
+                'user_role' => $userRole,
+                'required_roles' => $allowedRoles,
+                'user_id' => $request->user()->id
+            ]);
+            
             return response()->json([
                 'message' => 'Unauthorized. Insufficient permissions.',
                 'error' => 'INSUFFICIENT_ROLE',
                 'required_roles' => $allowedRoles,
-                'user_role' => $request->user()->role,
-                'user_id' => $request->user()->id,
-                'debug_info' => [
-                    'role_comparison' => [
-                        'required' => $allowedRoles,
-                        'actual' => $request->user()->role,
-                        'match' => false
-                    ]
-                ]
+                'user_role' => $userRole
             ], 403);
         }
 

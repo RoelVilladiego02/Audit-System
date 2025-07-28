@@ -22,12 +22,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Analytics routes (available to all authenticated users)
     Route::get('/analytics', [AnalyticsController::class, 'index']);
 
-    // Routes accessible by both admin and users
-    Route::middleware(['role:admin,user'])->group(function () {
-        // Read-only access to audit questions for all authenticated users
-        Route::get('/audit-questions', [AuditQuestionController::class, 'index']);
-        Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
-    });
+    // Routes accessible by both admin and users - FIXED: Remove nested middleware
+    // Read-only access to audit questions for all authenticated users
+    Route::get('/audit-questions', [AuditQuestionController::class, 'index']);
+    Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
 
     // Admin routes
     Route::middleware(['role:admin'])->group(function () {

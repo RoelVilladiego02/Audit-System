@@ -15,9 +15,9 @@ class AuditQuestionSeeder extends Seeder
                 'description' => 'Assess the strength of password policies in the organization',
                 'possible_answers' => ['Yes, fully implemented', 'Partially implemented', 'No policy in place'],
                 'risk_criteria' => [
-                    'Yes, fully implemented' => 'low',
-                    'Partially implemented' => 'medium',
-                    'No policy in place' => 'high'
+                    'high' => 'No password complexity requirements are in place, creating significant security vulnerabilities',
+                    'medium' => 'Basic password requirements exist but may not meet all security best practices',
+                    'low' => 'Comprehensive password complexity requirements are properly enforced'
                 ]
             ],
             [
@@ -25,10 +25,9 @@ class AuditQuestionSeeder extends Seeder
                 'description' => 'Evaluate the implementation of MFA across systems',
                 'possible_answers' => ['All systems', 'Most systems', 'Some systems', 'No systems'],
                 'risk_criteria' => [
-                    'All systems' => 'low',
-                    'Most systems' => 'low',
-                    'Some systems' => 'medium',
-                    'No systems' => 'high'
+                    'high' => 'Critical systems lack multi-factor authentication protection',
+                    'medium' => 'MFA is implemented on some but not all critical systems',
+                    'low' => 'Multi-factor authentication is properly implemented across critical systems'
                 ]
             ],
             [
@@ -36,10 +35,9 @@ class AuditQuestionSeeder extends Seeder
                 'description' => 'Review patch management processes',
                 'possible_answers' => ['Within 24 hours', 'Within 1 week', 'Within 1 month', 'Irregular'],
                 'risk_criteria' => [
-                    'Within 24 hours' => 'low',
-                    'Within 1 week' => 'low',
-                    'Within 1 month' => 'medium',
-                    'Irregular' => 'high'
+                    'high' => 'Security updates are applied irregularly or with significant delays',
+                    'medium' => 'Security updates are applied within a month of release',
+                    'low' => 'Security updates are applied promptly within a week of release'
                 ]
             ],
             [
@@ -47,10 +45,9 @@ class AuditQuestionSeeder extends Seeder
                 'description' => 'Assess backup and recovery procedures',
                 'possible_answers' => ['Monthly', 'Quarterly', 'Annually', 'Never'],
                 'risk_criteria' => [
-                    'Monthly' => 'low',
-                    'Quarterly' => 'medium',
-                    'Annually' => 'medium',
-                    'Never' => 'high'
+                    'high' => 'Backups are never tested or verification processes are absent',
+                    'medium' => 'Backup testing is conducted annually or quarterly',
+                    'low' => 'Regular monthly backup testing and verification is performed'
                 ]
             ],
             [
@@ -58,10 +55,9 @@ class AuditQuestionSeeder extends Seeder
                 'description' => 'Evaluate security awareness programs',
                 'possible_answers' => ['Quarterly', 'Annually', 'Ad-hoc', 'Never'],
                 'risk_criteria' => [
-                    'Quarterly' => 'low',
-                    'Annually' => 'medium',
-                    'Ad-hoc' => 'medium',
-                    'Never' => 'high'
+                    'high' => 'No regular security awareness training program exists',
+                    'medium' => 'Security training is conducted annually or on an ad-hoc basis',
+                    'low' => 'Regular quarterly security awareness training is conducted'
                 ]
             ]
         ];
