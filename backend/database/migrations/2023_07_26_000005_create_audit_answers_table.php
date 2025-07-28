@@ -13,8 +13,13 @@ return new class extends Migration
             $table->foreignId('audit_submission_id')->constrained('audit_submissions')->onDelete('cascade');
             $table->foreignId('audit_question_id')->constrained('audit_questions')->onDelete('cascade');
             $table->text('answer');
-            $table->enum('risk_level', ['low', 'medium', 'high']);
+            $table->enum('system_risk_level', ['low', 'medium', 'high'])->nullable();
+            $table->enum('admin_risk_level', ['low', 'medium', 'high'])->nullable();
+            $table->foreignId('reviewed_by')->nullable()->constrained('users');
+            $table->timestamp('reviewed_at')->nullable();
+            $table->text('admin_notes')->nullable();
             $table->text('recommendation')->nullable();
+            $table->enum('status', ['pending', 'reviewed'])->default('pending');
             $table->timestamps();
         });
     }

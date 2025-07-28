@@ -12,7 +12,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('title');
-            $table->enum('overall_risk', ['low', 'medium', 'high']);
+            $table->enum('system_overall_risk', ['low', 'medium', 'high'])->nullable();
+            $table->enum('admin_overall_risk', ['low', 'medium', 'high'])->nullable();
+            $table->enum('status', ['draft', 'submitted', 'under_review', 'completed'])->default('draft');
+            $table->foreignId('reviewed_by')->nullable()->constrained('users');
+            $table->timestamp('reviewed_at')->nullable();
+            $table->text('admin_summary')->nullable();
             $table->timestamps();
         });
     }

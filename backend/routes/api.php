@@ -45,6 +45,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/audit-submissions', [AuditSubmissionController::class, 'index']);
         Route::get('/admin/vulnerabilities', [VulnerabilityController::class, 'index']);
         Route::get('/audit-analytics', [AuditSubmissionController::class, 'analytics']);
+        
+        // Admin vulnerability management
+        Route::put('/vulnerability-submissions/{submission}/assign', [VulnerabilitySubmissionController::class, 'assign']);
+        Route::put('/vulnerability-submissions/{submission}/status', [VulnerabilitySubmissionController::class, 'updateStatus']);
     });
 
     // User routes
@@ -60,13 +64,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/my-vulnerabilities', [VulnerabilityController::class, 'index']);
     });
 
-    // Common routes for both roles (with permission checks inside controllers)
+        // Common routes for both roles (with permission checks inside controllers)
     Route::group([], function () {
         // Departments (read-only for regular users)
         Route::get('/departments', [DepartmentController::class, 'index']);
         Route::get('/departments/{department}', [DepartmentController::class, 'show']);
         
-        // Submissions - individual access with ownership/admin checks
+        // Status-based filters for vulnerability submissions
+        Route::get('/vulnerability-submissions/status/{status}', [VulnerabilitySubmissionController::class, 'byStatus']);
+        Route::get('/vulnerability-submissions/assigned/{userId}', [VulnerabilitySubmissionController::class, 'byAssignee']);        // Submissions - individual access with ownership/admin checks
         Route::get('/audit-submissions/{submission}', [AuditSubmissionController::class, 'show']);
         Route::get('/vulnerability-submissions/{submission}', [VulnerabilitySubmissionController::class, 'show']);
         Route::put('/vulnerability-submissions/{submission}', [VulnerabilitySubmissionController::class, 'update']);

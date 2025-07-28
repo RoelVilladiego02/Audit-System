@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             VulnerabilitySubmissionSeeder::class,
             VulnerabilitySeeder::class,
             AuditSubmissionSeeder::class,
+            AuditAnswerSeeder::class,
         ]);
     }
 }

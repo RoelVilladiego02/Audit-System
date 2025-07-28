@@ -13,12 +13,12 @@ return new class extends Migration
     {
         Schema::create('audit_questions', function (Blueprint $table) {
             $table->id();
-            $table->text('question'); // The main question text
-            $table->text('description')->nullable(); // Additional context/guidance
-            $table->json('possible_answers'); // Array of possible answer options
-            $table->json('risk_criteria'); // Object with high/medium/low risk criteria
+            $table->text('question');
+            $table->text('description')->nullable();
+            $table->json('possible_answers');
+            $table->json('risk_criteria');
             $table->timestamps();
-            $table->softDeletes(); // For soft deletion to preserve data integrity
+            $table->softDeletes();
             
             // Indexes for better performance
             $table->index('created_at');

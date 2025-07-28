@@ -15,7 +15,9 @@ class AuditQuestionController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $questions = AuditQuestion::orderBy('created_at', 'desc')->get();
+            $questions = AuditQuestion::active()
+                ->orderBy('created_at', 'desc')
+                ->get();
             return response()->json($questions);
         } catch (\Exception $e) {
             return response()->json([
@@ -37,13 +39,19 @@ class AuditQuestionController extends Controller
                 'possible_answers' => 'required|array|min:1',
                 'possible_answers.*' => 'required|string|max:255',
                 'risk_criteria' => 'required|array',
-                'risk_criteria.high' => 'nullable|string|max:500',
-                'risk_criteria.medium' => 'nullable|string|max:500',
-                'risk_criteria.low' => 'nullable|string|max:500',
+                'risk_criteria.high' => 'nullable|array',
+                'risk_criteria.high.*' => 'string|max:255',
+                'risk_criteria.medium' => 'nullable|array', 
+                'risk_criteria.medium.*' => 'string|max:255',
+                'risk_criteria.low' => 'nullable|array',
+                'risk_criteria.low.*' => 'string|max:255',
             ]);
 
             // Ensure unique possible answers
             $validated['possible_answers'] = array_unique($validated['possible_answers']);
+
+            // Validate that risk criteria answers exist in possible answers
+            $this->validateRiskCriteria($validated['risk_criteria'], $validated['possible_answers']);
 
             $question = AuditQuestion::create($validated);
             
@@ -70,7 +78,15 @@ class AuditQuestionController extends Controller
     public function show(AuditQuestion $auditQuestion): JsonResponse
     {
         try {
-            return response()->json($auditQuestion);
+            // Include usage statistics for admins
+            $data = $auditQuestion->toArray();
+            
+            if (auth()->user() && auth()->user()->isAdmin()) {
+                $data['usage_stats'] = $auditQuestion->getUsageStats();
+                $data['formatted_risk_criteria'] = $auditQuestion->formatted_risk_criteria;
+            }
+            
+            return response()->json($data);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Question not found.',
@@ -91,15 +107,37 @@ class AuditQuestionController extends Controller
                 'possible_answers' => 'required|array|min:1',
                 'possible_answers.*' => 'required|string|max:255',
                 'risk_criteria' => 'required|array',
-                'risk_criteria.high' => 'nullable|string|max:500',
-                'risk_criteria.medium' => 'nullable|string|max:500',
-                'risk_criteria.low' => 'nullable|string|max:500',
+                'risk_criteria.high' => 'nullable|array',
+                'risk_criteria.high.*' => 'string|max:255',
+                'risk_criteria.medium' => 'nullable|array',
+                'risk_criteria.medium.*' => 'string|max:255', 
+                'risk_criteria.low' => 'nullable|array',
+                'risk_criteria.low.*' => 'string|max:255',
             ]);
 
-            // Ensure unique possible answers
-            $validated['possible_answers'] = array_unique($validated['possible_answers']);
-
-            $auditQuestion->update($validated);
+            // Check if question is being used in answers
+            if ($auditQuestion->answers()->exists()) {
+                // Only allow minor updates if question is in use
+                $allowedFields = ['description'];
+                $updateData = array_intersect_key($validated, array_flip($allowedFields));
+                
+                if (empty($updateData)) {
+                    return response()->json([
+                        'message' => 'Cannot modify question structure that is referenced in existing answers.',
+                        'suggestion' => 'Create a new question instead or archive this one.'
+                    ], 409);
+                }
+                
+                $auditQuestion->update($updateData);
+            } else {
+                // Ensure unique possible answers
+                $validated['possible_answers'] = array_unique($validated['possible_answers']);
+                
+                // Validate risk criteria
+                $this->validateRiskCriteria($validated['risk_criteria'], $validated['possible_answers']);
+                
+                $auditQuestion->update($validated);
+            }
             
             return response()->json([
                 'message' => 'Question updated successfully.',
@@ -119,51 +157,70 @@ class AuditQuestionController extends Controller
     }
 
     /**
-     * Remove the specified audit question.
+     * Archive (soft delete) the specified audit question.
      */
     public function destroy(AuditQuestion $auditQuestion): JsonResponse
     {
         try {
-            // Check if question is being used in any answers
-            if ($auditQuestion->answers()->exists()) {
-                return response()->json([
-                    'message' => 'Cannot delete question that is referenced in existing audit answers.',
-                    'suggestion' => 'Consider archiving the question instead of deleting it.'
-                ], 409);
-            }
-
+            // Use soft delete to maintain data integrity
             $auditQuestion->delete();
             
             return response()->json([
-                'message' => 'Question deleted successfully.'
+                'message' => 'Question archived successfully.',
+                'note' => 'Question is archived but existing audit data remains intact.'
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Failed to delete question.',
+                'message' => 'Failed to archive question.',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Get questions with statistics (admin only).
+     * Get questions with comprehensive statistics (admin only).
      */
     public function statistics(): JsonResponse
     {
         try {
-            $questions = AuditQuestion::withCount('answers')
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($question) {
-                    return [
-                        'id' => $question->id,
-                        'question' => $question->question,
-                        'description' => $question->description,
-                        'answers_count' => $question->answers_count,
-                        'created_at' => $question->created_at,
-                        'updated_at' => $question->updated_at,
-                    ];
-                });
+            if (!auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $questions = AuditQuestion::withCount([
+                'answers',
+                'answers as high_risk_count' => function ($query) {
+                    $query->where(function($q) {
+                        $q->where('admin_risk_level', 'high')
+                          ->orWhere(function($subQ) {
+                              $subQ->whereNull('admin_risk_level')
+                                   ->where('system_risk_level', 'high');
+                          });
+                    });
+                },
+                'answers as pending_review_count' => function ($query) {
+                    $query->pendingReview();
+                }
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($question) {
+                $usageStats = $question->getUsageStats();
+                
+                return [
+                    'id' => $question->id,
+                    'question' => $question->question,
+                    'description' => $question->description,
+                    'possible_answers' => $question->possible_answers,
+                    'formatted_risk_criteria' => $question->formatted_risk_criteria,
+                    'answers_count' => $question->answers_count,
+                    'high_risk_count' => $question->high_risk_count,
+                    'pending_review_count' => $question->pending_review_count,
+                    'usage_stats' => $usageStats,
+                    'created_at' => $question->created_at,
+                    'updated_at' => $question->updated_at,
+                ];
+            });
 
             return response()->json($questions);
         } catch (\Exception $e) {
@@ -171,6 +228,73 @@ class AuditQuestionController extends Controller
                 'message' => 'Failed to retrieve question statistics.',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get archived questions (admin only).
+     */
+    public function archived(): JsonResponse
+    {
+        try {
+            if (!auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $questions = AuditQuestion::onlyTrashed()
+                ->withCount('answers')
+                ->orderBy('deleted_at', 'desc')
+                ->get();
+
+            return response()->json($questions);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to retrieve archived questions.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Restore archived question (admin only).
+     */
+    public function restore($id): JsonResponse
+    {
+        try {
+            if (!auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $question = AuditQuestion::onlyTrashed()->findOrFail($id);
+            $question->restore();
+
+            return response()->json([
+                'message' => 'Question restored successfully.',
+                'data' => $question
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to restore question.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Validate that risk criteria answers exist in possible answers.
+     */
+    private function validateRiskCriteria(array $riskCriteria, array $possibleAnswers): void
+    {
+        foreach ($riskCriteria as $level => $answers) {
+            if (!is_array($answers)) continue;
+            
+            foreach ($answers as $answer) {
+                if (!in_array($answer, $possibleAnswers, true)) {
+                    throw ValidationException::withMessages([
+                        "risk_criteria.{$level}" => "Risk criteria answer '{$answer}' must be one of the possible answers."
+                    ]);
+                }
+            }
         }
     }
 }

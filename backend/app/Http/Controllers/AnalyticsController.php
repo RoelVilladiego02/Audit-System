@@ -55,11 +55,12 @@ class AnalyticsController extends Controller
             'totalSubmissions' => $totalSubmissions,
             'riskDistribution' => $this->getVulnerabilityRiskDistribution($query->clone()),
             'averageRiskScore' => $this->getAverageRiskScore($query->clone()),
-            'resolvedIssues' => $this->getResolvedIssues($query->clone()),
-            'completionRate' => $this->getCompletionRate($query->clone()),
+            'statusDistribution' => $this->getStatusDistribution($query->clone()),
+            'assignmentStats' => $this->getAssignmentStats($query->clone()),
             'submissionTrends' => $this->getVulnerabilityTrends($query->clone()),
             'commonVulnerabilities' => $this->getCommonVulnerabilities($query->clone()),
             'departmentAnalysis' => $this->getDepartmentAnalysis($startDate),
+            'severityDistribution' => $this->getVulnerabilitySeverityDistribution($query->clone()),
         ];
     }
 
@@ -154,18 +155,57 @@ class AnalyticsController extends Controller
         return round($avg ?? 0, 1);
     }
 
-    private function getResolvedIssues($query)
+    private function getStatusDistribution($query)
     {
-        return $query->where('is_resolved', true)->count();
+        $distribution = $query->groupBy('status')
+            ->select('status', DB::raw('count(*) as count'))
+            ->pluck('count', 'status')
+            ->toArray();
+
+        return [
+            'open' => $distribution['open'] ?? 0,
+            'in_progress' => $distribution['in_progress'] ?? 0,
+            'resolved' => $distribution['resolved'] ?? 0,
+            'closed' => $distribution['closed'] ?? 0
+        ];
     }
 
-    private function getCompletionRate($query)
+    private function getAssignmentStats($query)
     {
         $total = $query->count();
-        if ($total === 0) return 0;
+        $assigned = $query->whereNotNull('assigned_to')->count();
+        $unassigned = $total - $assigned;
         
-        $resolved = $query->where('is_resolved', true)->count();
-        return round(($resolved / $total) * 100, 1);
+        return [
+            'assigned' => $assigned,
+            'unassigned' => $unassigned,
+            'assignmentRate' => $total > 0 ? round(($assigned / $total) * 100, 1) : 0
+        ];
+    }
+
+    private function getVulnerabilitySeverityDistribution($query)
+    {
+        $submissionIds = $query->pluck('id');
+        
+        if ($submissionIds->isEmpty()) {
+            return [
+                'low' => 0,
+                'medium' => 0,
+                'high' => 0
+            ];
+        }
+
+        $distribution = Vulnerability::whereIn('vulnerability_submission_id', $submissionIds)
+            ->groupBy('severity')
+            ->select('severity', DB::raw('count(*) as count'))
+            ->pluck('count', 'severity')
+            ->toArray();
+
+        return [
+            'low' => $distribution['low'] ?? 0,
+            'medium' => $distribution['medium'] ?? 0,
+            'high' => $distribution['high'] ?? 0
+        ];
     }
 
     private function getVulnerabilityTrends($query)
@@ -214,15 +254,20 @@ class AnalyticsController extends Controller
             ->groupBy('category')
             ->select(
                 'category',
-                DB::raw('count(*) as count')
+                DB::raw('count(*) as total_count'),
+                DB::raw('AVG(cvss_score) as avg_cvss'),
+                DB::raw('COUNT(CASE WHEN is_resolved = 1 THEN 1 END) as resolved_count')
             )
-            ->orderByDesc('count')
+            ->orderByDesc('total_count')
             ->limit(5)
             ->get()
             ->map(function($vuln) {
                 return [
                     'category' => $vuln->category,
-                    'count' => $vuln->count
+                    'count' => $vuln->total_count,
+                    'averageCVSS' => round($vuln->avg_cvss, 1),
+                    'resolvedCount' => $vuln->resolved_count,
+                    'resolutionRate' => round(($vuln->resolved_count / $vuln->total_count) * 100, 1)
                 ];
             });
     }
@@ -260,7 +305,10 @@ class AnalyticsController extends Controller
         return Department::select(
             'departments.name',
             DB::raw('COALESCE(AVG(vulnerability_submissions.risk_score), 0) as averageRiskScore'),
-            DB::raw('COALESCE((COUNT(CASE WHEN vulnerability_submissions.is_resolved = 1 THEN 1 END) * 100.0 / NULLIF(COUNT(vulnerability_submissions.id), 0)), 0) as completionRate')
+            DB::raw('COUNT(vulnerability_submissions.id) as totalSubmissions'),
+            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status IN ('resolved', 'closed') THEN 1 END) as resolvedCount"),
+            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status = 'in_progress' THEN 1 END) as inProgressCount"),
+            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status = 'open' THEN 1 END) as openCount")
         )
         ->leftJoin('vulnerability_submissions', function($join) use ($startDate) {
             $join->on('departments.id', '=', 'vulnerability_submissions.department_id')

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -12,67 +11,88 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'email',
         'password',
         'role',
+        'department_id',          // Optional: link users to departments
     ];
 
-    /**
-     * Check if user is an admin
-     */
-    public function isAdmin(): bool
-    {
-        return $this->role === 'admin';
-    }
-
-    /**
-     * Check if user is a regular user
-     */
-    public function isUser(): bool
-    {
-        return $this->role === 'user';
-    }
-
-    /**
-     * Get vulnerability submissions for this user
-     */
-    public function vulnerabilitySubmissions()
-    {
-        return $this->hasMany(VulnerabilitySubmission::class);
-    }
-
-    /**
-     * Get audit submissions for this user
-     */
-    public function auditSubmissions()
-    {
-        return $this->hasMany(AuditSubmission::class);
-    }
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    // Role checks
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isUser(): bool
+    {
+        return $this->role === 'user';
+    }
+
+    // Relationships
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function vulnerabilitySubmissions()
+    {
+        return $this->hasMany(VulnerabilitySubmission::class);
+    }
+
+    public function auditSubmissions()
+    {
+        return $this->hasMany(AuditSubmission::class);
+    }
+
+    public function assignedVulnerabilities()
+    {
+        return $this->hasMany(VulnerabilitySubmission::class, 'assigned_to');
+    }
+
+    public function reviewedAudits()
+    {
+        return $this->hasMany(AuditSubmission::class, 'reviewed_by');
+    }
+
+    public function reviewedAnswers()
+    {
+        return $this->hasMany(AuditAnswer::class, 'reviewed_by');
+    }
+
+    // Admin dashboard methods
+    public function getPendingAuditReviewsCount(): int
+    {
+        if (!$this->isAdmin()) return 0;
+        
+        return AuditAnswer::pendingReview()->count();
+    }
+
+    public function getPendingVulnerabilitiesCount(): int
+    {
+        if (!$this->isAdmin()) return 0;
+        
+        return VulnerabilitySubmission::open()->count();
+    }
+
+    public function getHighRiskItemsCount(): int
+    {
+        if (!$this->isAdmin()) return 0;
+        
+        $highRiskAudits = AuditAnswer::highRisk()->count();
+        $highRiskVulns = VulnerabilitySubmission::highPriority()->count();
+        
+        return $highRiskAudits + $highRiskVulns;
+    }
 }

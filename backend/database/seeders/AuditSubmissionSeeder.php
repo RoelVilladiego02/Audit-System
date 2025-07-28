@@ -12,6 +12,7 @@ class AuditSubmissionSeeder extends Seeder
     {
         $users = User::all();
         $riskLevels = ['low', 'medium', 'high'];
+        $statuses = ['draft', 'submitted', 'under_review', 'completed'];
         
         $auditTitles = [
             'Quarterly Security Assessment',
@@ -26,17 +27,34 @@ class AuditSubmissionSeeder extends Seeder
             'Business Continuity Plan Review'
         ];
 
+        $admin = User::where('role', 'admin')->first();
+
         // Create 20 sample audit submissions
         for ($i = 0; $i < 20; $i++) {
-            $overallRisk = $riskLevels[array_rand($riskLevels)];
-
-            AuditSubmission::create([
+            $status = $statuses[array_rand($statuses)];
+            $systemRisk = $riskLevels[array_rand($riskLevels)];
+            $createdAt = fake()->dateTimeBetween('-6 months', 'now');
+            
+            $submission = AuditSubmission::create([
                 'user_id' => $users->random()->id,
                 'title' => $auditTitles[array_rand($auditTitles)] . ' - ' . fake()->year(),
-                'overall_risk' => $overallRisk,
-                'created_at' => fake()->dateTimeBetween('-6 months', 'now'),
-                'updated_at' => fake()->dateTimeBetween('-6 months', 'now'),
+                'system_overall_risk' => $systemRisk,
+                'status' => $status,
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
             ]);
+
+            // If status is completed, add review details
+            if ($status === 'completed') {
+                $reviewedAt = fake()->dateTimeBetween($createdAt, 'now');
+                $submission->update([
+                    'admin_overall_risk' => $riskLevels[array_rand($riskLevels)],
+                    'reviewed_by' => $admin->id,
+                    'reviewed_at' => $reviewedAt,
+                    'admin_summary' => fake()->paragraph(),
+                    'updated_at' => $reviewedAt
+                ]);
+            }
         }
     }
 }
