@@ -28,7 +28,7 @@ const fetchQuestions = useCallback(async () => {
         console.log('Making API request with token:', token);
         console.log('User role:', user?.role);
         
-        const response = await api.get('/api/audit-questions');
+        const response = await api.get('/audit-questions');
         console.log('API Response:', response);
         
         if (response.data) {
@@ -74,7 +74,7 @@ useEffect(() => {
 
     const handleDelete = async (questionId) => {
         try {
-            await api.delete(`/api/audit-questions/${questionId}`);
+            await api.delete(`/audit-questions/${questionId}`);
             setQuestions(questions.filter(q => q.id !== questionId));
             setDeleteModalOpen(false);
             setQuestionToDelete(null);

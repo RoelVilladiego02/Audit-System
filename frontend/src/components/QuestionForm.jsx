@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import api from '../api/axios';
 
 const QuestionForm = ({ 
@@ -13,9 +14,9 @@ const QuestionForm = ({
         description: '',
         possible_answers: ['Yes', 'No', 'N/A'],
         risk_criteria: {
-            high: '',
-            medium: '',
-            low: ''
+            high: [],
+            medium: [],
+            low: []
         }
     });
     const [error, setError] = useState(null);
@@ -24,15 +25,14 @@ const QuestionForm = ({
 
     useEffect(() => {
         if (isEdit && questionData) {
-            // Map API response data to form fields
             setFormData({
                 question: questionData.question || '',
                 description: questionData.description || '',
                 possible_answers: questionData.possible_answers || ['Yes', 'No', 'N/A'],
-                risk_criteria: questionData.risk_criteria || {
-                    high: '',
-                    medium: '',
-                    low: ''
+                risk_criteria: {
+                    high: Array.isArray(questionData.risk_criteria?.high) ? questionData.risk_criteria.high : [],
+                    medium: Array.isArray(questionData.risk_criteria?.medium) ? questionData.risk_criteria.medium : [],
+                    low: Array.isArray(questionData.risk_criteria?.low) ? questionData.risk_criteria.low : []
                 }
             });
         }
@@ -40,6 +40,15 @@ const QuestionForm = ({
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (name === 'question' && value.length > 1000) {
+            setError('Question cannot exceed 1000 characters.');
+            return;
+        }
+        if (name === 'description' && value.length > 2000) {
+            setError('Description cannot exceed 2000 characters.');
+            return;
+        }
+        setError(null);
         setFormData(prev => ({
             ...prev,
             [name]: value
@@ -48,19 +57,52 @@ const QuestionForm = ({
 
     const addPossibleAnswer = () => {
         if (newAnswer.trim() && !formData.possible_answers.includes(newAnswer.trim())) {
+            if (newAnswer.trim().length > 255) {
+                setError('Possible answer cannot exceed 255 characters.');
+                return;
+            }
             setFormData(prev => ({
                 ...prev,
                 possible_answers: [...prev.possible_answers, newAnswer.trim()]
             }));
             setNewAnswer('');
+            setError(null);
+        } else if (formData.possible_answers.includes(newAnswer.trim())) {
+            setError('This answer already exists.');
         }
     };
 
     const removePossibleAnswer = (index) => {
+        const answerToRemove = formData.possible_answers[index];
         setFormData(prev => ({
             ...prev,
-            possible_answers: prev.possible_answers.filter((_, i) => i !== index)
+            possible_answers: prev.possible_answers.filter((_, i) => i !== index),
+            risk_criteria: {
+                high: prev.risk_criteria.high.filter(a => a !== answerToRemove),
+                medium: prev.risk_criteria.medium.filter(a => a !== answerToRemove),
+                low: prev.risk_criteria.low.filter(a => a !== answerToRemove)
+            }
         }));
+    };
+
+    const handleRiskCriteriaChange = (level, answer) => {
+        setFormData(prev => {
+            const currentAnswers = prev.risk_criteria[level];
+            let updatedAnswers;
+            if (currentAnswers.includes(answer)) {
+                updatedAnswers = currentAnswers.filter(a => a !== answer);
+            } else {
+                updatedAnswers = [...currentAnswers, answer];
+            }
+            return {
+                ...prev,
+                risk_criteria: {
+                    ...prev.risk_criteria,
+                    [level]: updatedAnswers
+                }
+            };
+        });
+        setError(null);
     };
 
     const handleKeyPress = (e) => {
@@ -70,10 +112,19 @@ const QuestionForm = ({
         }
     };
 
+    // Helper to get XSRF token from cookies
+    function getXsrfToken() {
+        const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError(null);
+
+        console.log('Submitting form data:', formData);
+        console.log('Token:', localStorage.getItem('token'));
 
         // Validation
         if (formData.possible_answers.length === 0) {
@@ -82,33 +133,64 @@ const QuestionForm = ({
             return;
         }
 
+        // Validate risk criteria
+        for (const level of ['high', 'medium', 'low']) {
+            for (const answer of formData.risk_criteria[level]) {
+                if (!formData.possible_answers.includes(answer)) {
+                    setError(`Risk criteria for ${level} contains invalid answer: ${answer}`);
+                    setSubmitting(false);
+                    return;
+                }
+            }
+        }
+
         try {
-            // Ensure token exists
             const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('Authentication token not found');
             }
 
-            // Make API request with proper authorization
-            if (isEdit) {
-                await api.put(`/api/audit-questions/${questionData.id}`, formData);
-            } else {
-                await api.post('/api/audit-questions', formData);
+            // Pre-fetch CSRF token
+            console.log('Pre-fetching CSRF token...');
+            await axios.get('sanctum/csrf-cookie', {
+                baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+                withCredentials: true
+            });
+            const csrfToken = getXsrfToken();
+            if (!csrfToken) {
+                throw new Error('Failed to retrieve CSRF token');
             }
-            
+            console.log('CSRF token fetched:', csrfToken);
+
+            // Use raw axios with pre-fetched token
+            const response = await axios.post('http://localhost:8000/api/audit-questions', formData, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'X-XSRF-TOKEN': csrfToken
+                },
+                withCredentials: true
+            });
+            console.log('Response:', response.data);
+
             onSuccess();
             onClose();
         } catch (err) {
-            console.error('Form submission error:', err);
-            
+            console.error('Form submission error:', err.response ? err.response.data : err.message);
             if (err.response?.status === 401) {
                 setError('Your session has expired. Please log in again.');
-                // Redirect to login after a brief delay
                 setTimeout(() => {
                     window.location.href = '/login';
                 }, 2000);
             } else if (err.response?.status === 403) {
                 setError('You do not have permission to perform this action.');
+            } else if (err.response?.status === 422) {
+                const errors = err.response.data.errors;
+                const errorMessages = Object.values(errors).flat().join(' ');
+                setError(errorMessages || 'Validation failed. Please check your inputs.');
+            } else if (err.response?.status === 404) {
+                setError('The API server could not be reached. Please ensure the backend is running at http://localhost:8000/api and try again.');
+            } else if (err.response?.status === 409) {
+                setError(err.response.data.message || 'Cannot modify question structure due to existing answers.');
             } else {
                 setError(
                     err.response?.data?.message || 
@@ -150,6 +232,9 @@ const QuestionForm = ({
                                     className="form-control"
                                     placeholder="Enter the security audit question"
                                 />
+                                <small className="form-text text-muted">
+                                    Max 1000 characters ({formData.question.length}/1000)
+                                </small>
                             </div>
 
                             <div className="mb-3">
@@ -163,12 +248,13 @@ const QuestionForm = ({
                                     className="form-control"
                                     placeholder="Enter additional context or guidance"
                                 />
+                                <small className="form-text text-muted">
+                                    Max 2000 characters ({formData.description.length}/2000)
+                                </small>
                             </div>
 
                             <div className="mb-3">
                                 <label className="form-label">Possible Answers *</label>
-                                
-                                {/* Add new answer input */}
                                 <div className="input-group mb-2">
                                     <input
                                         type="text"
@@ -187,8 +273,6 @@ const QuestionForm = ({
                                         Add
                                     </button>
                                 </div>
-
-                                {/* Display current answers */}
                                 <div className="border rounded p-2" style={{ minHeight: '60px', backgroundColor: '#f8f9fa' }}>
                                     {formData.possible_answers.length === 0 ? (
                                         <span className="text-muted">No possible answers added yet</span>
@@ -210,66 +294,44 @@ const QuestionForm = ({
                                     )}
                                 </div>
                                 <div className="form-text">
-                                    Type an answer and click "Add" or press Enter. Click the ✕ on a badge to remove it.
+                                    Type an answer (max 255 characters) and click "Add" or press Enter. Click the ✕ on a badge to remove it.
                                 </div>
                             </div>
 
                             <div className="mb-3">
                                 <label className="form-label">Risk Criteria</label>
-                                <div className="mb-2">
-                                    <label htmlFor="risk_criteria_high" className="form-label text-danger">High Risk Criteria</label>
-                                    <textarea
-                                        id="risk_criteria_high"
-                                        name="risk_criteria.high"
-                                        value={formData.risk_criteria.high}
-                                        onChange={(e) => setFormData(prev => ({
-                                            ...prev,
-                                            risk_criteria: {
-                                                ...prev.risk_criteria,
-                                                high: e.target.value
-                                            }
-                                        }))}
-                                        className="form-control"
-                                        placeholder="Criteria for high risk assessment"
-                                        rows={2}
-                                    />
-                                </div>
-                                <div className="mb-2">
-                                    <label htmlFor="risk_criteria_medium" className="form-label text-warning">Medium Risk Criteria</label>
-                                    <textarea
-                                        id="risk_criteria_medium"
-                                        name="risk_criteria.medium"
-                                        value={formData.risk_criteria.medium}
-                                        onChange={(e) => setFormData(prev => ({
-                                            ...prev,
-                                            risk_criteria: {
-                                                ...prev.risk_criteria,
-                                                medium: e.target.value
-                                            }
-                                        }))}
-                                        className="form-control"
-                                        placeholder="Criteria for medium risk assessment"
-                                        rows={2}
-                                    />
-                                </div>
-                                <div className="mb-2">
-                                    <label htmlFor="risk_criteria_low" className="form-label text-success">Low Risk Criteria</label>
-                                    <textarea
-                                        id="risk_criteria_low"
-                                        name="risk_criteria.low"
-                                        value={formData.risk_criteria.low}
-                                        onChange={(e) => setFormData(prev => ({
-                                            ...prev,
-                                            risk_criteria: {
-                                                ...prev.risk_criteria,
-                                                low: e.target.value
-                                            }
-                                        }))}
-                                        className="form-control"
-                                        placeholder="Criteria for low risk assessment"
-                                        rows={2}
-                                    />
-                                </div>
+                                {['high', 'medium', 'low'].map(level => (
+                                    <div key={level} className="mb-2">
+                                        <label className={`form-label text-${level === 'high' ? 'danger' : level === 'medium' ? 'warning' : 'success'}`}>
+                                            {level.charAt(0).toUpperCase() + level.slice(1)} Risk Criteria
+                                        </label>
+                                        <div className="border rounded p-2" style={{ backgroundColor: '#f8f9fa' }}>
+                                            {formData.possible_answers.length === 0 ? (
+                                                <span className="text-muted">Add possible answers first</span>
+                                            ) : (
+                                                <div className="d-flex flex-wrap gap-2">
+                                                    {formData.possible_answers.map((answer, index) => (
+                                                        <div key={index} className="form-check">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="form-check-input"
+                                                                id={`${level}-${answer}`}
+                                                                checked={formData.risk_criteria[level].includes(answer)}
+                                                                onChange={() => handleRiskCriteriaChange(level, answer)}
+                                                            />
+                                                            <label className="form-check-label" htmlFor={`${level}-${answer}`}>
+                                                                {answer}
+                                                            </label>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="form-text">
+                                            Select answers that indicate {level} risk. Leave empty if not applicable.
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
 
                             <div className="d-flex justify-content-end gap-2">

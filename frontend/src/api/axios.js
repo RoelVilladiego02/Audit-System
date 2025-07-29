@@ -12,7 +12,7 @@ const getXsrfToken = () => {
 };
 
 const instance = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -22,13 +22,9 @@ const instance = axios.create({
     withCredentials: true // Important for handling cookies
 });
 
-// Add a request interceptor to add the auth token to every request
+// Add a request interceptor for error handling
 instance.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`;
-        }
         return config;
     },
     (error) => {
@@ -68,7 +64,8 @@ instance.interceptors.request.use(
             if (!csrfToken) {
                 try {
                     console.log('Fetching CSRF token...');
-                    await axios.get('http://localhost:8000/sanctum/csrf-cookie', {
+                    await axios.get('sanctum/csrf-cookie', {
+                        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
                         withCredentials: true
                     });
                     const newCsrfToken = getXsrfToken();
@@ -95,7 +92,19 @@ instance.interceptors.request.use(
 
 // Response interceptor
 instance.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // Enhanced response logging
+        console.log('Response Data:', {
+            url: response.config.url,
+            status: response.status,
+            statusText: response.statusText,
+            dataType: typeof response.data,
+            data: response.data instanceof Blob ? 'Blob data' : response.data,
+            headers: response.headers,
+            timestamp: new Date().toISOString()
+        });
+        return response;
+    },
     async (error) => {
         const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
         console.error('API Error:', {
@@ -116,7 +125,8 @@ instance.interceptors.response.use(
         if (error.response?.status === 419 && !error.config._retry) {
             error.config._retry = true;
             try {
-                await axios.get('http://localhost:8000/sanctum/csrf-cookie', {
+                await axios.get('sanctum/csrf-cookie', {
+                    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
                     withCredentials: true
                 });
                 const csrfToken = getXsrfToken();
@@ -135,7 +145,7 @@ instance.interceptors.response.use(
             try {
                 const authToken = localStorage.getItem('token');
                 if (authToken) {
-                    const userResponse = await axios.get('/api/user', {
+                    const userResponse = await instance.get('user', {
                         headers: { Authorization: `Bearer ${authToken}` }
                     });
                     if (userResponse.data) {

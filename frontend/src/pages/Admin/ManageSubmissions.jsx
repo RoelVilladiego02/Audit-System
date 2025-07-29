@@ -11,7 +11,10 @@ import {
     User,
     FileText,
     TrendingUp,
-    AlertOctagon
+    AlertOctagon,
+    Clock,
+    Eye,
+    CheckSquare
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -22,11 +25,12 @@ const ManageSubmissions = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (!user || !isAdmin) {
+        if (!authLoading && (!user || !isAdmin)) {
             navigate('/login');
             return;
         }
-    }, [user, isAdmin, navigate]);
+    }, [user, isAdmin, navigate, authLoading]);
+
     const [submissions, setSubmissions] = useState([]);
     const [filteredSubmissions, setFilteredSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -34,35 +38,31 @@ const ManageSubmissions = () => {
     const [selectedSubmission, setSelectedSubmission] = useState(null);
     const [editingAnswer, setEditingAnswer] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [riskFilter, setRiskFilter] = useState('all');
     const [sortBy, setSortBy] = useState('date_desc');
+    const [selectedRiskLevel, setSelectedRiskLevel] = useState('');
+    const [summaryText, setSummaryText] = useState('');
 
     const fetchSubmissions = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             
-            // Verify token exists
             const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('No authentication token found');
             }
 
-            console.log('Making API request with token:', token);
-            console.log('User role:', user?.role);
-            
-            const response = await api.get('/admin/audit-submissions');
-            console.log('API Response:', response);
+            const response = await api.get('/audit-submissions');
             
             if (response.data) {
                 const mappedSubmissions = response.data.map(submission => ({
                     ...submission,
-                    overall_risk: submission.admin_overall_risk || submission.system_overall_risk,
-                    status: submission.status,
-                    review_progress: submission.review_progress,
-                    reviewer: submission.reviewer,
-                    answers_count: submission.answers_count,
-                    reviewed_answers_count: submission.reviewed_answers_count
+                    effective_overall_risk: submission.admin_overall_risk || submission.system_overall_risk || 'pending',
+                    review_progress: submission.review_progress || 0,
+                    answers_count: submission.answers?.length || 0,
+                    reviewed_answers_count: submission.answers?.filter(a => a.reviewed_by).length || 0
                 }));
                 
                 setSubmissions(mappedSubmissions);
@@ -73,18 +73,14 @@ const ManageSubmissions = () => {
             }
         } catch (err) {
             console.error('Error fetching submissions:', err);
-            console.error('Error response:', err.response);
-            
             setSubmissions([]);
             
-            // Handle different types of errors
             if (err.response?.status === 403) {
-                setError('Access denied. You do not have permission to view audit submissions. Please ensure you are logged in as an admin.');
+                setError('Access denied. You do not have permission to view audit submissions.');
             } else if (err.response?.status === 401) {
                 setError('Authentication failed. Please log in again.');
-                // Redirect to login
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                navigate('/login');
             } else {
                 setError(
                     err.response?.data?.message || 
@@ -95,12 +91,12 @@ const ManageSubmissions = () => {
         } finally {
             setLoading(false);
         }
-    }, [user]); // Add user as dependency since we use user?.role inside
+    }, [navigate]);
 
     useEffect(() => {
         if (!authLoading && user && isAdmin) {
             fetchSubmissions();
-        } else if (!authLoading && user && !isAdmin) {
+        } else if (!authLoading && (!user || !isAdmin)) {
             setError('You do not have permission to access this page.');
             setLoading(false);
         }
@@ -109,12 +105,13 @@ const ManageSubmissions = () => {
     const filterAndSortSubmissions = useCallback(() => {
         let filtered = submissions.filter(submission => {
             const matchesSearch = submission.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                submission.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 submission.user?.email.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesRisk = riskFilter === 'all' || submission.overall_risk === riskFilter;
-            return matchesSearch && matchesRisk;
+            const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
+            const matchesRisk = riskFilter === 'all' || submission.effective_overall_risk === riskFilter;
+            return matchesSearch && matchesStatus && matchesRisk;
         });
 
-        // Sort submissions
         filtered.sort((a, b) => {
             switch (sortBy) {
                 case 'date_desc':
@@ -122,11 +119,10 @@ const ManageSubmissions = () => {
                 case 'date_asc':
                     return new Date(a.created_at) - new Date(b.created_at);
                 case 'risk_desc':
-                    const riskOrder = { high: 3, medium: 2, low: 1 };
-                    return riskOrder[b.overall_risk] - riskOrder[a.overall_risk];
-                case 'risk_asc':
-                    const riskOrderAsc = { high: 3, medium: 2, low: 1 };
-                    return riskOrderAsc[a.overall_risk] - riskOrderAsc[b.overall_risk];
+                    const riskOrder = { high: 3, medium: 2, low: 1, pending: 0 };
+                    return riskOrder[b.effective_overall_risk] - riskOrder[a.effective_overall_risk];
+                case 'progress_desc':
+                    return b.review_progress - a.review_progress;
                 case 'title':
                     return a.title.localeCompare(b.title);
                 default:
@@ -135,108 +131,159 @@ const ManageSubmissions = () => {
         });
 
         setFilteredSubmissions(filtered);
-    }, [submissions, searchTerm, riskFilter, sortBy]);
+    }, [submissions, searchTerm, statusFilter, riskFilter, sortBy]);
 
     useEffect(() => {
         filterAndSortSubmissions();
     }, [filterAndSortSubmissions]);
 
-    const handleAnswerRiskUpdate = async (answerId, newRiskLevel, newRecommendation) => {
+    const fetchSubmissionDetails = async (submissionId) => {
         try {
-            const reviewPayload = {
-                admin_risk_level: newRiskLevel,
-                admin_notes: '', // Add if needed
-                recommendation: newRecommendation
-            };
-
-            const response = await api.put(`/audit-submissions/answers/${answerId}/review`, reviewPayload);
-
-            // Update local state with the response
-            const updatedAnswer = response.data.answer;
-            const updatedSubmission = submissions.find(s => 
-                s.answers.some(a => a.id === answerId)
-            );
-
-            if (updatedSubmission) {
-                const newSubmissions = submissions.map(sub => {
-                    if (sub.id === updatedSubmission.id) {
-                        return {
-                            ...sub,
-                            answers: sub.answers.map(ans => 
-                                ans.id === answerId ? updatedAnswer : ans
-                            ),
-                            status: response.data.submission_status,
-                            review_progress: response.data.submission_progress
-                        };
-                    }
-                    return sub;
-                });
-
-                setSubmissions(newSubmissions);
-                setSelectedSubmission(newSubmissions.find(s => s.id === updatedSubmission.id));
-                setEditingAnswer(null);
-                // Recalculate overall risk after updating answer
-                await recalculateOverallRisk(updatedSubmission.id);
+            const id = parseInt(submissionId, 10);
+            if (isNaN(id)) {
+                throw new Error('Invalid submission ID');
             }
+            
+            const response = await api.get(`/audit-submissions/${id}`);
+            // Debug log
+            console.log('API Response Raw:', JSON.stringify(response.data, null, 2));
+            
+            const submission = response.data;
+            if (typeof submission !== 'object' || submission === null || !('id' in submission)) {
+                console.error('Invalid submission data structure:', typeof submission, submission);
+                throw new Error('Invalid submission data received');
+            }
+
+            const processedSubmission = {
+                ...submission,
+                id: Number.isInteger(submission.id) ? submission.id : parseInt(submission.id, 10),
+                user_id: submission.user_id !== undefined ? parseInt(submission.user_id, 10) : null,
+                reviewed_by: submission.reviewed_by !== undefined ? parseInt(submission.reviewed_by, 10) : null,
+                answers: Array.isArray(submission.answers) ? submission.answers.map(answer => ({
+                    ...answer,
+                    id: Number.isInteger(answer.id) ? answer.id : parseInt(answer.id, 10),
+                    audit_submission_id: Number.isInteger(answer.audit_submission_id) ? answer.audit_submission_id : parseInt(answer.audit_submission_id, 10),
+                    audit_question_id: Number.isInteger(answer.audit_question_id) ? answer.audit_question_id : parseInt(answer.audit_question_id, 10),
+                    reviewed_by: answer.reviewed_by !== undefined ? parseInt(answer.reviewed_by, 10) : null
+                })) : []
+            };
+            console.log('Processed Submission:', processedSubmission); // Log processed data
+            setSelectedSubmission(processedSubmission);
         } catch (err) {
-            console.error('Error updating answer:', err);
-            alert(err.response?.data?.message || 'Failed to update answer');
+            console.error('Error fetching submission details:', err);
+            setError('Failed to load submission details.');
         }
     };
 
-    const recalculateOverallRisk = async (submissionId) => {
-        const submission = submissions.find(s => s.id === submissionId);
-        if (!submission) return;
-
-        const highCount = submission.answers.filter(a => a.risk_level === 'high').length;
-        const mediumCount = submission.answers.filter(a => a.risk_level === 'medium').length;
-        const total = submission.answers.length;
-
-        const highPercentage = (highCount / total) * 100;
-        const mediumPercentage = (mediumCount / total) * 100;
-
-        let overallRisk = 'low';
-        if (highPercentage >= 20 || highCount >= 2) {
-            overallRisk = 'high';
-        } else if (mediumPercentage >= 30 || mediumCount >= 3) {
-            overallRisk = 'medium';
-        }
-
+    const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
         try {
-            await api.put(`/audit-submissions/${submissionId}/risk`, {
-                overall_risk: overallRisk
+            const submissionId = parseInt(selectedSubmission.id, 10);
+            const answerIdInt = parseInt(answerId, 10);
+            
+            if (isNaN(submissionId) || isNaN(answerIdInt)) {
+                throw new Error('Invalid submission or answer ID');
+            }
+
+            const reviewPayload = {
+                admin_risk_level: adminRiskLevel,
+                admin_notes: adminNotes || '',
+                recommendation: recommendation || ''
+            };
+
+            const url = `/audit-submissions/${submissionId}/answers/${answerIdInt}/review`;
+            console.log('Review Request:', { url, method: 'PUT', payload: reviewPayload });
+
+            const response = await api.put(url, reviewPayload, {
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                method: 'PUT' // Explicitly set method
             });
 
-            // Update local state
-            setSelectedSubmission(prev => ({ ...prev, overall_risk: overallRisk }));
-            setSubmissions(prev => prev.map(sub =>
-                sub.id === submissionId ? { ...sub, overall_risk: overallRisk } : sub
-            ));
+            if (response.data && typeof response.data === 'object') {
+                await fetchSubmissionDetails(submissionId);
+                await fetchSubmissions();
+                setEditingAnswer(null);
+            } else {
+                throw new Error('Invalid response data');
+            }
         } catch (err) {
-            console.error('Error updating overall risk:', err);
-            setError('Failed to update overall risk level. Please try again.');
+            console.error('Error reviewing answer:', err.response?.data || err.message);
+            setError(err.response?.data?.message || 'Failed to update answer review');
+        }
+    };
+
+    const handleCompleteReview = async () => {
+        try {
+            const payload = {
+                admin_overall_risk: selectedRiskLevel || 'pending',
+                admin_summary: summaryText || 'No summary provided'
+            };
+
+            const response = await api.put(`/audit-submissions/${selectedSubmission.id}/complete`, payload);
+
+            if (response.data && typeof response.data === 'object') {
+                await fetchSubmissionDetails(selectedSubmission.id);
+                await fetchSubmissions();
+                setError(null);
+            } else {
+                throw new Error('Invalid response data');
+            }
+        } catch (err) {
+            console.error('Error completing review:', err);
+            setError(err.response?.data?.message || 'Failed to complete review');
+        }
+    };
+
+    const handleSubmissionFinalReview = async (submissionId, adminOverallRisk, adminSummary) => {
+        try {
+            const payload = {
+                admin_overall_risk: adminOverallRisk,
+                admin_summary: adminSummary
+            };
+
+            const response = await api.put(`/audit-submissions/${submissionId}/complete`, payload);
+
+            if (response.data) {
+                await fetchSubmissions();
+                await fetchSubmissionDetails(submissionId);
+            }
+        } catch (err) {
+            console.error('Error finalizing submission review:', err);
+            setError(err.response?.data?.message || 'Failed to finalize submission review');
         }
     };
 
     const getRiskColor = (risk) => {
         switch (risk) {
-            case 'high': return 'text-red-600 bg-red-50 border-red-200';
-            case 'medium': return 'text-orange-600 bg-orange-50 border-orange-200';
-            case 'low': return 'text-green-600 bg-green-50 border-green-200';
-            default: return 'text-gray-600 bg-gray-50 border-gray-200';
+            case 'high': return 'text-danger bg-danger-subtle border-danger';
+            case 'medium': return 'text-warning bg-warning-subtle border-warning';
+            case 'low': return 'text-success bg-success-subtle border-success';
+            case 'pending': return 'text-secondary bg-light border-secondary';
+            default: return 'text-muted bg-light border-secondary';
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'draft': return 'text-muted bg-light';
+            case 'submitted': return 'text-primary bg-primary-subtle';
+            case 'under_review': return 'text-warning bg-warning-subtle';
+            case 'completed': return 'text-success bg-success-subtle';
+            default: return 'text-muted bg-light';
         }
     };
 
     const getRiskIcon = (risk) => {
         switch (risk) {
-            case 'high': return <AlertOctagon className="w-4 h-4" />;
-            case 'medium': return <AlertTriangle className="w-4 h-4" />;
-            case 'low': return <CheckCircle className="w-4 h-4" />;
-            default: return <AlertCircle className="w-4 h-4" />;
+            case 'high': return <AlertOctagon className="me-1" size={16} />;
+            case 'medium': return <AlertTriangle className="me-1" size={16} />;
+            case 'low': return <CheckCircle className="me-1" size={16} />;
+            case 'pending': return <Clock className="me-1" size={16} />;
+            default: return <AlertCircle className="me-1" size={16} />;
         }
     };
 
     const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
@@ -246,15 +293,16 @@ const ManageSubmissions = () => {
         });
     };
 
-    const getRiskStats = () => {
+    const getStats = () => {
         const total = filteredSubmissions.length;
-        const high = filteredSubmissions.filter(s => s.overall_risk === 'high').length;
-        const medium = filteredSubmissions.filter(s => s.overall_risk === 'medium').length;
-        const low = filteredSubmissions.filter(s => s.overall_risk === 'low').length;
-        return { total, high, medium, low };
+        const pending = filteredSubmissions.filter(s => s.status === 'submitted').length;
+        const underReview = filteredSubmissions.filter(s => s.status === 'under_review').length;
+        const completed = filteredSubmissions.filter(s => s.status === 'completed').length;
+        const highRisk = filteredSubmissions.filter(s => s.effective_overall_risk === 'high').length;
+        
+        return { total, pending, underReview, completed, highRisk };
     };
 
-    // Show loading while checking authentication
     if (authLoading) {
         return (
             <div className="min-vh-100 d-flex align-items-center justify-content-center">
@@ -265,7 +313,6 @@ const ManageSubmissions = () => {
         );
     }
 
-    // Redirect if not authenticated or not admin
     if (!user || !isAdmin) {
         return (
             <div className="container py-4">
@@ -278,31 +325,58 @@ const ManageSubmissions = () => {
         );
     }
 
-    const stats = getRiskStats();
+    if (loading) {
+        return (
+            <div className="container-fluid py-4">
+                <div className="d-flex justify-content-center">
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading submissions...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="container-fluid py-4">
+                <div className="alert alert-danger">
+                    <h4>Error Loading Submissions</h4>
+                    <p>{error}</p>
+                    <button 
+                        className="btn btn-outline-danger" 
+                        onClick={() => {
+                            setError(null);
+                            fetchSubmissions();
+                        }}
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const stats = getStats();
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="container-fluid py-4 bg-light min-vh-100">
             {/* Header */}
-            <div className="bg-white shadow-sm border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Audit Submissions Management</h1>
-                            <p className="text-gray-600 mt-1">Review and assess security audit submissions</p>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-6 text-sm">
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                                    <span className="text-gray-600">High Risk: {stats.high}</span>
+            <div className="row mb-4">
+                <div className="col">
+                    <div className="card border-0 shadow-sm">
+                        <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h1 className="card-title h3 mb-2">Audit Submissions Management</h1>
+                                    <p className="text-muted mb-0">Review and assess security audit submissions</p>
                                 </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-                                    <span className="text-gray-600">Medium Risk: {stats.medium}</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                                    <span className="text-gray-600">Low Risk: {stats.low}</span>
+                                <div className="d-flex align-items-center">
+                                    <span className="badge bg-primary me-2">Total: {stats.total}</span>
+                                    <span className="badge bg-warning me-2">Pending: {stats.pending}</span>
+                                    <span className="badge bg-info me-2">Under Review: {stats.underReview}</span>
+                                    <span className="badge bg-success me-2">Completed: {stats.completed}</span>
+                                    <span className="badge bg-danger">High Risk: {stats.highRisk}</span>
                                 </div>
                             </div>
                         </div>
@@ -310,267 +384,624 @@ const ManageSubmissions = () => {
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Panel - Submissions List */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                            {/* Search and Filter Controls */}
-                            <div className="p-4 border-b border-gray-200">
-                                <div className="space-y-3">
-                                    {/* Search */}
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="row">
+                {/* Left Panel - Submissions List */}
+                <div className="col-lg-4">
+                    <div className="card border-0 shadow-sm">
+                        {/* Search and Filter Controls */}
+                        <div className="card-header bg-white border-bottom">
+                            <div className="row g-2">
+                                <div className="col-12">
+                                    <div className="input-group">
+                                        <span className="input-group-text bg-light border-end-0">
+                                            <Search size={16} />
+                                        </span>
                                         <input
                                             type="text"
+                                            className="form-control border-start-0"
                                             placeholder="Search submissions..."
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
                                     </div>
-
-                                    {/* Filters */}
-                                    <div className="flex space-x-2">
-                                        <select
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                            value={riskFilter}
-                                            onChange={(e) => setRiskFilter(e.target.value)}
-                                        >
-                                            <option value="all">All Risk Levels</option>
-                                            <option value="high">High Risk</option>
-                                            <option value="medium">Medium Risk</option>
-                                            <option value="low">Low Risk</option>
-                                        </select>
-                                        <select
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                            value={sortBy}
-                                            onChange={(e) => setSortBy(e.target.value)}
-                                        >
-                                            <option value="date_desc">Newest First</option>
-                                            <option value="date_asc">Oldest First</option>
-                                            <option value="risk_desc">Highest Risk</option>
-                                            <option value="risk_asc">Lowest Risk</option>
-                                            <option value="title">Title A-Z</option>
-                                        </select>
-                                    </div>
+                                </div>
+                                <div className="col-md-6">
+                                    <select
+                                        className="form-select form-select-sm"
+                                        value={statusFilter}
+                                        onChange={(e) => setStatusFilter(e.target.value)}
+                                    >
+                                        <option value="all">All Status</option>
+                                        <option value="submitted">Submitted</option>
+                                        <option value="under_review">Under Review</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
+                                <div className="col-md-6">
+                                    <select
+                                        className="form-select form-select-sm"
+                                        value={riskFilter}
+                                        onChange={(e) => setRiskFilter(e.target.value)}
+                                    >
+                                        <option value="all">All Risk Levels</option>
+                                        <option value="high">High Risk</option>
+                                        <option value="medium">Medium Risk</option>
+                                        <option value="low">Low Risk</option>
+                                        <option value="pending">Pending</option>
+                                    </select>
+                                </div>
+                                <div className="col-12">
+                                    <select
+                                        className="form-select form-select-sm"
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value)}
+                                    >
+                                        <option value="date_desc">Newest First</option>
+                                        <option value="date_asc">Oldest First</option>
+                                        <option value="risk_desc">Highest Risk First</option>
+                                        <option value="progress_desc">Most Progress</option>
+                                        <option value="title">Title A-Z</option>
+                                    </select>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Submissions List */}
-                            <div className="max-h-96 overflow-y-auto">
-                                {filteredSubmissions.map((submission) => (
+                        {/* Submissions List */}
+                        <div className="card-body p-0" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                            {filteredSubmissions.length === 0 ? (
+                                <div className="text-center py-5">
+                                    <FileText size={48} className="text-muted mb-3" />
+                                    <h5 className="text-muted">No submissions found</h5>
+                                    <p className="text-muted">Try adjusting your search or filters</p>
+                                </div>
+                            ) : (
+                                filteredSubmissions.map((submission, index) => (
                                     <div
                                         key={submission.id}
-                                        className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
-                                            selectedSubmission?.id === submission.id ? 'bg-blue-50 border-blue-200' : ''
+                                        className={`p-3 border-bottom cursor-pointer ${
+                                            selectedSubmission?.id === submission.id 
+                                                ? 'bg-primary-subtle border-primary' 
+                                                : 'hover-bg-light'
                                         }`}
-                                        onClick={() => setSelectedSubmission(submission)}
+                                        style={{ cursor: 'pointer' }}
+                                        onClick={() => fetchSubmissionDetails(submission.id)}
                                     >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-medium text-gray-900 truncate">
-                                                    {submission.title}
-                                                </h3>
-                                                <div className="flex items-center mt-1 text-xs text-gray-500">
-                                                    <User className="w-3 h-3 mr-1" />
-                                                    <span className="truncate">{submission.user?.email}</span>
+                                        <div className="d-flex justify-content-between align-items-start">
+                                            <div className="flex-grow-1 min-w-0">
+                                                <h6 className="mb-1 text-truncate">{submission.title}</h6>
+                                                <div className="small text-muted mb-2">
+                                                    <div className="d-flex align-items-center mb-1">
+                                                        <User size={12} className="me-1" />
+                                                        <span className="text-truncate">{submission.user?.name || submission.user?.email}</span>
+                                                    </div>
+                                                    <div className="d-flex align-items-center">
+                                                        <Calendar size={12} className="me-1" />
+                                                        <span>{formatDate(submission.created_at)}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center mt-1 text-xs text-gray-500">
-                                                    <Calendar className="w-3 h-3 mr-1" />
-                                                    <span>{formatDate(submission.created_at)}</span>
+                                                <div className="d-flex align-items-center justify-content-between">
+                                                    <span className={`badge ${getStatusColor(submission.status)}`}>
+                                                        {submission.status.replace('_', ' ').toUpperCase()}
+                                                    </span>
+                                                    {submission.review_progress > 0 && (
+                                                        <div className="d-flex align-items-center">
+                                                            <div className="progress me-2" style={{ width: '60px', height: '4px' }}>
+                                                                <div 
+                                                                    className="progress-bar bg-info" 
+                                                                    style={{ width: `${submission.review_progress}%` }}
+                                                                ></div>
+                                                            </div>
+                                                            <small className="text-muted">{Math.round(submission.review_progress)}%</small>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className={`ml-2 px-2 py-1 rounded-full text-xs font-medium border ${getRiskColor(submission.overall_risk)}`}>
-                                                <div className="flex items-center">
-                                                    {getRiskIcon(submission.overall_risk)}
-                                                    <span className="ml-1 capitalize">{submission.overall_risk}</span>
-                                                </div>
+                                            <div className="ms-2">
+                                                <span className={`badge ${getRiskColor(submission.effective_overall_risk)}`}>
+                                                    {getRiskIcon(submission.effective_overall_risk)}
+                                                    {submission.effective_overall_risk.toUpperCase()}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-
-                            {filteredSubmissions.length === 0 && (
-                                <div className="p-8 text-center text-gray-500">
-                                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                    <p>No submissions found</p>
-                                    <p className="text-sm mt-1">Try adjusting your search or filters</p>
-                                </div>
+                                ))
                             )}
                         </div>
                     </div>
+                </div>
 
-                    {/* Right Panel - Submission Details */}
-                    <div className="lg:col-span-2">
-                        {selectedSubmission ? (
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                                {/* Submission Header */}
-                                <div className="p-6 border-b border-gray-200">
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <h2 className="text-xl font-semibold text-gray-900">
-                                                {selectedSubmission.title}
-                                            </h2>
-                                            <div className="flex items-center mt-2 space-x-4 text-sm text-gray-600">
-                                                <div className="flex items-center">
-                                                    <User className="w-4 h-4 mr-1" />
-                                                    <span>{selectedSubmission.user?.email}</span>
-                                                </div>
-                                                <div className="flex items-center">
-                                                    <Calendar className="w-4 h-4 mr-1" />
-                                                    <span>{formatDate(selectedSubmission.created_at)}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className={`px-4 py-2 rounded-full text-sm font-medium border ${getRiskColor(selectedSubmission.overall_risk)}`}>
-                                            <div className="flex items-center">
-                                                {getRiskIcon(selectedSubmission.overall_risk)}
-                                                <span className="ml-2 capitalize">Overall Risk: {selectedSubmission.overall_risk}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Answers Section */}
-                                <div className="p-6">
-                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Risk Assessment</h3>
-                                    <div className="space-y-4">
-                                        {selectedSubmission.answers?.map((answer) => (
-                                            <div key={answer.id} className="border border-gray-200 rounded-lg p-4">
-                                                <div className="flex items-start justify-between mb-3">
-                                                    <div className="flex-1">
-                                                        <h4 className="text-sm font-medium text-gray-900 mb-1">
-                                                            {answer.question?.question}
-                                                        </h4>
-                                                        <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
-                                                            {answer.question?.category}
-                                                        </span>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setEditingAnswer(editingAnswer === answer.id ? null : answer.id)}
-                                                        className="ml-4 p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                                    >
-                                                        <Edit3 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-
-                                                <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                                                    <p className="text-sm text-gray-700">{answer.answer}</p>
-                                                </div>
-
-                                                {editingAnswer === answer.id ? (
-                                                    <AnswerRiskEditor
-                                                        answer={answer}
-                                                        onSave={(riskLevel, recommendation) =>
-                                                            handleAnswerRiskUpdate(answer.id, riskLevel, recommendation)
-                                                        }
-                                                        onCancel={() => setEditingAnswer(null)}
-                                                    />
-                                                ) : (
-                                                    <div className="flex items-start justify-between">
-                                                        <div className="flex-1">
-                                                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getRiskColor(answer.risk_level)}`}>
-                                                                {getRiskIcon(answer.risk_level)}
-                                                                <span className="ml-2 capitalize">{answer.risk_level} Risk</span>
-                                                            </div>
-                                                            {answer.recommendation && (
-                                                                <p className="text-sm text-gray-600 mt-2">
-                                                                    <strong>Recommendation:</strong> {answer.recommendation}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                {/* Right Panel - Submission Details */}
+                <div className="col-lg-8">
+                    {selectedSubmission ? (
+                        <SubmissionDetails
+                            submission={selectedSubmission}
+                            onAnswerReview={handleAnswerReview}
+                            onFinalReview={handleSubmissionFinalReview}
+                            onCompleteReview={handleCompleteReview}
+                            editingAnswer={editingAnswer}
+                            setEditingAnswer={setEditingAnswer}
+                            selectedRiskLevel={selectedRiskLevel}
+                            setSelectedRiskLevel={setSelectedRiskLevel}
+                            summaryText={summaryText}
+                            setSummaryText={setSummaryText}
+                            getRiskColor={getRiskColor}
+                            getRiskIcon={getRiskIcon}
+                            formatDate={formatDate}
+                        />
+                    ) : (
+                        <div className="card border-0 shadow-sm">
+                            <div className="card-body text-center py-5">
+                                <TrendingUp size={64} className="text-muted mb-3" />
+                                <h4 className="text-muted">Select a Submission</h4>
+                                <p className="text-muted">Choose a submission from the list to view and assess its details.</p>
                             </div>
-                        ) : (
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-                                <TrendingUp className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Submission</h3>
-                                <p className="text-gray-600">Choose a submission from the list to view and assess its risk levels.</p>
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
 
-// Answer Risk Editor Component
-const AnswerRiskEditor = ({ answer, onSave, onCancel }) => {
-    const [riskLevel, setRiskLevel] = useState(answer.risk_level);
-    const [recommendation, setRecommendation] = useState(answer.recommendation || '');
+        // Answer Review Form Component
+        const AnswerReviewForm = ({ 
+            adminRiskLevel, 
+            setAdminRiskLevel, 
+            adminNotes, 
+            setAdminNotes, 
+            recommendation, 
+            setRecommendation, 
+            onSave, 
+            onCancel, 
+            getRiskColor 
+        }) => {
+            const riskOptions = [
+                { value: 'low', label: 'Low Risk', description: 'Minimal security impact' },
+                { value: 'medium', label: 'Medium Risk', description: 'Moderate security concern' },
+                { value: 'high', label: 'High Risk', description: 'Significant security risk' }
+            ];
 
-    const handleSave = () => {
-        onSave(riskLevel, recommendation);
-    };
+            return (
+                <div className="border border-primary rounded p-3 bg-primary-subtle">
+                    <h6 className="text-primary mb-3">
+                        <Edit3 size={16} className="me-1" />
+                        Risk Assessment
+                    </h6>
+                    
+                    <div className="row">
+                        <div className="col-md-6">
+                            <label className="form-label fw-medium">Risk Level</label>
+                            <div className="d-grid gap-2">
+                                {riskOptions.map((option) => (
+                                    <div key={option.value} className="form-check">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="riskLevel"
+                                            id={`risk-${option.value}`}
+                                            value={option.value}
+                                            checked={adminRiskLevel === option.value}
+                                            onChange={(e) => setAdminRiskLevel(e.target.value)}
+                                        />
+                                        <label className="form-check-label d-flex align-items-center" htmlFor={`risk-${option.value}`}>
+                                            <span className={`badge ${getRiskColor(option.value)} me-2`}>
+                                                {option.label}
+                                            </span>
+                                            <small className="text-muted">{option.description}</small>
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="col-md-6">
+                            <div className="mb-3">
+                                <label className="form-label fw-medium">Admin Notes</label>
+                                <textarea
+                                    className="form-control"
+                                    rows={3}
+                                    value={adminNotes}
+                                    onChange={(e) => setAdminNotes(e.target.value)}
+                                    placeholder="Internal notes about this assessment..."
+                                />
+                                <div className="form-text">These notes are for internal review purposes.</div>
+                            </div>
+                        </div>
+                    </div>
 
+                    <div className="mb-3">
+                        <label className="form-label fw-medium">Recommendation</label>
+                        <textarea
+                            className="form-control"
+                            rows={3}
+                            value={recommendation}
+                            onChange={(e) => setRecommendation(e.target.value)}
+                            placeholder="Recommendations for addressing this issue..."
+                        />
+                        <div className="form-text">Provide actionable recommendations for the user.</div>
+                    </div>
+
+                    <div className="d-flex justify-content-end gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={onCancel}
+                        >
+                            <X size={16} className="me-1" />
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onSave();
+                            }}
+                            style={{ display: 'inline-block' }} // Ensure no form interference
+                        >
+                            <Save size={16} className="me-1" />
+                            Save Assessment
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+// Final Review Form Component
+const FinalReviewForm = ({ 
+    adminOverallRisk, 
+    setAdminOverallRisk, 
+    adminSummary, 
+    setAdminSummary, 
+    onSubmit, 
+    onCancel 
+}) => {
     const riskOptions = [
-        { value: 'low', label: 'Low Risk', color: 'text-green-600 bg-green-50 border-green-200' },
-        { value: 'medium', label: 'Medium Risk', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-        { value: 'high', label: 'High Risk', color: 'text-red-600 bg-red-50 border-red-200' }
+        { value: 'low', label: 'Low Risk', color: 'success' },
+        { value: 'medium', label: 'Medium Risk', color: 'warning' },
+        { value: 'high', label: 'High Risk', color: 'danger' }
     ];
 
     return (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h5 className="text-sm font-medium text-gray-900 mb-3">Risk Assessment</h5>
+        <div className="mt-3 p-3 border rounded bg-light">
+            <h6 className="mb-3">Final Risk Assessment</h6>
             
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Risk Level</label>
-                    <div className="flex space-x-2">
+            <div className="row">
+                <div className="col-md-6">
+                    <label className="form-label fw-medium">Overall Risk Level</label>
+                    <div className="d-grid gap-2">
                         {riskOptions.map((option) => (
-                            <button
-                                key={option.value}
-                                onClick={() => setRiskLevel(option.value)}
-                                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                                    riskLevel === option.value
-                                        ? option.color
-                                        : 'text-gray-600 bg-white border-gray-300 hover:bg-gray-50'
-                                }`}
-                            >
-                                {option.label}
-                            </button>
+                            <div key={option.value} className="form-check">
+                                <input
+                                    className="form-check-input"
+                                    type="radio"
+                                    name="overallRisk"
+                                    id={`overall-risk-${option.value}`}
+                                    value={option.value}
+                                    checked={adminOverallRisk === option.value}
+                                    onChange={(e) => setAdminOverallRisk(e.target.value)}
+                                />
+                                <label className="form-check-label" htmlFor={`overall-risk-${option.value}`}>
+                                    <span className={`badge bg-${option.color} me-2`}>
+                                        {option.label}
+                                    </span>
+                                </label>
+                            </div>
                         ))}
                     </div>
                 </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Recommendation</label>
+                
+                <div className="col-md-6">
+                    <label className="form-label fw-medium">Executive Summary</label>
                     <textarea
-                        value={recommendation}
-                        onChange={(e) => setRecommendation(e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter your assessment and recommendations..."
+                        className="form-control"
+                        rows={4}
+                        value={adminSummary}
+                        onChange={(e) => setAdminSummary(e.target.value)}
+                        placeholder="Provide an overall assessment and key recommendations..."
+                        required
                     />
                 </div>
+            </div>
 
-                <div className="flex justify-end space-x-2">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                        <X className="w-4 h-4 mr-1 inline" />
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <Save className="w-4 h-4 mr-1 inline" />
-                        Save Assessment
-                    </button>
-                </div>
+            <div className="d-flex justify-content-end gap-2 mt-3">
+                <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onCancel}
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={onSubmit}
+                    disabled={!adminOverallRisk || !adminSummary.trim()}
+                >
+                    <CheckSquare size={16} className="me-1" />
+                    Complete Review
+                </button>
             </div>
         </div>
     );
 };
 
 export default ManageSubmissions;
+
+// Submission Details Component
+const SubmissionDetails = ({ 
+    submission, 
+    onAnswerReview, 
+    onFinalReview,
+    onCompleteReview, 
+    editingAnswer, 
+    setEditingAnswer, 
+    getRiskColor, 
+    getRiskIcon, 
+    formatDate 
+}) => {
+    const [finalReviewMode, setFinalReviewMode] = useState(false);
+    const [adminOverallRisk, setAdminOverallRisk] = useState(submission.admin_overall_risk || '');
+    const [adminSummary, setAdminSummary] = useState(submission.admin_summary || '');
+
+    const canFinalize = submission.status === 'under_review' && 
+                       submission.answers?.every(answer => answer.reviewed_by);
+
+    return (
+        <div className="card border-0 shadow-sm">
+            {/* Submission Header */}
+            <div className="card-header bg-white">
+                <div className="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h4 className="mb-2">{submission.title}</h4>
+                        <div className="d-flex align-items-center text-muted small">
+                            <div className="me-4">
+                                <User size={14} className="me-1" />
+                                {submission.user?.name || submission.user?.email}
+                            </div>
+                            <div className="me-4">
+                                <Calendar size={14} className="me-1" />
+                                {formatDate(submission.created_at)}
+                            </div>
+                            {submission.reviewed_at && (
+                                <div>
+                                    <CheckSquare size={14} className="me-1" />
+                                    Reviewed {formatDate(submission.reviewed_at)}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="text-end">
+                        <span className={`badge fs-6 ${getRiskColor(submission.effective_overall_risk)}`}>
+                            {getRiskIcon(submission.effective_overall_risk)}
+                            Overall Risk: {submission.effective_overall_risk.toUpperCase()}
+                        </span>
+                        {submission.review_progress !== undefined && (
+                            <div className="mt-2">
+                                <div className="progress" style={{ height: '6px', width: '150px' }}>
+                                    <div 
+                                        className="progress-bar bg-info" 
+                                        style={{ width: `${submission.review_progress}%` }}
+                                    ></div>
+                                </div>
+                                <small className="text-muted">{Math.round(submission.review_progress)}% reviewed</small>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="card-body">
+                {/* Final Review Section */}
+                {(canFinalize || submission.status === 'completed') && (
+                    <div className="alert alert-info mb-4">
+                        <div className="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 className="alert-heading mb-1">Final Review</h6>
+                                <p className="mb-0">
+                                    {submission.status === 'completed' 
+                                        ? 'This submission has been completed.'
+                                        : 'All answers have been reviewed. Ready for final assessment.'
+                                    }
+                                </p>
+                            </div>
+                            {submission.status !== 'completed' && (
+                                <button
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => setFinalReviewMode(!finalReviewMode)}
+                                >
+                                    {finalReviewMode ? 'Cancel' : 'Finalize Review'}
+                                </button>
+                            )}
+                        </div>
+                        
+                        {finalReviewMode && (
+                            <FinalReviewForm
+                                adminOverallRisk={adminOverallRisk}
+                                setAdminOverallRisk={setAdminOverallRisk}
+                                adminSummary={adminSummary}
+                                setAdminSummary={setAdminSummary}
+                                onSubmit={() => {
+                                    onFinalReview(submission.id, adminOverallRisk, adminSummary);
+                                    setFinalReviewMode(false);
+                                }}
+                                onCancel={() => setFinalReviewMode(false)}
+                            />
+                        )}
+                    </div>
+                )}
+
+                {/* Admin Summary Display */}
+                        {submission.admin_summary && (
+                            <div className="alert alert-success mb-4">
+                                <h6 className="alert-heading">Admin Summary</h6>
+                                <p className="mb-0">{submission.admin_summary}</p>
+                                {submission.reviewer && (
+                                    <small className="text-muted">
+                                        Reviewed by {submission.reviewer.name || submission.reviewer.email}
+                                    </small>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Answers Section */}
+                        <h5 className="mb-3">Audit Answers</h5>
+                        <div className="accordion" id="answersAccordion">
+                            {submission.answers?.map((answer, index) => (
+                                <AnswerCard
+                                    key={answer.id}
+                                    answer={answer}
+                                    index={index}
+                                    isEditing={editingAnswer === answer.id}
+                                    onEdit={(answerId) => setEditingAnswer(editingAnswer === answerId ? null : answerId)}
+                                    onSave={onAnswerReview}
+                                    onCancel={() => setEditingAnswer(null)}
+                                    getRiskColor={getRiskColor}
+                                    getRiskIcon={getRiskIcon}
+                                    formatDate={formatDate}
+                                    canEdit={submission.status !== 'completed'}
+                                />
+                            ))}
+                        </div>
+
+                        {!submission.answers?.length && (
+                            <div className="text-center py-4">
+                                <AlertCircle size={48} className="text-muted mb-3" />
+                                <p className="text-muted">No answers found for this submission.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Answer Card Component
+        const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRiskColor, getRiskIcon, formatDate, canEdit }) => {
+            const [adminRiskLevel, setAdminRiskLevel] = useState(answer.admin_risk_level || answer.system_risk_level || 'low');
+            const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
+            const [recommendation, setRecommendation] = useState(answer.recommendation || '');
+
+            const handleSave = () => {
+                onSave(answer.id, adminRiskLevel, adminNotes, recommendation);
+            };
+
+            const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
+            const isReviewed = answer.reviewed_by;
+
+            return (
+                <div className="accordion-item">
+                    <h2 className="accordion-header">
+                        <button
+                            className="accordion-button collapsed"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target={`#answer${answer.id}`}
+                            aria-expanded="false"
+                        >
+                            <div className="d-flex justify-content-between align-items-center w-100 me-3">
+                                <div className="flex-grow-1">
+                                    <div className="fw-medium">{answer.question?.question}</div>
+                                    <div className="small text-muted">
+                                        Category: {answer.question?.category}
+                                        {isReviewed && (
+                                            <span className="ms-2">
+                                                <CheckCircle size={12} className="text-success me-1" />
+                                                Reviewed
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <span className={`badge ${getRiskColor(effectiveRiskLevel)}`}>
+                                    {getRiskIcon(effectiveRiskLevel)}
+                                    {effectiveRiskLevel.toUpperCase()}
+                                </span>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id={`answer${answer.id}`} className="accordion-collapse collapse">
+                        <div className="accordion-body">
+                            {/* User's Answer */}
+                            <div className="mb-3">
+                                <h6>User's Response:</h6>
+                                <div className="p-3 bg-light rounded">
+                                    {answer.answer}
+                                </div>
+                            </div>
+
+                            {/* System Risk Level Display */}
+                            {answer.system_risk_level && (
+                                <div className="mb-3">
+                                    <h6>System Assessment:</h6>
+                                    <span className={`badge ${getRiskColor(answer.system_risk_level)}`}>
+                                        {getRiskIcon(answer.system_risk_level)}
+                                        System Risk: {answer.system_risk_level.toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Review Section */}
+                            {isEditing ? (
+                                <AnswerReviewForm
+                                    adminRiskLevel={adminRiskLevel}
+                                    setAdminRiskLevel={setAdminRiskLevel}
+                                    adminNotes={adminNotes}
+                                    setAdminNotes={setAdminNotes}
+                                    recommendation={recommendation}
+                                    setRecommendation={setRecommendation}
+                                    onSave={handleSave}
+                                    onCancel={onCancel}
+                                    getRiskColor={getRiskColor}
+                                />
+                            ) : (
+                                <div className="d-flex justify-content-between align-items-start">
+                                    <div className="flex-grow-1">
+                                        {answer.admin_risk_level && (
+                                            <div className="mb-2">
+                                                <strong>Admin Assessment:</strong>
+                                                <span className={`badge ${getRiskColor(answer.admin_risk_level)} ms-2`}>
+                                                    {getRiskIcon(answer.admin_risk_level)}
+                                                    {answer.admin_risk_level.toUpperCase()}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {answer.admin_notes && (
+                                            <div className="mb-2">
+                                                <strong>Admin Notes:</strong>
+                                                <p className="mb-0 mt-1">{answer.admin_notes}</p>
+                                            </div>
+                                        )}
+                                        {answer.recommendation && (
+                                            <div className="mb-2">
+                                                <strong>Recommendation:</strong>
+                                                <p className="mb-0 mt-1">{answer.recommendation}</p>
+                                            </div>
+                                        )}
+                                        {answer.reviewed_by && (
+                                            <small className="text-muted">
+                                                Reviewed by {answer.reviewer?.name || answer.reviewer?.email || 'Admin'} 
+                                                {answer.reviewed_at && ` on ${formatDate(answer.reviewed_at)}`}
+                                            </small>
+                                        )}
+                                        {!isReviewed && (
+                                            <div className="alert alert-warning alert-sm">
+                                                <small><Eye size={14} className="me-1" />This answer is pending admin review.</small>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {canEdit && (
+                                        <button
+                                            className="btn btn-outline-primary btn-sm"
+                                            onClick={() => onEdit(answer.id)}
+                                        >
+                                            <Edit3 size={14} className="me-1" />
+                                            {isReviewed ? 'Edit Review' : 'Review'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };

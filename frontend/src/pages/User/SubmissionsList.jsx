@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/useAuth';
 import api from '../../api/axios';
 
 const getRiskLevelBadge = (level) => {
@@ -21,32 +22,60 @@ const getRiskIcon = (level) => {
 };
 
 const SubmissionsList = () => {
+    const { user } = useAuth();
+    const navigate = useNavigate();
     const [submissions, setSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
+        if (!user) {
+            navigate('/login', { 
+                state: { 
+                    from: '/submissions',
+                    message: 'Please log in to view your submissions.' 
+                }
+            });
+            return;
+        }
         fetchSubmissions();
-    }, []);
+    }, [user, navigate]);
 
     const fetchSubmissions = async () => {
         try {
-            // Get user info to determine which endpoint to use
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const token = localStorage.getItem('token');
+            console.log('Auth State:', {
+                token: token ? 'Present' : 'Missing',
+                user: localStorage.getItem('user'),
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             
-            let endpoint;
-            if (user.role === 'admin') {
-                // Admin can see all audit submissions
-                endpoint = '/api/admin/audit-submissions';
-            } else {
-                // Regular users see only their own submissions
-                endpoint = '/api/my-audit-submissions';
+            if (!token) {
+                throw new Error('No authentication token found');
             }
-            
-            const response = await api.get(endpoint);
-            setSubmissions(response.data);
+
+            const response = await api.get('/audit-submissions');
+            const transformedSubmissions = response.data.map(submission => ({
+                ...submission,
+                overall_risk: submission.effective_overall_risk || submission.admin_overall_risk || submission.system_overall_risk || 'low'
+            }));
+            setSubmissions(transformedSubmissions);
+            setError(null);
         } catch (err) {
             console.error('Error fetching submissions:', err);
+            if (err.response?.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                navigate('/login', {
+                    state: { 
+                        from: '/submissions',
+                        message: 'Your session has expired. Please log in again.'
+                    }
+                });
+                return;
+            }
             setError('Failed to load submissions. Please try again later.');
         } finally {
             setLoading(false);
@@ -207,11 +236,11 @@ const SubmissionsList = () => {
                                                         Submitted by: {submission.user?.name || 'Unknown'}
                                                     </div>
                                                 </div>
-                                                {submission.summary && (
+                                                {submission.admin_summary && (
                                                     <p className="mt-2 mb-0 text-muted small">
-                                                        {submission.summary.length > 120 
-                                                            ? `${submission.summary.substring(0, 120)}...` 
-                                                            : submission.summary
+                                                        {submission.admin_summary.length > 120 
+                                                            ? `${submission.admin_summary.substring(0, 120)}...` 
+                                                            : submission.admin_summary
                                                         }
                                                     </p>
                                                 )}

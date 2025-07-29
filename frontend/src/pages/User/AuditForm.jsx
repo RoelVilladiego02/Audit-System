@@ -40,7 +40,9 @@ const AuditForm = () => {
     const fetchQuestions = async () => {
         try {
             console.log('Fetching questions with user:', user);
-            const response = await api.get('/api/audit-questions');
+            // Fix: Remove leading slash to avoid double /api/
+            const response = await api.get('audit-questions');
+            console.log('Questions response:', response.data);
             setQuestions(response.data);
             // Initialize answers object with empty values
             const initialAnswers = {};
@@ -60,6 +62,8 @@ const AuditForm = () => {
                 });
             } else if (err.response?.status === 403) {
                 setError('You do not have permission to access audit questions.');
+            } else if (err.response?.status === 404) {
+                setError('Audit questions endpoint not found. Please check your server configuration.');
             } else {
                 setError(err.response?.data?.message || 'Failed to load audit questions. Please try again later.');
             }
@@ -126,7 +130,8 @@ const AuditForm = () => {
             console.log('Number of valid answers:', validAnswers.length);
             console.log('Current answers state:', answers);
             
-            const response = await api.post('/api/audit-submissions', submissionData);
+            // Fix: Remove leading slash to avoid double /api/
+            const response = await api.post('audit-submissions', submissionData);
             console.log('Submission successful:', response.data);
             
             // Show success message with status info
@@ -169,17 +174,6 @@ const AuditForm = () => {
                 } else {
                     setError('Server error. Please ensure you have the correct permissions and try again.');
                 }
-            } else if (err.response?.status === 403) {
-                setError('You do not have permission to submit audits. Only users can submit audit assessments.');
-                return;
-            } else if (err.response?.status === 500) {
-                if (err.response?.data?.message?.includes('SQLSTATE')) {
-                    setError('There was a problem processing your submission. Please try again later.');
-                    console.error('Database error:', err.response.data);
-                } else {
-                    setError('Server error. Please ensure you have the correct permissions and try again.');
-                }
-                return;
             } else if (err.response?.status === 422) {
                 // Validation errors
                 const errors = err.response?.data?.errors;

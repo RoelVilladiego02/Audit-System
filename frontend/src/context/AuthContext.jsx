@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    const response = await axios.get('/api/user', {
+                    const response = await axios.get('/user', {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
     const checkAuth = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('/api/user', {
+            const response = await axios.get('/user', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
         setLoading(true);
         setError('');
         try {
-            const response = await axios.post('/api/auth/login', { 
+            const response = await axios.post('/auth/login', { 
                 email, 
                 password 
             });
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
         setLoading(true);
         setError('');
         try {
-            const response = await axios.post('/api/auth/register', {
+            const response = await axios.post('/auth/register', {
                 name,
                 email,
                 password,
@@ -146,7 +146,7 @@ export const AuthProvider = ({ children }) => {
         try {
             // Call logout endpoint if available
             if (user) {
-                await axios.post('/api/auth/logout');
+                                await axios.post('/auth/logout');
             }
         } catch (error) {
             console.error('Logout error:', error);

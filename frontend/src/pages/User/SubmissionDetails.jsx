@@ -39,8 +39,8 @@ const SubmissionDetails = () => {
 
     const fetchSubmissionDetails = async () => {
         try {
-            // Enhanced logging for debugging
-            const url = `/audit-submissions/${id}`; // Updated to match Laravel routes
+            // Use the correct endpoint that matches Laravel routes
+            const url = `/audit-submissions/${id}`;
             console.log('Fetching submission details:', {
                 url: url,
                 id: id,
@@ -140,8 +140,10 @@ const SubmissionDetails = () => {
         
         const stats = { high: 0, medium: 0, low: 0 };
         submission.answers.forEach(answer => {
-            if (answer.risk_level && stats.hasOwnProperty(answer.risk_level)) {
-                stats[answer.risk_level]++;
+            // Use effective risk level (admin override or system calculated)
+            const riskLevel = answer.admin_risk_level || answer.system_risk_level || 'low';
+            if (stats.hasOwnProperty(riskLevel)) {
+                stats[riskLevel]++;
             }
         });
         return stats;
@@ -149,6 +151,7 @@ const SubmissionDetails = () => {
 
     const riskStats = getRiskStats();
     const totalAnswers = submission.answers?.length || 0;
+    const effectiveOverallRisk = submission.effective_overall_risk || submission.admin_overall_risk || submission.system_overall_risk || 'low';
 
     return (
         <div className="container-fluid py-4">
@@ -159,7 +162,7 @@ const SubmissionDetails = () => {
                         <div>
                             <h1 className="h2 mb-1">
                                 <i className="bi bi-clipboard-data me-2"></i>
-                                Audit Results #{submission.id}
+                                {submission.title || `Audit Results #${submission.id}`}
                             </h1>
                             <p className="text-muted mb-0">
                                 <i className="bi bi-calendar me-1"></i>
@@ -177,6 +180,17 @@ const SubmissionDetails = () => {
                                     Submitted by: {submission.user.name || submission.user.email}
                                 </p>
                             )}
+                            {submission.status && (
+                                <p className="text-muted small mb-0">
+                                    <i className="bi bi-check-circle me-1"></i>
+                                    Status: <span className="text-capitalize">{submission.status}</span>
+                                    {submission.review_progress && submission.status !== 'completed' && (
+                                        <span className="ms-2 badge bg-info">
+                                            {submission.review_progress}% Reviewed
+                                        </span>
+                                    )}
+                                </p>
+                            )}
                         </div>
                         <Link
                             to="/submissions"
@@ -189,13 +203,19 @@ const SubmissionDetails = () => {
 
                     {/* Overall Risk Summary Card */}
                     <div className="card mb-4">
-                        <div className={`card-header text-center py-4 ${getRiskLevelClass(submission.overall_risk)}`}>
+                        <div className={`card-header text-center py-4 ${getRiskLevelClass(effectiveOverallRisk)}`}>
                             <h3 className="card-title mb-2">
-                                {getRiskIcon(submission.overall_risk)} Overall Risk Level: {submission.overall_risk?.toUpperCase()}
+                                {getRiskIcon(effectiveOverallRisk)} Overall Risk Level: {effectiveOverallRisk?.toUpperCase()}
                             </h3>
                             <p className="card-text mb-0">
                                 {submission.title || 'Security Audit Assessment'}
                             </p>
+                            {submission.admin_overall_risk && submission.admin_overall_risk !== submission.system_overall_risk && (
+                                <small className="d-block mt-2 opacity-75">
+                                    <i className="bi bi-person-check me-1"></i>
+                                    Admin reviewed (System calculated: {submission.system_overall_risk?.toUpperCase()})
+                                </small>
+                            )}
                         </div>
                         <div className="card-body">
                             <div className="row text-center">
@@ -216,6 +236,19 @@ const SubmissionDetails = () => {
                                     <p className="text-muted small mb-0">Low Risk Items</p>
                                 </div>
                             </div>
+                            
+                            {/* Admin Summary */}
+                            {submission.admin_summary && (
+                                <div className="mt-4 pt-3 border-top">
+                                    <h6 className="text-primary mb-2">
+                                        <i className="bi bi-person-check me-1"></i>
+                                        Admin Review Summary:
+                                    </h6>
+                                    <div className="alert alert-info mb-0">
+                                        {submission.admin_summary}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -230,68 +263,95 @@ const SubmissionDetails = () => {
                         <div className="card-body">
                             {submission.answers && submission.answers.length > 0 ? (
                                 <div className="row">
-                                    {submission.answers.map((answer, index) => (
-                                        <div key={answer.id || index} className="col-12 mb-4">
-                                            <div className="card border-0 shadow-sm">
-                                                <div className="card-body">
-                                                    <div className="d-flex justify-content-between align-items-start mb-3">
-                                                        <div className="flex-grow-1">
-                                                            <h6 className="card-title mb-2">
-                                                                <span className="badge bg-primary me-2">{index + 1}</span>
-                                                                {answer.question?.question || 'Question not available'}
-                                                            </h6>
-                                                            {answer.question?.description && (
-                                                                <p className="text-muted small mb-2">
-                                                                    {answer.question.description}
-                                                                </p>
-                                                            )}
+                                    {submission.answers.map((answer, index) => {
+                                        const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'low';
+                                        const isReviewed = answer.admin_risk_level || answer.reviewed_by;
+                                        
+                                        return (
+                                            <div key={answer.id || index} className="col-12 mb-4">
+                                                <div className="card border-0 shadow-sm">
+                                                    <div className="card-body">
+                                                        <div className="d-flex justify-content-between align-items-start mb-3">
+                                                            <div className="flex-grow-1">
+                                                                <h6 className="card-title mb-2">
+                                                                    <span className="badge bg-primary me-2">{index + 1}</span>
+                                                                    {answer.question?.question || 'Question not available'}
+                                                                    {isReviewed && (
+                                                                        <i className="bi bi-check-circle-fill text-success ms-2" title="Admin Reviewed"></i>
+                                                                    )}
+                                                                </h6>
+                                                                {answer.question?.description && (
+                                                                    <p className="text-muted small mb-2">
+                                                                        {answer.question.description}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <div className="ms-3">
+                                                                <span className={`badge ${getRiskLevelClass(effectiveRiskLevel)}`}>
+                                                                    {getRiskIcon(effectiveRiskLevel)} {effectiveRiskLevel?.toUpperCase()}
+                                                                </span>
+                                                                {answer.admin_risk_level && answer.admin_risk_level !== answer.system_risk_level && (
+                                                                    <small className="d-block text-muted mt-1">
+                                                                        System: {answer.system_risk_level?.toUpperCase()}
+                                                                    </small>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <span className={`badge ${getRiskLevelClass(answer.risk_level)} ms-3`}>
-                                                            {getRiskIcon(answer.risk_level)} {answer.risk_level?.toUpperCase()}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    <div className="mb-3">
-                                                        <strong className="text-primary">Your Answer:</strong>
-                                                        <span className="ms-2 badge bg-light text-dark">{answer.answer}</span>
-                                                    </div>
+                                                        
+                                                        <div className="mb-3">
+                                                            <strong className="text-primary">Your Answer:</strong>
+                                                            <span className="ms-2 badge bg-light text-dark">{answer.answer}</span>
+                                                        </div>
 
-                                                    {answer.recommendation && (
-                                                        <div className="alert alert-info mb-0">
-                                                            <strong><i className="bi bi-lightbulb me-1"></i>Recommendation:</strong>
-                                                            <div className="mt-1">{answer.recommendation}</div>
-                                                        </div>
-                                                    )}
+                                                        {answer.recommendation && (
+                                                            <div className="alert alert-info mb-2">
+                                                                <strong><i className="bi bi-lightbulb me-1"></i>Recommendation:</strong>
+                                                                <div className="mt-1">{answer.recommendation}</div>
+                                                            </div>
+                                                        )}
 
-                                                    {/* Show risk criteria if available */}
-                                                    {answer.question?.risk_criteria && (
-                                                        <div className="mt-3">
-                                                            <details className="text-muted small">
-                                                                <summary className="cursor-pointer">View Risk Criteria</summary>
-                                                                <div className="mt-2 ps-3">
-                                                                    {answer.question.risk_criteria.high && (
-                                                                        <p className="mb-1">
-                                                                            <strong className="text-danger">🔴 High:</strong> {answer.question.risk_criteria.high}
-                                                                        </p>
-                                                                    )}
-                                                                    {answer.question.risk_criteria.medium && (
-                                                                        <p className="mb-1">
-                                                                            <strong className="text-warning">🟡 Medium:</strong> {answer.question.risk_criteria.medium}
-                                                                        </p>
-                                                                    )}
-                                                                    {answer.question.risk_criteria.low && (
-                                                                        <p className="mb-0">
-                                                                            <strong className="text-success">🟢 Low:</strong> {answer.question.risk_criteria.low}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                            </details>
-                                                        </div>
-                                                    )}
+                                                        {answer.admin_notes && (
+                                                            <div className="alert alert-warning mb-2">
+                                                                <strong><i className="bi bi-person-check me-1"></i>Admin Notes:</strong>
+                                                                <div className="mt-1">{answer.admin_notes}</div>
+                                                                {answer.reviewer && (
+                                                                    <small className="text-muted d-block mt-2">
+                                                                        Reviewed by: {answer.reviewer.name} on {new Date(answer.reviewed_at).toLocaleDateString()}
+                                                                    </small>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Show risk criteria if available */}
+                                                        {answer.question?.risk_criteria && (
+                                                            <div className="mt-3">
+                                                                <details className="text-muted small">
+                                                                    <summary className="cursor-pointer">View Risk Criteria</summary>
+                                                                    <div className="mt-2 ps-3">
+                                                                        {answer.question.risk_criteria.high && (
+                                                                            <p className="mb-1">
+                                                                                <strong className="text-danger">🔴 High:</strong> {answer.question.risk_criteria.high}
+                                                                            </p>
+                                                                        )}
+                                                                        {answer.question.risk_criteria.medium && (
+                                                                            <p className="mb-1">
+                                                                                <strong className="text-warning">🟡 Medium:</strong> {answer.question.risk_criteria.medium}
+                                                                            </p>
+                                                                        )}
+                                                                        {answer.question.risk_criteria.low && (
+                                                                            <p className="mb-0">
+                                                                                <strong className="text-success">🟢 Low:</strong> {answer.question.risk_criteria.low}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </details>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="text-center py-4">
