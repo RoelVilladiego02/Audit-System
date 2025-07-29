@@ -8,6 +8,7 @@ use App\Models\AuditQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuditSubmissionController extends Controller
@@ -21,33 +22,40 @@ class AuditSubmissionController extends Controller
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'answers' => 'required|array|min:1',
-                'answers.*.audit_question_id' => 'required|exists:audit_questions,id',
+                'answers.*.audit_question_id' => 'required|integer|exists:audit_questions,id',
                 'answers.*.answer' => 'required|string',
             ]);
 
             return DB::transaction(function () use ($validated, $request) {
                 // Create submission with initial status
                 $submission = AuditSubmission::create([
-                    'user_id' => $request->user()->id,
+                    'user_id' => (int) $request->user()->id,
                     'title' => $validated['title'],
                     'status' => 'submitted',
                 ]);
 
                 // Process each answer
                 foreach ($validated['answers'] as $answerData) {
-                    $question = AuditQuestion::find($answerData['audit_question_id']);
+                    $questionId = (int) $answerData['audit_question_id'];
+                    $question = AuditQuestion::find($questionId);
+                    
+                    if (!$question) {
+                        throw ValidationException::withMessages([
+                            'answers' => "Question with ID {$questionId} not found"
+                        ]);
+                    }
                     
                     // Validate answer is in possible answers
                     if (!$question->isValidAnswer($answerData['answer'])) {
                         throw ValidationException::withMessages([
-                            'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$question->id}"
+                            'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$questionId}"
                         ]);
                     }
                     
                     // Create answer with system risk assessment
                     $answer = AuditAnswer::create([
                         'audit_submission_id' => $submission->id,
-                        'audit_question_id' => $answerData['audit_question_id'],
+                        'audit_question_id' => $questionId,
                         'answer' => $answerData['answer'],
                         'status' => 'pending',
                     ]);
@@ -77,24 +85,30 @@ class AuditSubmissionController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            Log::error('Audit submission creation failed: ' . $e->getMessage(), [
+                'user_id' => $request->user()->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to create audit submission.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
 
     /**
      * Get audit submissions list.
+     * Users can only see their own submissions, while admins can see all.
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = AuditSubmission::with(['user', 'reviewer'])
+            $query = AuditSubmission::with(['user:id,name,email', 'reviewer:id,name,email'])
                 ->withCount([
                     'answers',
                     'answers as reviewed_answers_count' => function ($q) {
-                        $q->reviewed();
+                        $q->whereNotNull('reviewed_by');
                     }
                 ]);
             
@@ -103,46 +117,45 @@ class AuditSubmissionController extends Controller
                 $query->where('user_id', $request->user()->id);
             }
             
-            // Apply filters
-            if ($request->has('status')) {
-                $query->where('status', $request->status);
-            }
+            $submissions = $query->orderBy('created_at', 'desc')->get();
+
+            // Transform the data with proper type casting
+            $transformedSubmissions = $submissions->map(function ($submission) {
+                return [
+                    'id' => (int) $submission->id,
+                    'title' => (string) $submission->title,
+                    'user' => $submission->user ? [
+                        'id' => (int) $submission->user->id,
+                        'name' => (string) $submission->user->name,
+                        'email' => (string) $submission->user->email,
+                    ] : null,
+                    'status' => (string) $submission->status,
+                    'system_overall_risk' => $submission->system_overall_risk,
+                    'admin_overall_risk' => $submission->admin_overall_risk,
+                    'effective_overall_risk' => $submission->admin_overall_risk ?? $submission->system_overall_risk ?? 'pending',
+                    'review_progress' => $this->calculateReviewProgress($submission),
+                    'reviewer' => $submission->reviewer ? [
+                        'id' => (int) $submission->reviewer->id,
+                        'name' => (string) $submission->reviewer->name,
+                        'email' => (string) $submission->reviewer->email,
+                    ] : null,
+                    'created_at' => $submission->created_at,
+                    'reviewed_at' => $submission->reviewed_at,
+                    'answers_count' => (int) $submission->answers_count,
+                    'reviewed_answers_count' => (int) $submission->reviewed_answers_count,
+                ];
+            });
             
-            if ($request->has('risk_level')) {
-                $query->where(function($q) use ($request) {
-                    $q->where('admin_overall_risk', $request->risk_level)
-                      ->orWhere(function($subQ) use ($request) {
-                          $subQ->whereNull('admin_overall_risk')
-                               ->where('system_overall_risk', $request->risk_level);
-                      });
-                });
-            }
-            
-            $submissions = $query->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($submission) {
-                    return [
-                        'id' => $submission->id,
-                        'title' => $submission->title,
-                        'user' => $submission->user->name,
-                        'status' => $submission->status,
-                        'system_overall_risk' => $submission->system_overall_risk,
-                        'admin_overall_risk' => $submission->admin_overall_risk,
-                        'effective_overall_risk' => $submission->effective_overall_risk,
-                        'review_progress' => $submission->review_progress,
-                        'reviewer' => $submission->reviewer?->name,
-                        'created_at' => $submission->created_at,
-                        'reviewed_at' => $submission->reviewed_at,
-                        'answers_count' => $submission->answers_count,
-                        'reviewed_answers_count' => $submission->reviewed_answers_count,
-                    ];
-                });
-            
-            return response()->json($submissions);
+            return response()->json($transformedSubmissions);
         } catch (\Exception $e) {
+            Log::error('Failed to retrieve submissions: ' . $e->getMessage(), [
+                'user_id' => $request->user()->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to retrieve submissions.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -150,39 +163,126 @@ class AuditSubmissionController extends Controller
     /**
      * Get specific audit submission.
      */
-    public function show(AuditSubmission $submission): JsonResponse
-    {
-        try {
-            // Authorization check
-            if (!auth()->user()->isAdmin() && $submission->user_id !== auth()->id()) {
-                return response()->json(['message' => 'Unauthorized'], 403);
-            }
-
-            $data = $submission->load([
-                'answers.question',
-                'answers.reviewer',
-                'user',
-                'reviewer'
-            ]);
-
-            return response()->json($data);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to retrieve submission.',
-                'error' => $e->getMessage()
-            ], 500);
+public function show(AuditSubmission $submission): JsonResponse
+{
+    try {
+        // Authorization check - users can only view their own submissions, admins can view all
+        if ($submission->user_id !== auth()->id() && auth()->user()->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
+
+        // Load relationships
+        $submission->load([
+            'answers' => function ($query) {
+                $query->orderBy('id');
+            },
+            'answers.question:id,question,description,possible_answers,risk_criteria',
+            'answers.reviewer:id,name,email',
+            'user:id,name,email',
+        ]);
+
+        // Log raw data for debugging
+        Log::info('Submission Show - Raw Data', [
+            'reviewed_by' => gettype($submission->reviewed_by) . ': ' . json_encode($submission->reviewed_by),
+            'reviewer' => gettype($submission->reviewer) . ': ' . json_encode($submission->reviewer)
+        ]);
+
+        // Transform data with validation
+        $data = [
+            'id' => (int) $submission->id,
+            'title' => (string) $submission->title,
+            'status' => (string) $submission->status,
+            'system_overall_risk' => $submission->system_overall_risk,
+            'admin_overall_risk' => $submission->admin_overall_risk,
+            'effective_overall_risk' => $submission->admin_overall_risk ?? $submission->system_overall_risk ?? 'pending',
+            'admin_summary' => $submission->admin_summary,
+            'created_at' => $submission->created_at,
+            'reviewed_at' => $submission->reviewed_at,
+            'user' => $submission->user instanceof \App\Models\User ? [
+                'id' => (int) $submission->user->id,
+                'name' => (string) $submission->user->name,
+                'email' => (string) $submission->user->email,
+            ] : null,
+            'reviewer' => $submission->reviewed_by ? (
+                $submission->reviewer instanceof \App\Models\User && $submission->reviewer->role === 'admin' ? [
+                    'id' => (int) $submission->reviewer->id,
+                    'name' => (string) $submission->reviewer->name,
+                    'email' => (string) $submission->reviewer->email,
+                ] : null
+            ) : null,
+            'answers' => $submission->answers->map(function ($answer) {
+                Log::info('Answer Raw Data', [
+                    'reviewed_by' => gettype($answer->reviewed_by) . ': ' . json_encode($answer->reviewed_by),
+                    'reviewer' => gettype($answer->reviewer) . ': ' . json_encode($answer->reviewer)
+                ]);
+                return [
+                    'id' => (int) $answer->id,
+                    'audit_submission_id' => (int) $answer->audit_submission_id,
+                    'audit_question_id' => (int) $answer->audit_question_id,
+                    'answer' => (string) $answer->answer,
+                    'system_risk_level' => $answer->system_risk_level,
+                    'admin_risk_level' => $answer->admin_risk_level,
+                    'status' => (string) $answer->status,
+                    'admin_notes' => $answer->admin_notes,
+                    'recommendation' => $answer->recommendation,
+                    'reviewed_by' => $answer->reviewed_by ? (int) $answer->reviewed_by : null,
+                    'reviewed_at' => $answer->reviewed_at,
+                    'question' => $answer->question instanceof \App\Models\AuditQuestion ? [
+                        'id' => (int) $answer->question->id,
+                        'question' => (string) $answer->question->question,
+                        'description' => $answer->question->description,
+                        'possible_answers' => $answer->question->possible_answers,
+                        'risk_criteria' => $answer->question->risk_criteria,
+                    ] : null,
+                    'reviewer' => $answer->reviewed_by ? (
+                        $answer->reviewer instanceof \App\Models\User && $answer->reviewer->role === 'admin' ? [
+                            'id' => (int) $answer->reviewer->id,
+                            'name' => (string) $answer->reviewer->name,
+                            'email' => (string) $answer->reviewer->email,
+                        ] : null
+                    ) : null,
+                ];
+            }),
+            'review_progress' => $this->calculateReviewProgress($submission),
+        ];
+
+        return response()->json($data);
+    } catch (\Exception $e) {
+        Log::error('Failed to retrieve submission: ' . $e->getMessage(), [
+            'submission_id' => $submission->id ?? null,
+            'user_id' => auth()->id(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'message' => 'Failed to retrieve submission.',
+            'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+        ], 500);
     }
+}
 
     /**
      * Admin review individual answer.
      */
-    public function reviewAnswer(Request $request, AuditAnswer $answer): JsonResponse
-    {
-        try {
-            if (!auth()->user()->isAdmin()) {
-                return response()->json(['message' => 'Only admins can review answers'], 403);
-            }
+    public function reviewAnswer(Request $request, AuditSubmission $submission, AuditAnswer $answer): JsonResponse
+{
+    try {
+        if (auth()->user()->role !== 'admin') {
+            return response()->json(['message' => 'Only admins can review answers'], 403);
+        }
+
+        // Add logging for debugging
+        Log::info('Review Answer Request', [
+            'submission_id' => $submission->id,
+            'answer_id' => $answer->id,
+            'admin_id' => auth()->id()
+        ]);
+        
+        if (!$answer) {
+            return response()->json([
+                'message' => 'Answer not found or does not belong to this submission'
+            ], 404);
+        }
 
             $validated = $request->validate([
                 'admin_risk_level' => 'required|in:low,medium,high',
@@ -200,8 +300,8 @@ class AuditSubmissionController extends Controller
             return response()->json([
                 'message' => 'Answer reviewed successfully.',
                 'answer' => $answer->fresh(['question', 'reviewer']),
-                'submission_status' => $answer->auditSubmission->status,
-                'submission_progress' => $answer->auditSubmission->review_progress
+                'submission_status' => $submission->fresh()->status,
+                'submission_progress' => $this->calculateReviewProgress($submission->fresh())
             ]);
         } catch (ValidationException $e) {
             return response()->json([
@@ -209,9 +309,16 @@ class AuditSubmissionController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            Log::error('Failed to review answer: ' . $e->getMessage(), [
+                'submission_id' => $submission->id ?? null,
+                'answer_id' => $answerId ?? null,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to review answer.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -242,13 +349,13 @@ class AuditSubmissionController extends Controller
                 'admin_overall_risk' => $validated['admin_overall_risk'],
                 'admin_summary' => $validated['admin_summary'] ?? null,
                 'status' => 'completed',
-                'reviewed_by' => auth()->id(),
+                'reviewed_by' => (int) auth()->id(), // Ensure integer
                 'reviewed_at' => now(),
             ]);
 
             return response()->json([
                 'message' => 'Audit review completed successfully.',
-                'submission' => $submission->fresh(['user', 'reviewer'])
+                'submission' => $submission->fresh(['user'])
             ]);
         } catch (ValidationException $e) {
             return response()->json([
@@ -256,9 +363,15 @@ class AuditSubmissionController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            Log::error('Failed to complete review: ' . $e->getMessage(), [
+                'submission_id' => $submission->id ?? null,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to complete review.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -289,18 +402,18 @@ class AuditSubmissionController extends Controller
                     })
                     ->count(),
                 'pending_answers' => AuditAnswer::pendingReview()->count(),
-                'recent_submissions' => AuditSubmission::with('user')
+                'recent_submissions' => AuditSubmission::with('user:id,name,email')
                     ->orderBy('created_at', 'desc')
                     ->limit(5)
                     ->get()
                     ->map(function($sub) {
                         return [
-                            'id' => $sub->id,
-                            'title' => $sub->title,
-                            'user' => $sub->user->name,
-                            'status' => $sub->status,
-                            'effective_overall_risk' => $sub->effective_overall_risk,
-                            'review_progress' => $sub->review_progress,
+                            'id' => (int) $sub->id,
+                            'title' => (string) $sub->title,
+                            'user' => $sub->user ? (string) $sub->user->name : 'Unknown',
+                            'status' => (string) $sub->status,
+                            'effective_overall_risk' => $sub->admin_overall_risk ?? $sub->system_overall_risk ?? 'pending',
+                            'review_progress' => $this->calculateReviewProgress($sub),
                             'created_at' => $sub->created_at
                         ];
                     })
@@ -308,9 +421,14 @@ class AuditSubmissionController extends Controller
 
             return response()->json($dashboard);
         } catch (\Exception $e) {
+            Log::error('Failed to load dashboard: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to load dashboard.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -325,7 +443,7 @@ class AuditSubmissionController extends Controller
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
-            $dateRange = $request->get('days', 30);
+            $dateRange = (int) $request->get('days', 30);
             $startDate = now()->subDays($dateRange);
 
             $analytics = [
@@ -372,9 +490,14 @@ class AuditSubmissionController extends Controller
 
             return response()->json($analytics);
         } catch (\Exception $e) {
+            Log::error('Failed to generate analytics: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Failed to generate analytics.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -403,6 +526,23 @@ class AuditSubmissionController extends Controller
             ->select(DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, reviewed_at)) as avg_hours'))
             ->first();
 
-        return round($completed->avg_hours ?? 0, 2);
+        return round((float) ($completed->avg_hours ?? 0), 2);
     }
+
+    /**
+     * Calculate review progress for a submission
+     */
+    private function calculateReviewProgress(AuditSubmission $submission): float
+    {
+        $totalAnswers = $submission->answers()->count();
+        if ($totalAnswers === 0) {
+            return 0.0;
+        }
+        
+        $reviewedAnswers = $submission->answers()->whereNotNull('reviewed_by')->count();
+        return round(($reviewedAnswers / $totalAnswers) * 100, 2);
+    }
+
+    
+
 }

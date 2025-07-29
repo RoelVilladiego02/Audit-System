@@ -28,7 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
 
     // Admin routes
-    Route::middleware(['role:admin'])->group(function () {
+    Route::middleware(['role:admin', 'debug.audit'])->group(function () {
         Route::apiResource('users', UserController::class);
         Route::apiResource('departments', DepartmentController::class);
         
@@ -40,23 +40,31 @@ Route::middleware('auth:sanctum')->group(function () {
         // Additional admin routes for question management
         Route::get('/audit-questions-statistics', [AuditQuestionController::class, 'statistics']);
         
-        // Admin can access all submissions and vulnerabilities  
-        Route::get('/admin/vulnerability-submissions', [VulnerabilitySubmissionController::class, 'index']);
-        Route::get('/admin/audit-submissions', [AuditSubmissionController::class, 'index']);
-        Route::get('/admin/vulnerabilities', [VulnerabilityController::class, 'index']);
-        Route::get('/audit-analytics', [AuditSubmissionController::class, 'analytics']);
-        
+        // Admin-only audit submission operations
+        Route::prefix('audit-submissions')->group(function () {
+            // Review routes (admin only)
+            Route::put('/{submission}/answers/{answer}/review', [AuditSubmissionController::class, 'reviewAnswer']);
+            Route::put('/{submission}/complete', [AuditSubmissionController::class, 'completeReview']);
+
+            // Analytics and dashboard (admin only)
+            Route::get('/admin/dashboard', [AuditSubmissionController::class, 'adminDashboard']);
+            Route::get('/admin/analytics', [AuditSubmissionController::class, 'analytics']);
+        });
+
         // Admin vulnerability management
-        Route::put('/vulnerability-submissions/{submission}/assign', [VulnerabilitySubmissionController::class, 'assign']);
-        Route::put('/vulnerability-submissions/{submission}/status', [VulnerabilitySubmissionController::class, 'updateStatus']);
+        Route::prefix('vulnerability-submissions')->group(function () {
+            Route::get('/admin', [VulnerabilitySubmissionController::class, 'index']);
+            Route::put('/{submission}/assign', [VulnerabilitySubmissionController::class, 'assign']);
+            Route::put('/{submission}/status', [VulnerabilitySubmissionController::class, 'updateStatus']);
+        });
+
+        Route::get('/admin/vulnerabilities', [VulnerabilityController::class, 'index']);
     });
 
     // User routes
     Route::middleware(['role:user'])->group(function () {
-        
         // User audit submissions
         Route::post('/audit-submissions', [AuditSubmissionController::class, 'store']);
-        Route::get('/my-audit-submissions', [AuditSubmissionController::class, 'index']);
         
         // User vulnerability submissions
         Route::post('/vulnerability-submissions', [VulnerabilitySubmissionController::class, 'store']);
@@ -66,26 +74,33 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Common routes for both roles (with permission checks inside controllers)
     Route::group([], function () {
+        // Audit Submissions - common operations (with controller-level access control)
+        Route::prefix('audit-submissions')->group(function () {
+            Route::get('/', [AuditSubmissionController::class, 'index']); // List submissions (admin sees all, users see their own)
+            Route::get('/{submission}', [AuditSubmissionController::class, 'show']); // View specific submission (with ownership check)
+        });
+
         // Departments (read-only for regular users)
         Route::get('/departments', [DepartmentController::class, 'index']);
         Route::get('/departments/{department}', [DepartmentController::class, 'show']);
         
-        // Status-based filters for vulnerability submissions
-        Route::get('/vulnerability-submissions/status/{status}', [VulnerabilitySubmissionController::class, 'byStatus']);
-        Route::get('/vulnerability-submissions/assigned/{userId}', [VulnerabilitySubmissionController::class, 'byAssignee']);        // Submissions - individual access with ownership/admin checks
-        Route::get('/audit-submissions/{submission}', [AuditSubmissionController::class, 'show']);
-        Route::get('/vulnerability-submissions/{submission}', [VulnerabilitySubmissionController::class, 'show']);
-        Route::put('/vulnerability-submissions/{submission}', [VulnerabilitySubmissionController::class, 'update']);
-        Route::delete('/vulnerability-submissions/{submission}', [VulnerabilitySubmissionController::class, 'destroy']);
+        // Vulnerability submissions - common operations
+        Route::prefix('vulnerability-submissions')->group(function () {
+            Route::get('/status/{status}', [VulnerabilitySubmissionController::class, 'byStatus'])
+                ->where('status', '[a-z_]+');
+            Route::get('/assigned/{userId}', [VulnerabilitySubmissionController::class, 'byAssignee'])
+                ->where('userId', '[0-9]+');
+            Route::get('/{submission}', [VulnerabilitySubmissionController::class, 'show']);
+            Route::put('/{submission}', [VulnerabilitySubmissionController::class, 'update']);
+            Route::delete('/{submission}', [VulnerabilitySubmissionController::class, 'destroy']);
+        });
         
-        // Vulnerabilities - individual access with ownership/admin checks
-        Route::get('/vulnerabilities/{vulnerability}', [VulnerabilityController::class, 'show']);
-        Route::put('/vulnerabilities/{vulnerability}', [VulnerabilityController::class, 'update']);
-        Route::delete('/vulnerabilities/{vulnerability}', [VulnerabilityController::class, 'destroy']);
-        
-        // General submission listings (filtered by role in controller)
-        Route::get('/vulnerability-submissions', [VulnerabilitySubmissionController::class, 'index']);
-        Route::get('/audit-submissions', [AuditSubmissionController::class, 'index']);
-        Route::get('/vulnerabilities', [VulnerabilityController::class, 'index']);
+        // Vulnerabilities - common operations
+        Route::prefix('vulnerabilities')->group(function () {
+            Route::get('/', [VulnerabilityController::class, 'index']);
+            Route::get('/{vulnerability}', [VulnerabilityController::class, 'show']);
+            Route::put('/{vulnerability}', [VulnerabilityController::class, 'update']);
+            Route::delete('/{vulnerability}', [VulnerabilityController::class, 'destroy']);
+        });
     });
 });

@@ -11,11 +11,6 @@ class AuditQuestion extends Model
 {
     use HasFactory, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'question',
         'description',
@@ -23,12 +18,8 @@ class AuditQuestion extends Model
         'risk_criteria',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
+        'id' => 'integer',
         'possible_answers' => 'array',
         'risk_criteria' => 'array',
         'created_at' => 'datetime',
@@ -36,42 +27,25 @@ class AuditQuestion extends Model
         'deleted_at' => 'datetime',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'deleted_at',
     ];
 
-    /**
-     * Get the audit submissions for this question.
-     */
     public function submissions(): HasMany
     {
         return $this->hasMany(AuditSubmission::class);
     }
 
-    /**
-     * Get the audit answers for this question.
-     */
     public function answers(): HasMany
     {
         return $this->hasMany(AuditAnswer::class, 'audit_question_id');
     }
 
-    /**
-     * Scope to filter active (non-deleted) questions.
-     */
     public function scopeActive($query)
     {
         return $query->whereNull('deleted_at');
     }
 
-    /**
-     * Check if the question has valid risk criteria.
-     */
     public function hasValidRiskCriteria(): bool
     {
         $criteria = $this->risk_criteria;
@@ -83,9 +57,6 @@ class AuditQuestion extends Model
         return isset($criteria['high']) || isset($criteria['medium']) || isset($criteria['low']);
     }
 
-    /**
-     * Get formatted risk criteria for display.
-     */
     public function getFormattedRiskCriteriaAttribute(): string
     {
         if (!$this->hasValidRiskCriteria()) {
@@ -108,9 +79,6 @@ class AuditQuestion extends Model
         return implode(' | ', $formatted);
     }
 
-    /**
-     * Get the possible answers as a comma-separated string.
-     */
     public function getPossibleAnswersStringAttribute(): string
     {
         if (!is_array($this->possible_answers)) {
@@ -120,9 +88,6 @@ class AuditQuestion extends Model
         return implode(', ', $this->possible_answers);
     }
 
-    /**
-     * Validate if an answer is valid for this question.
-     */
     public function isValidAnswer(string $answer): bool
     {
         if (!is_array($this->possible_answers)) {
@@ -132,12 +97,9 @@ class AuditQuestion extends Model
         return in_array($answer, $this->possible_answers, true);
     }
 
-    /**
-     * Get usage statistics for this question.
-     */
     public function getUsageStats(): array
     {
-        $totalSubmissions = $this->submissions()->count();
+        $totalSubmissions = $this->answers()->count();
         $responseStats = [];
 
         if (is_array($this->possible_answers)) {

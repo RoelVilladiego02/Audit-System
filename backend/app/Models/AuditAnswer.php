@@ -11,16 +11,22 @@ class AuditAnswer extends Model
         'audit_submission_id',
         'audit_question_id',
         'answer',
-        'system_risk_level',      // Auto-calculated from question criteria
-        'admin_risk_level',       // Admin override
-        'reviewed_by',            // Admin user ID who reviewed this
-        'reviewed_at',            // When this answer was reviewed
-        'admin_notes',            // Admin comments on this answer
-        'recommendation',         // Recommendation text
-        'status',                 // pending, reviewed
+        'system_risk_level',
+        'admin_risk_level',
+        'reviewed_by',
+        'reviewed_at',
+        'admin_notes',
+        'recommendation',
+        'status',
     ];
 
     protected $casts = [
+        'id' => 'integer',
+        'audit_submission_id' => 'integer',
+        'audit_question_id' => 'integer',
+        'reviewed_by' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
         'reviewed_at' => 'datetime',
     ];
 
@@ -61,6 +67,11 @@ class AuditAnswer extends Model
     public function calculateSystemRiskLevel(): string
     {
         $question = $this->question;
+        if (!$question) {
+            // Try to load the question if it's not loaded
+            $question = AuditQuestion::find($this->audit_question_id);
+        }
+        
         if (!$question || !is_array($question->risk_criteria)) {
             return 'low';
         }
@@ -94,7 +105,7 @@ class AuditAnswer extends Model
 
         $this->update([
             'admin_risk_level' => $riskLevel,
-            'reviewed_by' => $admin->id,
+            'reviewed_by' => (int) $admin->id, // Ensure integer
             'reviewed_at' => now(),
             'admin_notes' => $notes,
             'recommendation' => $recommendation,
@@ -103,15 +114,15 @@ class AuditAnswer extends Model
 
         // Update submission status
         $submission = $this->auditSubmission;
-        if ($submission->status === 'submitted') {
+        if ($submission && $submission->status === 'submitted') {
             $submission->update(['status' => 'under_review']);
         }
 
         // Check if all answers are now reviewed
-        if ($submission->isFullyReviewed()) {
+        if ($submission && $submission->isFullyReviewed()) {
             $submission->update([
                 'status' => 'completed',
-                'reviewed_by' => $admin->id,
+                'reviewed_by' => (int) $admin->id,
                 'reviewed_at' => now(),
                 'system_overall_risk' => $submission->calculateSystemOverallRisk(),
             ]);
@@ -123,12 +134,17 @@ class AuditAnswer extends Model
     // Scopes
     public function scopePendingReview($query)
     {
-        return $query->where('status', 'pending')->orWhereNull('status');
+        return $query->where(function($q) {
+            $q->where('status', 'pending')
+              ->orWhereNull('status')
+              ->orWhereNull('reviewed_by');
+        });
     }
 
     public function scopeReviewed($query)
     {
-        return $query->where('status', 'reviewed');
+        return $query->where('status', 'reviewed')
+                    ->whereNotNull('reviewed_by');
     }
 
     public function scopeHighRisk($query)

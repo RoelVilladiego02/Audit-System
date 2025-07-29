@@ -13,17 +13,20 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Create admin if it doesn't exist
-        if (!\App\Models\User::where('email', 'admin@admin.com')->exists()) {
-            $this->call(AdminSeeder::class);
-        }
-
+        // Always refresh seeders for development
         $this->call([
+            // First create users
+            AdminSeeder::class,
+            UserSeeder::class,
+            
+            // Then create core data
             DepartmentSeeder::class,
             AuditQuestionSeeder::class,
+            
+            // Finally create submissions and their relationships
+            AuditSubmissionSeeder::class,
             VulnerabilitySubmissionSeeder::class,
             VulnerabilitySeeder::class,
-            AuditSubmissionSeeder::class,
-            AuditAnswerSeeder::class,
         ]);
     }
 }

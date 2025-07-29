@@ -24,8 +24,8 @@ class AuditAnswerSeeder extends Seeder
                 
                 // Create base answer
                 $auditAnswer = AuditAnswer::create([
-                    'audit_submission_id' => $submission->id,
-                    'audit_question_id' => $question->id,
+                    'audit_submission_id' => (int)$submission->id,
+                    'audit_question_id' => (int)$question->id,
                     'answer' => $answer,
                     'system_risk_level' => $riskLevels[array_rand($riskLevels)],
                     'status' => $submission->status === 'completed' ? 'reviewed' : 'pending',
@@ -36,7 +36,7 @@ class AuditAnswerSeeder extends Seeder
                 if ($submission->status === 'completed') {
                     $auditAnswer->update([
                         'admin_risk_level' => $riskLevels[array_rand($riskLevels)],
-                        'reviewed_by' => $admin->id,
+                        'reviewed_by' => (int)$admin->id,
                         'reviewed_at' => $submission->reviewed_at,
                         'admin_notes' => fake()->paragraph(),
                         'recommendation' => fake()->paragraph(),
