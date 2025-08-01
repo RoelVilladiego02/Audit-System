@@ -23,8 +23,8 @@ class DatabaseSeeder extends Seeder
             AuditQuestionSeeder::class,
             
             // Finally create submissions and their relationships
-            // AuditSubmissionSeeder::class,
-            // VulnerabilitySubmissionSeeder::class,
+            AuditSubmissionSeeder::class,
+            VulnerabilitySubmissionSeeder::class,
             // VulnerabilitySeeder::class,
         ]);
     }
