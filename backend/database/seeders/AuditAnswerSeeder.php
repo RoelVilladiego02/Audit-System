@@ -29,6 +29,7 @@ class AuditAnswerSeeder extends Seeder
                     'answer' => $answer,
                     'system_risk_level' => $riskLevels[array_rand($riskLevels)],
                     'status' => $submission->status === 'completed' ? 'reviewed' : 'pending',
+                    'recommendation' => 'Review required to address potential security concerns.',
                     'created_at' => $submission->created_at,
                 ]);
 

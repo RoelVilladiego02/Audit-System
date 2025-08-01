@@ -36,6 +36,7 @@ class AuditQuestionController extends Controller
             $validated = $request->validate([
                 'question' => 'required|string|max:1000',
                 'description' => 'nullable|string|max:2000',
+                'category' => 'required|string|max:255',
                 'possible_answers' => 'required|array|min:1',
                 'possible_answers.*' => 'required|string|max:255',
                 'risk_criteria' => 'required|array',
@@ -104,6 +105,7 @@ class AuditQuestionController extends Controller
             $validated = $request->validate([
                 'question' => 'required|string|max:1000',
                 'description' => 'nullable|string|max:2000',
+                'category' => 'required|string|max:255',
                 'possible_answers' => 'required|array|min:1',
                 'possible_answers.*' => 'required|string|max:255',
                 'risk_criteria' => 'required|array',
@@ -118,7 +120,7 @@ class AuditQuestionController extends Controller
             // Check if question is being used in answers
             if ($auditQuestion->answers()->exists()) {
                 // Only allow minor updates if question is in use
-                $allowedFields = ['description'];
+                $allowedFields = ['description', 'category'];
                 $updateData = array_intersect_key($validated, array_flip($allowedFields));
                 
                 if (empty($updateData)) {
@@ -211,6 +213,7 @@ class AuditQuestionController extends Controller
                     'id' => $question->id,
                     'question' => $question->question,
                     'description' => $question->description,
+                    'category' => $question->category,
                     'possible_answers' => $question->possible_answers,
                     'formatted_risk_criteria' => $question->formatted_risk_criteria,
                     'answers_count' => $question->answers_count,

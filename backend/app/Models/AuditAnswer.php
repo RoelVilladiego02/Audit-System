@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class AuditAnswer extends Model
 {
@@ -98,19 +99,53 @@ class AuditAnswer extends Model
         if (!$admin->isAdmin()) {
             throw new \Exception('Only admins can review audit answers');
         }
-
         if (!in_array($riskLevel, ['low', 'medium', 'high'])) {
             throw new \Exception('Invalid risk level');
         }
 
-        $this->update([
+        $recommendation = $recommendation ? trim($recommendation) : 'Review required to address potential security concerns.';
+        
+        $updateData = [
             'admin_risk_level' => $riskLevel,
-            'reviewed_by' => (int) $admin->id, // Ensure integer
+            'reviewed_by' => (int) $admin->id,
             'reviewed_at' => now(),
-            'admin_notes' => $notes,
+            'admin_notes' => $notes ? trim($notes) : '',
             'recommendation' => $recommendation,
             'status' => 'reviewed',
+        ];
+
+        Log::info('Updating audit answer', [
+            'answer_id' => $this->id,
+            'update_data' => $updateData
         ]);
+
+        $result = $this->update($updateData);
+
+        // Verify update
+        $updated = self::find($this->id);
+        foreach ($updateData as $key => $value) {
+            if ($key === 'reviewed_at' && $value instanceof \Carbon\Carbon) {
+                $expected = $value->toDateTimeString();
+                $actual = $updated->$key ? $updated->$key->toDateTimeString() : null;
+                if ($actual !== $expected) {
+                    Log::error('Answer update verification failed for timestamp', [
+                        'answer_id' => $this->id,
+                        'field' => $key,
+                        'expected' => $expected,
+                        'actual' => $actual
+                    ]);
+                    throw new \Exception("Failed to verify answer update for field: {$key}");
+                }
+            } elseif ($updated->$key !== $value) {
+                Log::error('Answer update verification failed', [
+                    'answer_id' => $this->id,
+                    'field' => $key,
+                    'expected' => $value,
+                    'actual' => $updated->$key
+                ]);
+                throw new \Exception("Failed to verify answer update for field: {$key}");
+            }
+        }
 
         // Update submission status
         $submission = $this->auditSubmission;
@@ -118,17 +153,7 @@ class AuditAnswer extends Model
             $submission->update(['status' => 'under_review']);
         }
 
-        // Check if all answers are now reviewed
-        if ($submission && $submission->isFullyReviewed()) {
-            $submission->update([
-                'status' => 'completed',
-                'reviewed_by' => (int) $admin->id,
-                'reviewed_at' => now(),
-                'system_overall_risk' => $submission->calculateSystemOverallRisk(),
-            ]);
-        }
-
-        return true;
+        return $result;
     }
 
     // Scopes

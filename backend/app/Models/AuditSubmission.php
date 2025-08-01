@@ -5,14 +5,22 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Models\VulnerabilitySubmission;
+use App\Models\Vulnerability;
 
 class AuditSubmission extends Model
 {
+    use HasFactory, SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'title',
         'system_overall_risk',
-        'admin_overall_risk', 
+        'admin_overall_risk',
         'status',
         'reviewed_by',
         'reviewed_at',
@@ -111,5 +119,147 @@ class AuditSubmission extends Model
     public function scopeCompleted($query)
     {
         return $query->where('status', 'completed');
+    }
+
+    /**
+     * Check if this submission has any high risk answers or overall risk
+     */
+    public function hasHighRisk(): bool
+    {
+        if ($this->admin_overall_risk === 'high') {
+            return true;
+        }
+
+        return $this->answers()->where(function($query) {
+            $query->where('admin_risk_level', 'high')
+                ->orWhere('system_risk_level', 'high');
+        })->exists();
+    }
+
+    /**
+     * Create a vulnerability submission from this audit submission
+     */
+    /**
+     * Override the update method to verify data persistence
+     *
+     * @param array $attributes
+     * @param array $options
+     * @return bool
+     */
+    public function update(array $attributes = [], array $options = []): bool
+    {
+        Log::info('Updating submission with attributes', [
+            'submission_id' => $this->id,
+            'current_state' => $this->toArray(),
+            'update_attributes' => $attributes
+        ]);
+
+        $result = parent::update($attributes, $options);
+        $updated = self::find($this->id);
+
+        foreach ($attributes as $key => $value) {
+            if ($key === 'reviewed_at' && $value instanceof \Carbon\Carbon) {
+                $expected = $value->toDateTimeString();
+                $actual = $updated->$key ? $updated->$key->toDateTimeString() : null;
+                if ($actual !== $expected) {
+                    Log::error('Submission update verification failed for timestamp', [
+                        'submission_id' => $this->id,
+                        'field' => $key,
+                        'expected' => $expected,
+                        'actual' => $actual
+                    ]);
+                    throw new \Exception("Failed to verify submission update for field: {$key}");
+                }
+            } elseif ($updated->$key !== $value) {
+                Log::error('Submission update verification failed', [
+                    'submission_id' => $this->id,
+                    'field' => $key,
+                    'expected' => $value,
+                    'actual' => $updated->$key
+                ]);
+                throw new \Exception("Failed to verify submission update for field: {$key}");
+            }
+        }
+
+        Log::info('Submission update verified successfully', [
+            'submission_id' => $this->id,
+            'verified_attributes' => $attributes
+        ]);
+        return $result;
+    }
+
+    public function createVulnerabilitySubmission(): ?VulnerabilitySubmission
+    {
+        if (!$this->hasHighRisk()) {
+            Log::info('Skipping vulnerability creation - no high risks found', [
+                'audit_submission_id' => $this->id
+            ]);
+            return null;
+        }
+
+        return DB::transaction(function () {
+            $highRiskAnswers = $this->answers()
+                ->with('question')
+                ->where(function($query) {
+                    $query->where('admin_risk_level', 'high')
+                        ->orWhere('system_risk_level', 'high');
+                })
+                ->get();
+
+            // Create vulnerabilities for high-risk answers OR if admin marked overall as high
+            if ($highRiskAnswers->isEmpty() && $this->admin_overall_risk !== 'high') {
+                Log::info('No high risk conditions met for vulnerability creation', [
+                    'audit_submission_id' => $this->id,
+                    'admin_overall_risk' => $this->admin_overall_risk,
+                    'high_risk_answers_count' => 0
+                ]);
+                return null;
+            }
+
+            // If admin overall risk is high but no specific high-risk answers, create a general vulnerability
+            if ($highRiskAnswers->isEmpty() && $this->admin_overall_risk === 'high') {
+                $highRiskAnswers = collect([
+                    (object)[
+                        'question' => (object)['question' => 'Overall Security Assessment'],
+                        'admin_risk_level' => 'high',
+                        'system_risk_level' => null,
+                        'recommendation' => 'Address overall security concerns identified during audit review.'
+                    ]
+                ]);
+            }
+
+            // Calculate risk level based on audit's overall risk
+            $riskLevel = $this->admin_overall_risk ?? $this->system_overall_risk ?? 'high';
+            
+            $vulnSubmission = VulnerabilitySubmission::create([
+                'user_id' => $this->user_id,
+                'title' => "High Risk Audit - {$this->title}",
+                'status' => 'open',
+                'risk_score' => $riskLevel === 'high' ? 75 : ($riskLevel === 'medium' ? 50 : 25),
+                'risk_level' => $riskLevel,
+            ]);
+
+            Log::info('Created vulnerability submission', [
+                'audit_submission_id' => $this->id,
+                'vulnerability_submission_id' => $vulnSubmission->id
+            ]);
+
+            foreach ($highRiskAnswers as $answer) {
+                $vulnerability = $vulnSubmission->vulnerabilities()->create([
+                    'category' => $answer->question->category ?? 'General',
+                    'title' => $answer->question->question ?? 'High Risk Audit Finding',
+                    'severity' => $answer->admin_risk_level ?? $answer->system_risk_level ?? 'high',
+                    'remediation_steps' => $answer->recommendation ?? 'Review and address the high-risk audit finding.',
+                    'is_resolved' => false
+                ]);
+
+                Log::info('Created vulnerability from audit answer', [
+                    'vulnerability_id' => $vulnerability->id,
+                    'audit_answer_id' => $answer->id
+                ]);
+            }
+
+            return $vulnSubmission;
+        });
     }
 }

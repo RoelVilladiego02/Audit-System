@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->text('question');
             $table->text('description')->nullable();
+            $table->string('category')->default('General');
             $table->json('possible_answers');
             $table->json('risk_criteria');
             $table->timestamps();

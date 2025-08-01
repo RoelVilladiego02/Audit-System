@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('reviewed_by')->nullable()->constrained('users');
             $table->timestamp('reviewed_at')->nullable();
             $table->text('admin_notes')->nullable();
-            $table->text('recommendation')->nullable();
+            $table->text('recommendation')->default('Review required to address potential security concerns.');
             $table->enum('status', ['pending', 'reviewed'])->default('pending');
             $table->timestamps();
         });

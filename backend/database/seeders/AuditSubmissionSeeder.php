@@ -18,7 +18,7 @@ class AuditSubmissionSeeder extends Seeder
         $questions = AuditQuestion::all();
         $riskLevels = ['low', 'medium', 'high'];
         $statuses = ['draft', 'submitted', 'under_review', 'completed'];
-        
+
         $auditTitles = [
             'Quarterly Security Assessment',
             'Annual Compliance Review',
@@ -28,8 +28,6 @@ class AuditSubmissionSeeder extends Seeder
             'Cloud Security Assessment',
             'Access Control Review',
             'Security Policy Compliance Check',
-            'Access Control Review',
-            'Data Protection Audit',
             'Incident Response Assessment',
             'Third-Party Vendor Review',
             'Employee Security Training Audit',
@@ -37,46 +35,48 @@ class AuditSubmissionSeeder extends Seeder
             'Business Continuity Plan Review'
         ];
 
-        $admin = User::where('role', 'admin')->first();
-
         // Create 20 sample audit submissions
         for ($i = 0; $i < 20; $i++) {
             $status = $statuses[array_rand($statuses)];
             $systemRisk = $riskLevels[array_rand($riskLevels)];
             $createdAt = fake()->dateTimeBetween('-6 months', 'now');
-            
+            $reviewedAt = $status === 'completed' ? fake()->dateTimeBetween($createdAt, 'now') : null;
+            $adminRisk = $status === 'completed' ? $riskLevels[array_rand($riskLevels)] : null;
+
             $submission = AuditSubmission::create([
                 'user_id' => (int)$users->random()->id,
                 'title' => $auditTitles[array_rand($auditTitles)] . ' - ' . fake()->year(),
                 'system_overall_risk' => $systemRisk,
+                'admin_overall_risk' => $adminRisk,
                 'status' => $status,
+                'reviewed_by' => $status === 'completed' ? (int)$admin->id : null,
+                'reviewed_at' => $reviewedAt,
+                'admin_summary' => $status === 'completed' ? fake()->paragraph() : null,
                 'created_at' => $createdAt,
-                'updated_at' => $createdAt,
+                'updated_at' => $reviewedAt ?? $createdAt,
             ]);
 
-            // Create answers for each question
+            // Create answers for each question, aligned with submission status
             foreach ($questions as $question) {
+                $possibleAnswers = $question->possible_answers;
+                $answer = $possibleAnswers[array_rand($possibleAnswers)];
+                $systemRiskLevel = $riskLevels[array_rand($riskLevels)];
+                $answerStatus = $status === 'completed' ? 'reviewed' : 'pending';
+                $adminRiskLevel = $status === 'completed' ? $riskLevels[array_rand($riskLevels)] : null;
+
                 AuditAnswer::create([
                     'audit_submission_id' => $submission->id,
                     'audit_question_id' => $question->id,
-                    'answer' => fake()->paragraph(),
-                    'system_risk_level' => $riskLevels[array_rand($riskLevels)],
-                    'recommendation' => fake()->paragraph(),
-                    'status' => 'pending',
-                    'created_at' => $createdAt,
-                    'updated_at' => $createdAt,
-                ]);
-            }
-
-            // If status is completed, add review details
-            if ($status === 'completed') {
-                $reviewedAt = fake()->dateTimeBetween($createdAt, 'now');
-                $submission->update([
-                    'admin_overall_risk' => $riskLevels[array_rand($riskLevels)],
-                    'reviewed_by' => (int)$admin->id,
+                    'answer' => $answer,
+                    'system_risk_level' => $systemRiskLevel,
+                    'admin_risk_level' => $adminRiskLevel,
+                    'reviewed_by' => $status === 'completed' ? (int)$admin->id : null,
                     'reviewed_at' => $reviewedAt,
-                    'admin_summary' => fake()->paragraph(),
-                    'updated_at' => $reviewedAt
+                    'admin_notes' => $status === 'completed' ? fake()->paragraph() : null,
+                    'recommendation' => fake()->paragraph(),
+                    'status' => $answerStatus,
+                    'created_at' => $createdAt,
+                    'updated_at' => $reviewedAt ?? $createdAt,
                 ]);
             }
         }

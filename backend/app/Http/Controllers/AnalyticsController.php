@@ -5,76 +5,137 @@ namespace App\Http\Controllers;
 use App\Models\VulnerabilitySubmission;
 use App\Models\AuditSubmission;
 use App\Models\Vulnerability;
-use App\Models\Department;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class AnalyticsController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * Get analytics data for vulnerabilities and/or audits.
+     */
+    public function index(Request $request): JsonResponse
     {
-        $timeRange = $request->input('timeRange', 'month');
-        $userId = $request->input('userId');
-        $type = $request->input('type', 'all'); // 'vulnerability', 'audit', or 'all'
-        
-        $startDate = $this->getStartDate($timeRange);
-        
-        Log::info('Analytics Request', [
-            'timeRange' => $timeRange,
-            'userId' => $userId,
-            'type' => $type,
-            'startDate' => $startDate
-        ]);
-        
-        // Get data based on type
-        if ($type === 'vulnerability') {
-            $data = $this->getVulnerabilityAnalytics($startDate, $userId);
-        } elseif ($type === 'audit') {
-            $data = $this->getAuditAnalytics($startDate, $userId);
-        } else {
-            $data = $this->getCombinedAnalytics($startDate, $userId);
-        }
+        try {
+            $timeRange = $request->input('timeRange', 'week');
+            $userId = $request->input('userId');
+            $type = $request->input('type', 'all');
+            $startDateInput = $request->input('startDate');
+            $endDateInput = $request->input('endDate');
 
-        return response()->json($data);
+            $startDate = $this->getStartDate($timeRange, $startDateInput, $endDateInput);
+
+            Log::info('Analytics Request', [
+                'timeRange' => $timeRange,
+                'userId' => $userId,
+                'type' => $type,
+                'startDate' => $startDate->toDateTimeString()
+            ]);
+
+            // Authorization checks
+            if ($userId && !$request->user()->isAdmin() && $userId != $request->user()->id) {
+                return response()->json(['message' => 'Unauthorized to access other users\' analytics'], 403);
+            }
+            // Restrict non-admins from accessing global analytics (no userId)
+            // Current logic might be preventing admin access
+            if (!$userId && !$request->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized: Non-admin users can only access their own analytics'], 403);
+            }
+
+            // Get data based on type
+            if ($type === 'vulnerability') {
+                $data = $this->getVulnerabilityAnalytics($startDate, $userId);
+            } elseif ($type === 'audit') {
+                $data = $this->getAuditAnalytics($startDate, $userId);
+            } else {
+                $data = $this->getCombinedAnalytics($startDate, $userId);
+            }
+
+            return response()->json($data);
+        } catch (\Exception $e) {
+            Log::error('Failed to generate analytics: ' . $e->getMessage(), [
+                'user_id' => $request->user()->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to generate analytics.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 
-    private function getVulnerabilityAnalytics($startDate, $userId = null)
+    /**
+     * Calculate start date based on time range or custom dates.
+     */
+    private function getStartDate(string $timeRange, ?string $startDateInput = null, ?string $endDateInput = null): Carbon
+    {
+        if ($timeRange === 'custom' && $startDateInput) {
+            try {
+                $startDate = Carbon::parse($startDateInput);
+                if ($endDateInput) {
+                    $endDate = Carbon::parse($endDateInput);
+                    if ($endDate->isBefore($startDate)) {
+                        throw new \Exception('End date must be after start date');
+                    }
+                }
+                return $startDate;
+            } catch (\Exception $e) {
+                Log::warning('Invalid custom date range', ['error' => $e->getMessage()]);
+                return Carbon::now()->subWeek();
+            }
+        }
+
+        return match($timeRange) {
+            'week' => Carbon::now()->subWeek(),
+            'year' => Carbon::now()->subYear(),
+            'quarter' => Carbon::now()->subMonths(3),
+            'month' => Carbon::now()->subMonth(),
+            'all' => Carbon::createFromTimestamp(0),
+            default => Carbon::now()->subWeek(),
+        };
+    }
+
+    /**
+     * Get vulnerability analytics data.
+     */
+    private function getVulnerabilityAnalytics(Carbon $startDate, ?int $userId = null): array
     {
         $query = VulnerabilitySubmission::query()
             ->when($userId, function ($q) use ($userId) {
-                return $q->where('user_id', $userId);
+                return $q->where('user_id', (int) $userId);
             })
             ->where('created_at', '>=', $startDate);
 
-        $totalSubmissions = $query->count();
-        
         return [
             'type' => 'vulnerability',
-            'totalSubmissions' => $totalSubmissions,
+            'totalSubmissions' => (int) $query->count(),
             'riskDistribution' => $this->getVulnerabilityRiskDistribution($query->clone()),
             'averageRiskScore' => $this->getAverageRiskScore($query->clone()),
             'statusDistribution' => $this->getStatusDistribution($query->clone()),
             'assignmentStats' => $this->getAssignmentStats($query->clone()),
             'submissionTrends' => $this->getVulnerabilityTrends($query->clone()),
             'commonVulnerabilities' => $this->getCommonVulnerabilities($query->clone()),
-            'departmentAnalysis' => $this->getDepartmentAnalysis($startDate),
             'severityDistribution' => $this->getVulnerabilitySeverityDistribution($query->clone()),
         ];
     }
 
-    private function getAuditAnalytics($startDate, $userId = null)
+    /**
+     * Get audit analytics data.
+     */
+    private function getAuditAnalytics(Carbon $startDate, ?int $userId = null): array
     {
         $query = AuditSubmission::query()
             ->when($userId, function ($q) use ($userId) {
-                return $q->where('user_id', $userId);
+                return $q->where('user_id', (int) $userId);
             })
             ->where('created_at', '>=', $startDate);
 
         return [
             'type' => 'audit',
-            'totalSubmissions' => $query->count(),
+            'totalSubmissions' => (int) $query->count(),
             'riskDistribution' => $this->getAuditRiskDistribution($query->clone()),
             'averageRiskScore' => $this->getAuditAverageRiskScore($query->clone()),
             'submissionTrends' => $this->getAuditTrends($query->clone()),
@@ -82,7 +143,10 @@ class AnalyticsController extends Controller
         ];
     }
 
-    private function getCombinedAnalytics($startDate, $userId = null)
+    /**
+     * Get combined vulnerability and audit analytics.
+     */
+    private function getCombinedAnalytics(Carbon $startDate, ?int $userId = null): array
     {
         $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId);
         $auditData = $this->getAuditAnalytics($startDate, $userId);
@@ -99,16 +163,10 @@ class AnalyticsController extends Controller
         ];
     }
 
-    private function getStartDate($timeRange)
-    {
-        return match($timeRange) {
-            'year' => Carbon::now()->subYear(),
-            'quarter' => Carbon::now()->subMonths(3),
-            default => Carbon::now()->subMonth(),
-        };
-    }
-
-    private function getVulnerabilityRiskDistribution($query)
+    /**
+     * Get vulnerability risk distribution.
+     */
+    private function getVulnerabilityRiskDistribution($query): array
     {
         $distribution = $query->groupBy('risk_level')
             ->select('risk_level', DB::raw('count(*) as count'))
@@ -116,46 +174,58 @@ class AnalyticsController extends Controller
             ->toArray();
 
         return [
-            'high' => $distribution['high'] ?? 0,
-            'medium' => $distribution['medium'] ?? 0,
-            'low' => $distribution['low'] ?? 0
+            'high' => (int) ($distribution['high'] ?? 0),
+            'medium' => (int) ($distribution['medium'] ?? 0),
+            'low' => (int) ($distribution['low'] ?? 0)
         ];
     }
 
-    private function getAuditRiskDistribution($query)
+    /**
+     * Get audit risk distribution.
+     */
+    private function getAuditRiskDistribution($query): array
     {
-        $distribution = $query->groupBy('overall_risk')
-            ->select('overall_risk', DB::raw('count(*) as count'))
-            ->pluck('count', 'overall_risk')
+        $distribution = $query->groupBy('system_overall_risk')
+            ->select('system_overall_risk as risk', DB::raw('count(*) as count'))
+            ->pluck('count', 'risk')
             ->toArray();
 
         return [
-            'high' => $distribution['high'] ?? 0,
-            'medium' => $distribution['medium'] ?? 0,
-            'low' => $distribution['low'] ?? 0
+            'high' => (int) ($distribution['high'] ?? 0),
+            'medium' => (int) ($distribution['medium'] ?? 0),
+            'low' => (int) ($distribution['low'] ?? 0)
         ];
     }
 
-    private function getAverageRiskScore($query)
+    /**
+     * Calculate average risk score for vulnerabilities.
+     */
+    private function getAverageRiskScore($query): float
     {
-        return round($query->avg('risk_score') ?? 0, 1);
+        return round((float) ($query->avg('risk_score') ?? 0), 1);
     }
 
-    private function getAuditAverageRiskScore($query)
+    /**
+     * Calculate average risk score for audits.
+     */
+    private function getAuditAverageRiskScore($query): float
     {
         $avg = $query->select(DB::raw("
             AVG(CASE 
-                WHEN overall_risk = 'high' THEN 3 
-                WHEN overall_risk = 'medium' THEN 2 
-                WHEN overall_risk = 'low' THEN 1 
+                WHEN system_overall_risk = 'high' THEN 3 
+                WHEN system_overall_risk = 'medium' THEN 2 
+                WHEN system_overall_risk = 'low' THEN 1 
                 ELSE 0
             END) as avg_score
         "))->first()->avg_score;
 
-        return round($avg ?? 0, 1);
+        return round((float) ($avg ?? 0), 1);
     }
 
-    private function getStatusDistribution($query)
+    /**
+     * Get status distribution for vulnerabilities.
+     */
+    private function getStatusDistribution($query): array
     {
         $distribution = $query->groupBy('status')
             ->select('status', DB::raw('count(*) as count'))
@@ -163,30 +233,36 @@ class AnalyticsController extends Controller
             ->toArray();
 
         return [
-            'open' => $distribution['open'] ?? 0,
-            'in_progress' => $distribution['in_progress'] ?? 0,
-            'resolved' => $distribution['resolved'] ?? 0,
-            'closed' => $distribution['closed'] ?? 0
+            'open' => (int) ($distribution['open'] ?? 0),
+            'in_progress' => (int) ($distribution['in_progress'] ?? 0),
+            'resolved' => (int) ($distribution['resolved'] ?? 0),
+            'closed' => (int) ($distribution['closed'] ?? 0)
         ];
     }
 
-    private function getAssignmentStats($query)
+    /**
+     * Get assignment statistics for vulnerabilities.
+     */
+    private function getAssignmentStats($query): array
     {
         $total = $query->count();
         $assigned = $query->whereNotNull('assigned_to')->count();
         $unassigned = $total - $assigned;
-        
+
         return [
-            'assigned' => $assigned,
-            'unassigned' => $unassigned,
+            'assigned' => (int) $assigned,
+            'unassigned' => (int) $unassigned,
             'assignmentRate' => $total > 0 ? round(($assigned / $total) * 100, 1) : 0
         ];
     }
 
-    private function getVulnerabilitySeverityDistribution($query)
+    /**
+     * Get vulnerability severity distribution.
+     */
+    private function getVulnerabilitySeverityDistribution($query): array
     {
         $submissionIds = $query->pluck('id');
-        
+
         if ($submissionIds->isEmpty()) {
             return [
                 'low' => 0,
@@ -202,13 +278,16 @@ class AnalyticsController extends Controller
             ->toArray();
 
         return [
-            'low' => $distribution['low'] ?? 0,
-            'medium' => $distribution['medium'] ?? 0,
-            'high' => $distribution['high'] ?? 0
+            'low' => (int) ($distribution['low'] ?? 0),
+            'medium' => (int) ($distribution['medium'] ?? 0),
+            'high' => (int) ($distribution['high'] ?? 0)
         ];
     }
 
-    private function getVulnerabilityTrends($query)
+    /**
+     * Get vulnerability submission trends.
+     */
+    private function getVulnerabilityTrends($query): array
     {
         return $query->select(
             DB::raw("DATE(created_at) as date"),
@@ -220,12 +299,15 @@ class AnalyticsController extends Controller
         ->map(function($trend) {
             return [
                 'date' => Carbon::parse($trend->date)->format('M d'),
-                'count' => $trend->count
+                'count' => (int) $trend->count
             ];
-        });
+        })->toArray();
     }
 
-    private function getAuditTrends($query)
+    /**
+     * Get audit submission trends.
+     */
+    private function getAuditTrends($query): array
     {
         return $query->select(
             DB::raw("DATE(created_at) as date"),
@@ -237,17 +319,20 @@ class AnalyticsController extends Controller
         ->map(function($trend) {
             return [
                 'date' => Carbon::parse($trend->date)->format('M d'),
-                'count' => $trend->count
+                'count' => (int) $trend->count
             ];
-        });
+        })->toArray();
     }
 
-    private function getCommonVulnerabilities($query)
+    /**
+     * Get common vulnerabilities.
+     */
+    private function getCommonVulnerabilities($query): array
     {
         $submissionIds = $query->pluck('id');
-        
+
         if ($submissionIds->isEmpty()) {
-            return collect([]);
+            return [];
         }
 
         return Vulnerability::whereIn('vulnerability_submission_id', $submissionIds)
@@ -255,7 +340,6 @@ class AnalyticsController extends Controller
             ->select(
                 'category',
                 DB::raw('count(*) as total_count'),
-                DB::raw('AVG(cvss_score) as avg_cvss'),
                 DB::raw('COUNT(CASE WHEN is_resolved = 1 THEN 1 END) as resolved_count')
             )
             ->orderByDesc('total_count')
@@ -263,27 +347,29 @@ class AnalyticsController extends Controller
             ->get()
             ->map(function($vuln) {
                 return [
-                    'category' => $vuln->category,
-                    'count' => $vuln->total_count,
-                    'averageCVSS' => round($vuln->avg_cvss, 1),
-                    'resolvedCount' => $vuln->resolved_count,
+                    'category' => (string) $vuln->category,
+                    'count' => (int) $vuln->total_count,
+                    'resolvedCount' => (int) $vuln->resolved_count,
                     'resolutionRate' => round(($vuln->resolved_count / $vuln->total_count) * 100, 1)
                 ];
-            });
+            })->toArray();
     }
 
-    private function getCommonHighRiskAudits($query)
+    /**
+     * Get common high-risk audit questions.
+     */
+    private function getCommonHighRiskAudits($query): array
     {
-        $submissionIds = $query->where('overall_risk', 'high')->pluck('id');
-        
+        $submissionIds = $query->where('system_overall_risk', 'high')->pluck('id');
+
         if ($submissionIds->isEmpty()) {
-            return collect([]);
+            return [];
         }
 
         return DB::table('audit_answers')
             ->join('audit_questions', 'audit_answers.audit_question_id', '=', 'audit_questions.id')
             ->whereIn('audit_answers.audit_submission_id', $submissionIds)
-            ->where('audit_answers.risk_level', 'high')
+            ->where('audit_answers.system_risk_level', 'high')
             ->groupBy('audit_questions.question')
             ->select(
                 'audit_questions.question',
@@ -294,34 +380,9 @@ class AnalyticsController extends Controller
             ->get()
             ->map(function($item) {
                 return [
-                    'question' => $item->question,
-                    'count' => $item->count
+                    'question' => (string) $item->question,
+                    'count' => (int) $item->count
                 ];
-            });
-    }
-
-    private function getDepartmentAnalysis($startDate)
-    {
-        return Department::select(
-            'departments.name',
-            DB::raw('COALESCE(AVG(vulnerability_submissions.risk_score), 0) as averageRiskScore'),
-            DB::raw('COUNT(vulnerability_submissions.id) as totalSubmissions'),
-            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status IN ('resolved', 'closed') THEN 1 END) as resolvedCount"),
-            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status = 'in_progress' THEN 1 END) as inProgressCount"),
-            DB::raw("COUNT(CASE WHEN vulnerability_submissions.status = 'open' THEN 1 END) as openCount")
-        )
-        ->leftJoin('vulnerability_submissions', function($join) use ($startDate) {
-            $join->on('departments.id', '=', 'vulnerability_submissions.department_id')
-                ->where('vulnerability_submissions.created_at', '>=', $startDate);
-        })
-        ->groupBy('departments.id', 'departments.name')
-        ->get()
-        ->map(function ($dept) {
-            return [
-                'name' => $dept->name,
-                'averageRiskScore' => round($dept->averageRiskScore, 1),
-                'completionRate' => round($dept->completionRate, 1)
-            ];
-        });
+            })->toArray();
     }
 }

@@ -19,6 +19,11 @@ return new class extends Migration
             $table->timestamp('reviewed_at')->nullable();
             $table->text('admin_summary')->nullable();
             $table->timestamps();
+            $table->softDeletes();
+            
+            // Add indexes for better performance
+            $table->index('created_at');
+            $table->index('deleted_at');
         });
     }
 

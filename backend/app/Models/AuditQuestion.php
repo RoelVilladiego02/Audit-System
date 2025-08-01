@@ -14,12 +14,14 @@ class AuditQuestion extends Model
     protected $fillable = [
         'question',
         'description',
+        'category',
         'possible_answers',
         'risk_criteria',
     ];
 
     protected $casts = [
         'id' => 'integer',
+        'category' => 'string',
         'possible_answers' => 'array',
         'risk_criteria' => 'array',
         'created_at' => 'datetime',

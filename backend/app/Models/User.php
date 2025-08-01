@@ -16,7 +16,6 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'department_id',          // Optional: link users to departments
     ];
 
     protected $hidden = [
@@ -29,7 +28,9 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
-    // Role checks
+    /**
+     * Check if user is an admin
+     */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
@@ -41,11 +42,6 @@ class User extends Authenticatable
     }
 
     // Relationships
-    public function department()
-    {
-        return $this->belongsTo(Department::class);
-    }
-
     public function vulnerabilitySubmissions()
     {
         return $this->hasMany(VulnerabilitySubmission::class);
