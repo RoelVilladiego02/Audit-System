@@ -195,6 +195,12 @@ useEffect(() => {
                                             </p>
                                         )}
                                         <div className="mb-2">
+                                            <small className="text-secondary fw-bold d-block mb-1">Category:</small>
+                                            <span className="badge bg-info text-white">
+                                                {question.category}
+                                            </span>
+                                        </div>
+                                        <div className="mb-2">
                                             <small className="text-primary fw-bold d-block mb-1">Possible Answers:</small>
                                             <div className="d-flex gap-2 flex-wrap">
                                                 {question.possible_answers?.map((answer, index) => (

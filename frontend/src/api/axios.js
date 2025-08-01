@@ -35,14 +35,15 @@ instance.interceptors.request.use(
 // Enhanced request interceptor for CSRF and logging
 instance.interceptors.request.use(
     async (config) => {
-        // Get auth data
         const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
         const authToken = localStorage.getItem('token');
 
-        // Enhanced request logging
+        // Log request details
         console.log('Request Config:', {
             url: config.url,
             method: config.method,
+            headers: config.headers,
+            data: config.data,
             auth: {
                 token: authToken ? 'Present' : 'Missing',
                 user: user ? {
@@ -53,33 +54,43 @@ instance.interceptors.request.use(
             }
         });
 
-        // Add Bearer token if available
+        // Set auth token if available
         if (authToken) {
             config.headers.Authorization = `Bearer ${authToken}`;
         }
 
-        // Skip CSRF cookie request for the csrf-cookie endpoint itself
+        // Handle CSRF token
         if (!config.url?.includes('sanctum/csrf-cookie')) {
             const csrfToken = getXsrfToken();
             if (!csrfToken) {
+                console.log('No CSRF token found, fetching new one...');
                 try {
-                    console.log('Fetching CSRF token...');
-                    await axios.get('sanctum/csrf-cookie', {
+                    await axios.get('/sanctum/csrf-cookie', {
                         baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
                         withCredentials: true
                     });
                     const newCsrfToken = getXsrfToken();
                     if (newCsrfToken) {
                         config.headers['X-XSRF-TOKEN'] = newCsrfToken;
-                        console.log('New CSRF token set:', newCsrfToken);
+                        console.log('New CSRF token obtained:', newCsrfToken);
+                    } else {
+                        console.error('Failed to obtain CSRF token');
+                        throw new Error('Failed to obtain CSRF token');
                     }
-                } catch (err) {
-                    console.error('Failed to fetch CSRF token:', err);
+                } catch (error) {
+                    console.error('Error fetching CSRF token:', error);
+                    throw error;
                 }
             } else {
                 config.headers['X-XSRF-TOKEN'] = csrfToken;
                 console.log('Using existing CSRF token:', csrfToken);
             }
+        }
+
+        // Ensure PUT requests are properly formatted
+        if (config.method?.toLowerCase() === 'put') {
+            config.headers['X-HTTP-Method-Override'] = 'PUT';
+            config.headers['Content-Type'] = 'application/json';
         }
 
         return config;
@@ -131,8 +142,18 @@ instance.interceptors.response.use(
                 });
                 const csrfToken = getXsrfToken();
                 if (csrfToken) {
-                    error.config.headers['X-XSRF-TOKEN'] = csrfToken;
-                    return axios(error.config);
+                    // Create exact copy of original request configuration
+                    const retryConfig = {
+                        ...error.config,
+                        method: error.config.method, // Explicitly preserve the HTTP method
+                        data: error.config.data, // Preserve request body/payload
+                        params: error.config.params, // Preserve query parameters
+                        headers: {
+                            ...error.config.headers,
+                            'X-XSRF-TOKEN': csrfToken
+                        }
+                    };
+                    return instance(retryConfig);
                 }
             } catch (retryError) {
                 console.error('Failed to refresh CSRF token:', retryError);
@@ -150,8 +171,18 @@ instance.interceptors.response.use(
                     });
                     if (userResponse.data) {
                         localStorage.setItem('user', JSON.stringify(userResponse.data));
-                        // Retry the original request
-                        return axios(error.config);
+                        // Retry the original request with exact same configuration
+                        const retryConfig = {
+                            ...error.config,
+                            method: error.config.method, // Explicitly preserve the HTTP method
+                            data: error.config.data, // Preserve request body/payload
+                            params: error.config.params, // Preserve query parameters
+                            headers: {
+                                ...error.config.headers,
+                                Authorization: `Bearer ${authToken}`
+                            }
+                        };
+                        return instance(retryConfig);
                     }
                 }
             } catch (refreshError) {
@@ -166,5 +197,35 @@ instance.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+// Add specific methods for review operations before the export
+instance.reviewAnswer = async (submissionId, answerId, reviewData) => {
+    const url = `/audit-submissions/${submissionId}/answers/${answerId}/review`;
+    console.log('Sending review request:', {
+        url,
+        method: 'PUT',
+        data: reviewData
+    });
+    
+    try {
+        const response = await instance({
+            url,
+            method: 'PUT', // Explicitly set method as PUT
+            data: reviewData,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-HTTP-Method-Override': 'PUT' // Add this for extra safety
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Review request failed:', {
+            error: error.response?.data || error.message,
+            status: error.response?.status,
+            config: error.config
+        });
+        throw error;
+    }
+};
 
 export default instance;

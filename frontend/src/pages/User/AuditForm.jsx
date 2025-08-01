@@ -105,10 +105,23 @@ const AuditForm = () => {
             // Filter out empty answers and format correctly
             const validAnswers = Object.entries(answers)
                 .filter(([questionId, answer]) => answer && answer.trim() !== '')
-                .map(([questionId, answer]) => ({
-                    audit_question_id: parseInt(questionId),
-                    answer: answer.trim()
-                }));
+                .map(([questionId, answer]) => {
+                    const question = questions.find(q => q.id === parseInt(questionId));
+                    let risk_level = 'low';
+
+                    if (question.risk_criteria?.high?.includes(answer)) {
+                        risk_level = 'high';
+                    } else if (question.risk_criteria?.medium?.includes(answer)) {
+                        risk_level = 'medium';
+                    }
+
+                    return {
+                        audit_question_id: parseInt(questionId),
+                        answer: answer.trim(),
+                        risk_level: risk_level
+                    };
+                });
+
 
             if (validAnswers.length === 0) {
                 setError('Please answer at least one question before submitting.');

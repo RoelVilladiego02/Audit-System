@@ -31,6 +31,9 @@ const Navbar = () => {
                                 <li className="nav-item">
                                     <Link className="nav-link" to="/admin/submissions">Manage Submissions</Link>
                                 </li>
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/analytics">Analytics</Link>
+                                </li>
                             </>
                         )}
                         {user?.role === 'user' && (
@@ -45,11 +48,6 @@ const Navbar = () => {
                                     <Link className="nav-link" to="/submissions">My Submissions</Link>
                                 </li>
                             </>
-                        )}
-                        {user && (
-                            <li className="nav-item">
-                                <Link className="nav-link" to="/analytics">Analytics</Link>
-                            </li>
                         )}
                     </ul>
                     {user && (

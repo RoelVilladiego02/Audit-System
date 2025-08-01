@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import api from '../api/axios';
 
 const QuestionForm = ({ 
     isEdit = false, 
@@ -12,6 +11,7 @@ const QuestionForm = ({
     const [formData, setFormData] = useState({
         question: '',
         description: '',
+        category: '',
         possible_answers: ['Yes', 'No', 'N/A'],
         risk_criteria: {
             high: [],
@@ -28,6 +28,7 @@ const QuestionForm = ({
             setFormData({
                 question: questionData.question || '',
                 description: questionData.description || '',
+                category: questionData.category || '',
                 possible_answers: questionData.possible_answers || ['Yes', 'No', 'N/A'],
                 risk_criteria: {
                     high: Array.isArray(questionData.risk_criteria?.high) ? questionData.risk_criteria.high : [],
@@ -127,6 +128,12 @@ const QuestionForm = ({
         console.log('Token:', localStorage.getItem('token'));
 
         // Validation
+        if (!formData.category.trim()) {
+            setError('Category is required.');
+            setSubmitting(false);
+            return;
+        }
+
         if (formData.possible_answers.length === 0) {
             setError('At least one possible answer is required.');
             setSubmitting(false);
@@ -163,7 +170,10 @@ const QuestionForm = ({
             console.log('CSRF token fetched:', csrfToken);
 
             // Use raw axios with pre-fetched token
-            const response = await axios.post('http://localhost:8000/api/audit-questions', formData, {
+            const url = `http://localhost:8000/api/audit-questions${isEdit ? `/${questionData.id}` : ''}`;
+            const method = isEdit ? 'put' : 'post';
+            
+            const response = await axios[method](url, formData, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
                     'X-XSRF-TOKEN': csrfToken
@@ -235,6 +245,20 @@ const QuestionForm = ({
                                 <small className="form-text text-muted">
                                     Max 1000 characters ({formData.question.length}/1000)
                                 </small>
+                            </div>
+
+                            <div className="mb-3">
+                                <label htmlFor="category" className="form-label">Category *</label>
+                                <input
+                                    type="text"
+                                    id="category"
+                                    name="category"
+                                    required
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    className="form-control"
+                                    placeholder="Enter the question category (e.g., 'Security', 'Compliance', 'Operations')"
+                                />
                             </div>
 
                             <div className="mb-3">

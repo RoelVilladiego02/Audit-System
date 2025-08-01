@@ -1,583 +1,579 @@
 import React, { useState, useEffect } from 'react';
-import axios from '../../api/axios';
-import { useAuth } from '../../auth/useAuth';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Filler
-} from 'chart.js';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar } from 'recharts';
+import api from '../../api/axios';
 
-// Register ChartJS components
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Filler
-);
+const AdminAnalyticsDashboard = () => {
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [timeRange, setTimeRange] = useState('week');
+  const [dataType, setDataType] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
-const AnalyticsDashboard = () => {
-    const { user, isAdmin } = useAuth(); // Use the auth hook
-    const [analyticsData, setAnalyticsData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [timeRange, setTimeRange] = useState('month');
-    const [type, setType] = useState('all');
-    const [departmentData, setDepartmentData] = useState([]);
+  // Check if user is admin
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = user.role === 'admin';
 
-    useEffect(() => {
-        const fetchAnalytics = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                
-                const response = await axios.get('/api/analytics', {
-                    params: {
-                        timeRange,
-                        type,
-                        ...(user?.isAdmin ? {} : { userId: user.id })
-                    }
-                });
-                
-                if (!response.data) {
-                    throw new Error('No data received from the API');
-                }
-                
-                const data = response.data;
-                
-                // Process data based on type
-                let processedData = {};
-                if (data.type === 'vulnerability') {
-                    processedData = {
-                        type: 'vulnerability',
-                        totalSubmissions: data.totalSubmissions,
-                        riskDistribution: data.riskDistribution,
-                        averageRiskScore: data.averageRiskScore,
-                        statusDistribution: data.statusDistribution,
-                        assignmentStats: data.assignmentStats,
-                        submissionTrends: {
-                            labels: data.submissionTrends.map(t => t.date),
-                            data: data.submissionTrends.map(t => t.count)
-                        },
-                        commonVulnerabilities: data.commonVulnerabilities,
-                        severityDistribution: data.severityDistribution
-                    };
-                } else if (data.type === 'audit') {
-                    processedData = {
-                        type: 'audit',
-                        totalSubmissions: data.totalSubmissions,
-                        riskDistribution: data.riskDistribution,
-                        averageRiskScore: data.averageRiskScore,
-                        submissionTrends: {
-                            labels: data.submissionTrends.map(t => t.date),
-                            data: data.submissionTrends.map(t => t.count)
-                        },
-                        commonVulnerabilities: data.commonHighRisks?.map(item => ({
-                            category: item.question,
-                            count: item.count
-                        })) || []
-                    };
-                } else {
-                    // Combined data
-                    const vulnData = data.vulnerability;
-                    const auditData = data.audit;
-                    processedData = {
-                        type: 'combined',
-                        totalSubmissions: data.summary.totalSubmissions,
-                        vulnSubmissions: data.summary.vulnerabilitySubmissions,
-                        auditSubmissions: data.summary.auditSubmissions,
-                        riskDistribution: vulnData.riskDistribution,
-                        averageRiskScore: vulnData.averageRiskScore,
-                        statusDistribution: vulnData.statusDistribution,
-                        assignmentStats: vulnData.assignmentStats,
-                        submissionTrends: {
-                            labels: vulnData.submissionTrends.map(t => t.date),
-                            data: vulnData.submissionTrends.map(t => t.count)
-                        },
-                        commonVulnerabilities: vulnData.commonVulnerabilities,
-                        severityDistribution: vulnData.severityDistribution,
-                        auditData: {
-                            riskDistribution: auditData.riskDistribution,
-                            averageRiskScore: auditData.averageRiskScore,
-                            commonHighRisks: auditData.commonHighRisks
-                        }
-                    };
-                }
-                
-                setAnalyticsData(processedData);
-                setDepartmentData(data.departmentAnalysis || []);
-                
-            } catch (err) {
-                console.error('Analytics fetch error:', err);
-                setError(err.response?.data?.message || 'Failed to fetch analytics data');
-                setAnalyticsData(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (user) {
-            fetchAnalytics();
-        }
-    }, [timeRange, type, user]);
-
-    const getRiskDistributionData = () => {
-        if (!analyticsData) return null;
-        
-        let riskData;
-        if (analyticsData.type === 'audit') {
-            riskData = analyticsData.riskDistribution;
-        } else {
-            riskData = analyticsData.severityDistribution || analyticsData.riskDistribution;
-        }
-
-        return {
-            labels: ['High Risk', 'Medium Risk', 'Low Risk'],
-            datasets: [{
-                data: [
-                    riskData?.high || 0,
-                    riskData?.medium || 0,
-                    riskData?.low || 0
-                ],
-                backgroundColor: [
-                    'rgba(220, 53, 69, 0.8)',
-                    'rgba(255, 193, 7, 0.8)',
-                    'rgba(25, 135, 84, 0.8)'
-                ],
-                borderColor: [
-                    'rgb(220, 53, 69)',
-                    'rgb(255, 193, 7)',
-                    'rgb(25, 135, 84)'
-                ],
-                borderWidth: 2
-            }]
-        };
-    };
-
-    const submissionTrendData = {
-        labels: analyticsData?.submissionTrends?.labels || [],
-        datasets: [{
-            label: 'Submissions',
-            data: analyticsData?.submissionTrends?.data || [],
-            fill: true,
-            backgroundColor: 'rgba(13, 110, 253, 0.1)',
-            borderColor: 'rgb(13, 110, 253)',
-            tension: 0.4,
-            pointBackgroundColor: 'rgb(13, 110, 253)',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
-        }]
-    };
-
-    const getCommonIssuesData = () => {
-        if (!analyticsData) return null;
-        
-        let issues = [];
-        if (analyticsData.type === 'audit') {
-            issues = analyticsData.commonVulnerabilities || [];
-        } else {
-            issues = analyticsData.commonVulnerabilities?.slice(0, 5) || [];
-        }
-
-        return {
-            labels: issues.map(v => v.category),
-            datasets: [{
-                label: 'Frequency',
-                data: issues.map(v => v.count),
-                backgroundColor: Array(issues.length).fill().map((_, i) => [
-                    'rgba(220, 53, 69, 0.8)',
-                    'rgba(255, 193, 7, 0.8)', 
-                    'rgba(25, 135, 84, 0.8)',
-                    'rgba(13, 110, 253, 0.8)',
-                    'rgba(111, 66, 193, 0.8)'
-                ][i % 5]),
-                borderColor: Array(issues.length).fill().map((_, i) => [
-                    'rgb(220, 53, 69)',
-                    'rgb(255, 193, 7)',
-                    'rgb(25, 135, 84)',
-                    'rgb(13, 110, 253)',
-                    'rgb(111, 66, 193)'
-                ][i % 5]),
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        };
-    };
-
-    const departmentAnalysisData = {
-        labels: departmentData.map(d => d.name) || [],
-        datasets: [{
-            label: 'Risk Score',
-            data: departmentData.map(d => d.averageRiskScore) || [],
-            backgroundColor: 'rgba(13, 110, 253, 0.8)',
-            borderColor: 'rgb(13, 110, 253)',
-            borderWidth: 1,
-            borderRadius: 4
-        }, {
-            label: 'Resolved Issues',
-            data: departmentData.map(d => d.resolvedCount) || [],
-            backgroundColor: 'rgba(25, 135, 84, 0.8)',
-            borderColor: 'rgb(25, 135, 84)',
-            borderWidth: 1,
-            borderRadius: 4
-        }]
-    };
-
-    if (loading) {
-        return (
-            <div className="container-fluid bg-light min-vh-100 d-flex align-items-center justify-content-center">
-                <div className="text-center">
-                    <div className="spinner-border text-primary mb-3" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </div>
-                    <p className="text-muted">Loading analytics data...</p>
-                </div>
-            </div>
-        );
+  useEffect(() => {
+    if (!isAdmin) {
+      setError('Unauthorized: Admin access required');
+      setLoading(false);
+      return;
     }
+    fetchAnalytics();
+  }, [timeRange, dataType, isAdmin]);
+
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {
+        timeRange,
+        type: dataType
+      };
+
+      if (timeRange === 'custom') {
+        if (customStartDate) params.startDate = customStartDate;
+        if (customEndDate) params.endDate = customEndDate;
+      }
+
+      const response = await api.get('/analytics', { params });
+      setAnalyticsData(response.data);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+      setError(err.response?.data?.message || 'Failed to fetch analytics data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCustomDateSubmit = (e) => {
+    e.preventDefault();
+    if (customStartDate && customEndDate) {
+      fetchAnalytics();
+    }
+  };
+
+  // Color schemes for charts
+  const riskColors = {
+    high: '#dc3545',
+    medium: '#ffc107',
+    low: '#28a745'
+  };
+
+  const statusColors = {
+    open: '#dc3545',
+    in_progress: '#ffc107',
+    resolved: '#28a745',
+    closed: '#6c757d'
+  };
+
+  const severityColors = {
+    high: '#dc3545',
+    medium: '#fd7e14',
+    low: '#20c997'
+  };
+
+  // Helper function to format pie chart data
+  const formatPieData = (data, colors) => {
+    return Object.entries(data).map(([key, value]) => ({
+      name: key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' '),
+      value: value,
+      fill: colors[key] || '#6c757d'
+    }));
+  };
+
+  // Custom label function for pie charts
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+    if (percent < 0.05) return null; // Don't show labels for slices less than 5%
+    
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
     return (
-        <div className="container-fluid bg-light min-vh-100">
-            <div className="container-lg py-4">
-                {/* Header Section */}
-                <div className="row mb-4">
-                    <div className="col-lg-8">
-                        <h1 className="display-6 fw-bold text-dark mb-2">Security Analytics</h1>
-                        <p className="text-muted lead mb-0">
-                            {user?.isAdmin 
-                                ? 'Comprehensive security audit analytics across all submissions.'
-                                : 'Analysis of your security audit submissions.'}
-                        </p>
-                    </div>
-                    <div className="col-lg-4 d-flex align-items-center justify-content-lg-end mt-3 mt-lg-0">
-                        <div className="d-flex align-items-center">
-                            <label htmlFor="timeRange" className="form-label me-2 mb-0 fw-medium">
-                                Time Range:
-                            </label>
-                            <div className="d-flex gap-3">
-                                <select
-                                    id="timeRange"
-                                    value={timeRange}
-                                    onChange={(e) => setTimeRange(e.target.value)}
-                                    className="form-select form-select-sm"
-                                    style={{ width: '150px' }}
-                                >
-                                    <option value="month">Last Month</option>
-                                    <option value="quarter">Last Quarter</option>
-                                    <option value="year">Last Year</option>
-                                </select>
-                                <select
-                                    id="type"
-                                    value={type}
-                                    onChange={(e) => setType(e.target.value)}
-                                    className="form-select form-select-sm"
-                                    style={{ width: '150px' }}
-                                >
-                                    <option value="all">All Submissions</option>
-                                    <option value="vulnerability">Vulnerabilities</option>
-                                    <option value="audit">Audits</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Error Alert */}
-                {error && (
-                    <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
-                        <i className="bi bi-exclamation-triangle-fill me-2" style={{ fontSize: '1rem' }}></i>
-                        <div>{error}</div>
-                    </div>
-                )}
-
-                {/* Stats Cards */}
-                <div className="row g-3 mb-4">
-                    <div className="col-sm-6 col-lg-3">
-                        <div className="card bg-primary text-white h-100">
-                            <div className="card-body">
-                                <div className="d-flex align-items-center">
-                                    <div className="flex-shrink-0 me-3">
-                                        <i className="bi bi-file-earmark-text" style={{ fontSize: '1.5rem' }}></i>
-                                    </div>
-                                    <div className="flex-grow-1">
-                                        <div className="small text-white-50 fw-medium">Total Submissions</div>
-                                        <div className="h4 fw-bold mb-0">{analyticsData?.totalSubmissions?.toLocaleString() || 0}</div>
-                                        {analyticsData?.type === 'combined' && (
-                                            <small className="text-white-50">
-                                                {analyticsData.vulnSubmissions} vulnerabilities, {analyticsData.auditSubmissions} audits
-                                            </small>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="col-sm-6 col-lg-3">
-                        <div className="card bg-danger text-white h-100">
-                            <div className="card-body">
-                                <div className="d-flex align-items-center">
-                                    <div className="flex-shrink-0 me-3">
-                                        <i className="bi bi-exclamation-triangle" style={{ fontSize: '1.5rem' }}></i>
-                                    </div>
-                                    <div className="flex-grow-1">
-                                        <div className="small text-white-50 fw-medium">High Risk Issues</div>
-                                        {analyticsData?.type === 'vulnerability' ? (
-                                            <>
-                                                <div className="h4 fw-bold mb-0">
-                                                    {analyticsData?.severityDistribution?.high || 0}
-                                                </div>
-                                                <small className="text-white-50">
-                                                    vulnerabilities
-                                                </small>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="h4 fw-bold mb-0">
-                                                    {analyticsData?.riskDistribution?.high || 0}
-                                                </div>
-                                                <small className="text-white-50">
-                                                    {analyticsData?.type === 'audit' ? 'audit findings' : 'total issues'}
-                                                </small>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="col-sm-6 col-lg-3">
-                        <div className="card bg-warning text-white h-100">
-                            <div className="card-body">
-                                <div className="d-flex align-items-center">
-                                    <div className="flex-shrink-0 me-3">
-                                        <i className="bi bi-bar-chart" style={{ fontSize: '1.5rem' }}></i>
-                                    </div>
-                                    <div className="flex-grow-1">
-                                        <div className="small text-white-50 fw-medium">Average Risk Score</div>
-                                        <div className="h4 fw-bold mb-0">{analyticsData?.averageRiskScore?.toFixed(1) || 0}</div>
-                                        {analyticsData?.type === 'combined' && analyticsData.auditData && (
-                                            <small className="text-white-50">
-                                                Audit avg: {analyticsData.auditData.averageRiskScore?.toFixed(1)}
-                                            </small>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="col-sm-6 col-lg-3">
-                        <div className="card bg-success text-white h-100">
-                            <div className="card-body">
-                                <div className="d-flex align-items-center">
-                                    <div className="flex-shrink-0 me-3">
-                                        <i className="bi bi-check-circle" style={{ fontSize: '1.5rem' }}></i>
-                                    </div>
-                                    <div className="flex-grow-1">
-                                        {analyticsData?.type === 'vulnerability' ? (
-                                            <>
-                                                <div className="small text-white-50 fw-medium">Status Distribution</div>
-                                                <div className="h4 fw-bold mb-0">
-                                                    {analyticsData?.statusDistribution?.resolved || 0}
-                                                </div>
-                                                <small className="text-white-50">
-                                                    resolved out of {analyticsData?.totalSubmissions} issues
-                                                </small>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="small text-white-50 fw-medium">Assignment Rate</div>
-                                                <div className="h4 fw-bold mb-0">
-                                                    {analyticsData?.assignmentStats?.assignmentRate || 0}%
-                                                </div>
-                                                <small className="text-white-50">
-                                                    {analyticsData?.assignmentStats?.assigned || 0} assigned
-                                                </small>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Charts Section */}
-                <div className="row g-4">
-                    {/* Risk Distribution Chart */}
-                    <div className="col-lg-6">
-                        <div className="card h-100">
-                            <div className="card-header bg-white border-bottom">
-                                <div className="d-flex align-items-center justify-content-between">
-                                    <h5 className="card-title mb-0 fw-semibold">Risk Distribution</h5>
-                                    <small className="text-muted d-flex align-items-center">
-                                        <i className="bi bi-info-circle me-1" style={{ fontSize: '0.875rem' }}></i>
-                                        Breakdown by severity
-                                    </small>
-                                </div>
-                            </div>
-                            <div className="card-body">
-                                <div style={{ height: '280px', position: 'relative' }}>
-                                    <Doughnut 
-                                        data={getRiskDistributionData()}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: {
-                                                    position: 'bottom',
-                                                    labels: {
-                                                        padding: 15,
-                                                        usePointStyle: true,
-                                                        font: {
-                                                            size: 12
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Submission Trends Chart */}
-                    <div className="col-lg-6">
-                        <div className="card h-100">
-                            <div className="card-header bg-white border-bottom">
-                                <div className="d-flex align-items-center justify-content-between">
-                                    <h5 className="card-title mb-0 fw-semibold">Submission Trends</h5>
-                                    <small className="text-muted d-flex align-items-center">
-                                        <i className="bi bi-graph-up me-1" style={{ fontSize: '0.875rem' }}></i>
-                                        Trend analysis
-                                    </small>
-                                </div>
-                            </div>
-                            <div className="card-body">
-                                <div style={{ height: '280px', position: 'relative' }}>
-                                    <Line 
-                                        data={submissionTrendData}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: {
-                                                    display: false
-                                                }
-                                            },
-                                            scales: {
-                                                y: {
-                                                    beginAtZero: true
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Department Analysis Chart */}
-                    {user?.isAdmin && (
-                        <div className="col-12">
-                            <div className="card">
-                                <div className="card-header bg-white border-bottom">
-                                    <div className="d-flex align-items-center justify-content-between">
-                                        <h5 className="card-title mb-0 fw-semibold">Department Analysis</h5>
-                                        <small className="text-muted d-flex align-items-center">
-                                            <i className="bi bi-building me-1" style={{ fontSize: '0.875rem' }}></i>
-                                            Department performance metrics
-                                        </small>
-                                    </div>
-                                </div>
-                                <div className="card-body">
-                                    <div style={{ height: '350px', position: 'relative' }}>
-                                        <Bar 
-                                            data={departmentAnalysisData}
-                                            options={{
-                                                responsive: true,
-                                                maintainAspectRatio: false,
-                                                plugins: {
-                                                    legend: {
-                                                        position: 'top',
-                                                        labels: {
-                                                            font: {
-                                                                size: 12
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                scales: {
-                                                    y: {
-                                                        beginAtZero: true,
-                                                        max: 100
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Common Vulnerabilities Chart */}
-                    <div className="col-12">
-                        <div className="card">
-                            <div className="card-header bg-white border-bottom">
-                                <div className="d-flex align-items-center justify-content-between">
-                                    <h5 className="card-title mb-0 fw-semibold">Common Vulnerabilities</h5>
-                                    <small className="text-muted d-flex align-items-center">
-                                        <i className="bi bi-shield-exclamation me-1" style={{ fontSize: '0.875rem' }}></i>
-                                        Top security issues
-                                    </small>
-                                </div>
-                            </div>
-                            <div className="card-body">
-                                <div style={{ height: '350px', position: 'relative' }}>
-                                    <Bar 
-                                        data={getCommonIssuesData()}
-                                        options={{
-                                            indexAxis: 'y',
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: {
-                                                    display: false
-                                                }
-                                            },
-                                            scales: {
-                                                x: {
-                                                    beginAtZero: true
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <text 
+        x={x} 
+        y={y} 
+        fill="white" 
+        textAnchor={x > cx ? 'start' : 'end'} 
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight="bold"
+      >
+        {value > 0 ? value : ''}
+      </text>
     );
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="container mt-5">
+        <div className="alert alert-danger" role="alert">
+          <h4 className="alert-heading">Access Denied</h4>
+          <p>You must be an administrator to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="container mt-5">
+        <div className="d-flex justify-content-center">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mt-5">
+        <div className="alert alert-danger" role="alert">
+          <h4 className="alert-heading">Error</h4>
+          <p>{error}</p>
+          <button className="btn btn-outline-danger" onClick={fetchAnalytics}>
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const renderVulnerabilityAnalytics = (data) => (
+    <div className="row">
+      {/* Summary Cards */}
+      <div className="col-12 mb-4">
+        <div className="row">
+          <div className="col-md-3">
+            <div className="card bg-primary text-white">
+              <div className="card-body">
+                <h5 className="card-title">Total Submissions</h5>
+                <h2>{data.totalSubmissions}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-info text-white">
+              <div className="card-body">
+                <h5 className="card-title">Avg Risk Score</h5>
+                <h2>{data.averageRiskScore}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-success text-white">
+              <div className="card-body">
+                <h5 className="card-title">Assignment Rate</h5>
+                <h2>{data.assignmentStats?.assignmentRate || 0}%</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-warning text-white">
+              <div className="card-body">
+                <h5 className="card-title">Unassigned</h5>
+                <h2>{data.assignmentStats?.unassigned || 0}</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk Distribution */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Risk Level Distribution</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={formatPieData(data.riskDistribution, riskColors)}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {formatPieData(data.riskDistribution, riskColors).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Status Distribution */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Status Distribution</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={formatPieData(data.statusDistribution, statusColors)}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {formatPieData(data.statusDistribution, statusColors).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Severity Distribution */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Severity Distribution</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={formatPieData(data.severityDistribution, severityColors)}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {formatPieData(data.severityDistribution, severityColors).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Submission Trends */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Submission Trends</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.submissionTrends}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Common Vulnerabilities */}
+      <div className="col-12 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Common Vulnerability Categories</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={data.commonVulnerabilities}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="count" fill="#8884d8" name="Total" />
+                <Bar dataKey="resolvedCount" fill="#82ca9d" name="Resolved" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAuditAnalytics = (data) => (
+    <div className="row">
+      {/* Summary Cards */}
+      <div className="col-12 mb-4">
+        <div className="row">
+          <div className="col-md-4">
+            <div className="card bg-primary text-white">
+              <div className="card-body">
+                <h5 className="card-title">Total Submissions</h5>
+                <h2>{data.totalSubmissions}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div className="card bg-info text-white">
+              <div className="card-body">
+                <h5 className="card-title">Avg Risk Score</h5>
+                <h2>{data.averageRiskScore}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div className="card bg-warning text-white">
+              <div className="card-body">
+                <h5 className="card-title">High Risk Audits</h5>
+                <h2>{data.riskDistribution?.high || 0}</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk Distribution */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Risk Level Distribution</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={formatPieData(data.riskDistribution, riskColors)}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {formatPieData(data.riskDistribution, riskColors).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Submission Trends */}
+      <div className="col-md-6 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Submission Trends</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.submissionTrends}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Common High Risk Questions */}
+      <div className="col-12 mb-4">
+        <div className="card">
+          <div className="card-header">
+            <h5>Common High-Risk Audit Questions</h5>
+          </div>
+          <div className="card-body">
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={data.commonHighRisks} layout="horizontal">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis dataKey="question" type="category" width={200} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#dc3545" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCombinedAnalytics = (data) => (
+    <div className="row">
+      {/* Summary Cards */}
+      <div className="col-12 mb-4">
+        <div className="row">
+          <div className="col-md-3">
+            <div className="card bg-primary text-white">
+              <div className="card-body">
+                <h5 className="card-title">Total Submissions</h5>
+                <h2>{data.summary.totalSubmissions}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-success text-white">
+              <div className="card-body">
+                <h5 className="card-title">Vulnerability Submissions</h5>
+                <h2>{data.summary.vulnerabilitySubmissions}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-info text-white">
+              <div className="card-body">
+                <h5 className="card-title">Audit Submissions</h5>
+                <h2>{data.summary.auditSubmissions}</h2>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card bg-warning text-white">
+              <div className="card-body">
+                <h5 className="card-title">High Risk Items</h5>
+                <h2>{(data.vulnerability.riskDistribution?.high || 0) + (data.audit.riskDistribution?.high || 0)}</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Vulnerability Section */}
+      <div className="col-12 mb-4">
+        <h4 className="text-primary">Vulnerability Analytics</h4>
+        {renderVulnerabilityAnalytics(data.vulnerability)}
+      </div>
+
+      {/* Audit Section */}
+      <div className="col-12 mb-4">
+        <h4 className="text-info">Audit Analytics</h4>
+        {renderAuditAnalytics(data.audit)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="container-fluid mt-4">
+      <div className="row">
+        <div className="col-12">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h1 className="h2">Analytics Dashboard</h1>
+            <button className="btn btn-outline-primary" onClick={fetchAnalytics}>
+              <i className="fas fa-sync-alt me-2"></i>
+              Refresh
+            </button>
+          </div>
+
+          {/* Filters */}
+          <div className="card mb-4">
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-3">
+                  <label className="form-label">Data Type</label>
+                  <select
+                    className="form-select"
+                    value={dataType}
+                    onChange={(e) => setDataType(e.target.value)}
+                  >
+                    <option value="all">Combined</option>
+                    <option value="vulnerability">Vulnerabilities</option>
+                    <option value="audit">Audits</option>
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Time Range</label>
+                  <select
+                    className="form-select"
+                    value={timeRange}
+                    onChange={(e) => setTimeRange(e.target.value)}
+                  >
+                    <option value="week">Last Week</option>
+                    <option value="month">Last Month</option>
+                    <option value="quarter">Last Quarter</option>
+                    <option value="year">Last Year</option>
+                    <option value="all">All Time</option>
+                    <option value="custom">Custom Range</option>
+                  </select>
+                </div>
+                {timeRange === 'custom' && (
+                  <>
+                    <div className="col-md-2">
+                      <label className="form-label">Start Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">End Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-2 d-flex align-items-end">
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCustomDateSubmit}
+                        disabled={!customStartDate || !customEndDate}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Analytics Content */}
+          {analyticsData && (
+            <div className="analytics-content">
+              {analyticsData.type === 'vulnerability' && renderVulnerabilityAnalytics(analyticsData)}
+              {analyticsData.type === 'audit' && renderAuditAnalytics(analyticsData)}
+              {analyticsData.type === 'combined' && renderCombinedAnalytics(analyticsData)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export default AnalyticsDashboard;
+export default AdminAnalyticsDashboard;

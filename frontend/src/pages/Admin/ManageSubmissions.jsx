@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
     Search, 
     AlertTriangle, 
@@ -60,9 +60,7 @@ const ManageSubmissions = () => {
                 const mappedSubmissions = response.data.map(submission => ({
                     ...submission,
                     effective_overall_risk: submission.admin_overall_risk || submission.system_overall_risk || 'pending',
-                    review_progress: submission.review_progress || 0,
-                    answers_count: submission.answers?.length || 0,
-                    reviewed_answers_count: submission.answers?.filter(a => a.reviewed_by).length || 0
+                    review_progress: submission.review_progress || 0
                 }));
                 
                 setSubmissions(mappedSubmissions);
@@ -81,6 +79,8 @@ const ManageSubmissions = () => {
                 setError('Authentication failed. Please log in again.');
                 localStorage.removeItem('token');
                 navigate('/login');
+            } else if (err.response?.status === 422) {
+                setError(err.response.data.message || 'Validation error occurred.');
             } else {
                 setError(
                     err.response?.data?.message || 
@@ -139,118 +139,217 @@ const ManageSubmissions = () => {
 
     const fetchSubmissionDetails = async (submissionId) => {
         try {
-            const id = parseInt(submissionId, 10);
-            if (isNaN(id)) {
-                throw new Error('Invalid submission ID');
-            }
+            console.log('Fetching submission details for ID:', submissionId);
             
-            const response = await api.get(`/audit-submissions/${id}`);
-            // Debug log
-            console.log('API Response Raw:', JSON.stringify(response.data, null, 2));
-            
+            const response = await api.get(`/audit-submissions/${submissionId}`);
             const submission = response.data;
+
             if (typeof submission !== 'object' || submission === null || !('id' in submission)) {
-                console.error('Invalid submission data structure:', typeof submission, submission);
+                console.error('Invalid submission data structure:', submission);
                 throw new Error('Invalid submission data received');
             }
 
-            const processedSubmission = {
+            // Enhanced data transformation with validation
+            const transformedSubmission = {
                 ...submission,
-                id: Number.isInteger(submission.id) ? submission.id : parseInt(submission.id, 10),
-                user_id: submission.user_id !== undefined ? parseInt(submission.user_id, 10) : null,
-                reviewed_by: submission.reviewed_by !== undefined ? parseInt(submission.reviewed_by, 10) : null,
-                answers: Array.isArray(submission.answers) ? submission.answers.map(answer => ({
-                    ...answer,
-                    id: Number.isInteger(answer.id) ? answer.id : parseInt(answer.id, 10),
-                    audit_submission_id: Number.isInteger(answer.audit_submission_id) ? answer.audit_submission_id : parseInt(answer.audit_submission_id, 10),
-                    audit_question_id: Number.isInteger(answer.audit_question_id) ? answer.audit_question_id : parseInt(answer.audit_question_id, 10),
-                    reviewed_by: answer.reviewed_by !== undefined ? parseInt(answer.reviewed_by, 10) : null
-                })) : []
+                answers: submission.answers.map(answer => {
+                    const recommendation = answer.recommendation?.trim() || 'Default: Review required to address potential security concerns.';
+                    const transformed = {
+                        ...answer,
+                        recommendation, // Ensure recommendation is always set
+                        effective_risk_level: answer.admin_risk_level || answer.system_risk_level || 'pending',
+                        isReviewed: Boolean(
+                            answer.reviewed_by && 
+                            answer.admin_risk_level && 
+                            recommendation
+                        )
+                    };
+                    
+                    console.log(`Answer ${answer.id} review status:`, {
+                        reviewed_by: answer.reviewed_by,
+                        admin_risk_level: answer.admin_risk_level,
+                        recommendation,
+                        recommendation_length: recommendation.length,
+                        isReviewed: transformed.isReviewed
+                    });
+                    
+                    return transformed;
+                }),
+                effective_overall_risk: submission.admin_overall_risk || submission.system_overall_risk || 'pending',
+                review_progress: calculateReviewProgress(submission.answers)
             };
-            console.log('Processed Submission:', processedSubmission); // Log processed data
-            setSelectedSubmission(processedSubmission);
+
+            setSelectedSubmission(transformedSubmission);
+            setError(null);
+
+            console.log('Transformed submission:', {
+                id: transformedSubmission.id,
+                status: transformedSubmission.status,
+                answersCount: transformedSubmission.answers.length,
+                reviewedAnswersCount: transformedSubmission.answers.filter(a => a.isReviewed).length
+            });
+
         } catch (err) {
             console.error('Error fetching submission details:', err);
-            setError('Failed to load submission details.');
+            setError(err.response?.data?.message || 'Failed to load submission details.');
+            setSelectedSubmission(null);
         }
+    };
+
+    // Helper function to calculate review progress
+    const calculateReviewProgress = (answers) => {
+        if (!answers || answers.length === 0) return 0;
+        const reviewedCount = answers.filter(answer => 
+            answer.reviewed_by && answer.admin_risk_level
+        ).length;
+        return (reviewedCount / answers.length) * 100;
     };
 
     const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
         try {
-            const submissionId = parseInt(selectedSubmission.id, 10);
-            const answerIdInt = parseInt(answerId, 10);
-            
-            if (isNaN(submissionId) || isNaN(answerIdInt)) {
-                throw new Error('Invalid submission or answer ID');
+            // Add validation
+            if (!adminRiskLevel || !recommendation) {
+                setError('Risk level and recommendation are required');
+                return;
             }
 
-            const reviewPayload = {
-                admin_risk_level: adminRiskLevel,
-                admin_notes: adminNotes || '',
-                recommendation: recommendation || ''
-            };
-
-            const url = `/audit-submissions/${submissionId}/answers/${answerIdInt}/review`;
-            console.log('Review Request:', { url, method: 'PUT', payload: reviewPayload });
-
-            const response = await api.put(url, reviewPayload, {
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                method: 'PUT' // Explicitly set method
-            });
-
-            if (response.data && typeof response.data === 'object') {
-                await fetchSubmissionDetails(submissionId);
-                await fetchSubmissions();
-                setEditingAnswer(null);
-            } else {
-                throw new Error('Invalid response data');
-            }
-        } catch (err) {
-            console.error('Error reviewing answer:', err.response?.data || err.message);
-            setError(err.response?.data?.message || 'Failed to update answer review');
-        }
-    };
-
-    const handleCompleteReview = async () => {
-        try {
-            const payload = {
-                admin_overall_risk: selectedRiskLevel || 'pending',
-                admin_summary: summaryText || 'No summary provided'
-            };
-
-            const response = await api.put(`/audit-submissions/${selectedSubmission.id}/complete`, payload);
+            const response = await api.put(
+                `/audit-submissions/${selectedSubmission.id}/answers/${answerId}/review`,
+                {
+                    admin_risk_level: adminRiskLevel,
+                    admin_notes: adminNotes || '',
+                    recommendation: recommendation || ''
+                }
+            );
 
             if (response.data && typeof response.data === 'object') {
                 await fetchSubmissionDetails(selectedSubmission.id);
                 await fetchSubmissions();
+                setEditingAnswer(null);
                 setError(null);
             } else {
                 throw new Error('Invalid response data');
             }
         } catch (err) {
-            console.error('Error completing review:', err);
-            setError(err.response?.data?.message || 'Failed to complete review');
+            console.error('Error reviewing answer:', err);
+            setError(
+                err.response?.status === 500
+                    ? 'Server error while reviewing answer. Please try again.'
+                    : err.response?.status === 422
+                    ? err.response.data.message || 'Validation error in answer review.'
+                    : err.response?.data?.message || 'Failed to update answer review.'
+            );
+            
+            // Log additional error details
+            if (err.response?.status === 500) {
+                console.error('Server Error Details:', {
+                    status: err.response.status,
+                    data: err.response.data,
+                    answerId,
+                    submissionId: selectedSubmission.id
+                });
+            }
         }
     };
 
-    const handleSubmissionFinalReview = async (submissionId, adminOverallRisk, adminSummary) => {
+    const calculateOverallRisk = (answers) => {
+        if (!answers || answers.length === 0) {
+            return 'low';
+        }
+
+        // Get all risk levels, preferring admin_risk_level over system_risk_level
+        const riskLevels = answers.map(answer => 
+            answer.admin_risk_level || answer.system_risk_level || 'low'
+        );
+
+        // Count occurrences
+        const riskCounts = {
+            high: riskLevels.filter(r => r === 'high').length,
+            medium: riskLevels.filter(r => r === 'medium').length,
+            low: riskLevels.filter(r => r === 'low').length
+        };
+
+        // Decision logic
+        if (riskCounts.high > 0) {
+            return 'high';
+        } else if (riskCounts.medium > Math.floor(answers.length * 0.3)) {
+            // If more than 30% are medium risk
+            return 'medium';
+        } else {
+            return 'low';
+        }
+    };
+
+    const handleCompleteReview = async () => {
         try {
+            if (!selectedSubmission.answers || selectedSubmission.answers.length === 0) {
+                setError('No answers found to review.');
+                return;
+            }
+
+            // Verify all answers have been properly reviewed
+            const pendingAnswers = selectedSubmission.answers.filter(answer => 
+                !answer.reviewed_by || !answer.admin_risk_level || !answer.admin_notes
+            );
+            
+            if (pendingAnswers.length > 0) {
+                setError('All answers must be fully reviewed (including risk level and notes) before completing the review.');
+                return;
+            }
+
+            if (!summaryText.trim()) {
+                setError('Please provide a summary before completing the review.');
+                return;
+            }
+
+            // Calculate overall risk based on admin risk levels
+            const calculatedRisk = calculateOverallRisk(selectedSubmission.answers);
+            
             const payload = {
-                admin_overall_risk: adminOverallRisk,
-                admin_summary: adminSummary
+                admin_overall_risk: calculatedRisk,
+                admin_summary: summaryText.trim()
             };
 
-            const response = await api.put(`/audit-submissions/${submissionId}/complete`, payload);
+            console.log('Sending payload:', payload);
 
-            if (response.data) {
-                await fetchSubmissions();
-                await fetchSubmissionDetails(submissionId);
+            const response = await api.put(
+                `/audit-submissions/${selectedSubmission.id}/complete`,
+                payload
+            );
+
+            console.log('Server response:', response);
+
+            if (!response.data || !response.data.submission) {
+                throw new Error('Invalid server response');
             }
+
+            // Verify the data was saved correctly
+            const savedSubmission = response.data.submission;
+            if (savedSubmission.admin_overall_risk !== calculatedRisk || 
+                savedSubmission.admin_summary !== summaryText.trim()) {
+                throw new Error('Data verification failed');
+            }
+
+            // Reset state and refresh data
+            setError(null);
+            setSelectedRiskLevel('');
+            setSummaryText('');
+            await fetchSubmissionDetails(selectedSubmission.id);
+            await fetchSubmissions();
+
         } catch (err) {
-            console.error('Error finalizing submission review:', err);
-            setError(err.response?.data?.message || 'Failed to finalize submission review');
+            console.error('Error completing review:', err);
+            setError(
+                err.response?.status === 400
+                    ? 'Cannot complete review. Some answers are still pending.'
+                    : err.response?.status === 422
+                    ? 'Validation error in final review.'
+                    : err.response?.data?.message || 'Failed to complete review.'
+            );
         }
     };
+
+    // Removed handleSubmissionFinalReview as it's handled directly in FinalReviewForm
 
     const getRiskColor = (risk) => {
         switch (risk) {
@@ -516,17 +615,14 @@ const ManageSubmissions = () => {
                         <SubmissionDetails
                             submission={selectedSubmission}
                             onAnswerReview={handleAnswerReview}
-                            onFinalReview={handleSubmissionFinalReview}
                             onCompleteReview={handleCompleteReview}
                             editingAnswer={editingAnswer}
                             setEditingAnswer={setEditingAnswer}
-                            selectedRiskLevel={selectedRiskLevel}
-                            setSelectedRiskLevel={setSelectedRiskLevel}
-                            summaryText={summaryText}
-                            setSummaryText={setSummaryText}
                             getRiskColor={getRiskColor}
                             getRiskIcon={getRiskIcon}
                             formatDate={formatDate}
+                            calculateOverallRisk={calculateOverallRisk}
+                            fetchSubmissionDetails={fetchSubmissionDetails}
                         />
                     ) : (
                         <div className="card border-0 shadow-sm">
@@ -555,11 +651,35 @@ const ManageSubmissions = () => {
             onCancel, 
             getRiskColor 
         }) => {
+            const [error, setError] = useState('');
+
             const riskOptions = [
                 { value: 'low', label: 'Low Risk', description: 'Minimal security impact' },
                 { value: 'medium', label: 'Medium Risk', description: 'Moderate security concern' },
                 { value: 'high', label: 'High Risk', description: 'Significant security risk' }
             ];
+
+            const handleSave = () => {
+                if (!adminRiskLevel) {
+                    setError('Please select a risk level');
+                    return;
+                }
+                if (!recommendation.trim()) {
+                    setError('Please provide a recommendation');
+                    return;
+                }
+                // Ensure we don't send empty strings
+                const cleanedNotes = adminNotes.trim();
+                const cleanedRecommendation = recommendation.trim();
+                
+                if (cleanedRecommendation.length < 5) {
+                    setError('Recommendation must be at least 5 characters long');
+                    return;
+                }
+                
+                setError('');
+                onSave(adminRiskLevel, cleanedNotes, cleanedRecommendation);
+            };
 
             return (
                 <div className="border border-primary rounded p-3 bg-primary-subtle">
@@ -567,6 +687,13 @@ const ManageSubmissions = () => {
                         <Edit3 size={16} className="me-1" />
                         Risk Assessment
                     </h6>
+
+                    {error && (
+                        <div className="alert alert-danger mb-3">
+                            <AlertCircle size={16} className="me-2" />
+                            {error}
+                        </div>
+                    )}
                     
                     <div className="row">
                         <div className="col-md-6">
@@ -581,7 +708,10 @@ const ManageSubmissions = () => {
                                             id={`risk-${option.value}`}
                                             value={option.value}
                                             checked={adminRiskLevel === option.value}
-                                            onChange={(e) => setAdminRiskLevel(e.target.value)}
+                                            onChange={(e) => {
+                                                setAdminRiskLevel(e.target.value);
+                                                setError(''); // Clear error when selection is made
+                                            }}
                                         />
                                         <label className="form-check-label d-flex align-items-center" htmlFor={`risk-${option.value}`}>
                                             <span className={`badge ${getRiskColor(option.value)} me-2`}>
@@ -615,7 +745,10 @@ const ManageSubmissions = () => {
                             className="form-control"
                             rows={3}
                             value={recommendation}
-                            onChange={(e) => setRecommendation(e.target.value)}
+                            onChange={(e) => {
+                                setRecommendation(e.target.value);
+                                setError(''); // Clear error when input changes
+                            }}
                             placeholder="Recommendations for addressing this issue..."
                         />
                         <div className="form-text">Provide actionable recommendations for the user.</div>
@@ -633,12 +766,8 @@ const ManageSubmissions = () => {
                         <button
                             type="button"
                             className="btn btn-primary"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onSave();
-                            }}
-                            style={{ display: 'inline-block' }} // Ensure no form interference
+                            onClick={handleSave}
+                            style={{ display: 'inline-block' }}
                         >
                             <Save size={16} className="me-1" />
                             Save Assessment
@@ -647,6 +776,28 @@ const ManageSubmissions = () => {
                 </div>
             );
         };
+
+// Add this before the FinalReviewForm component
+const riskOptions = [
+    { 
+        value: 'low', 
+        label: 'Low Risk', 
+        description: 'Minimal security impact',
+        color: 'success'
+    },
+    { 
+        value: 'medium', 
+        label: 'Medium Risk', 
+        description: 'Moderate security concern',
+        color: 'warning'
+    },
+    { 
+        value: 'high', 
+        label: 'High Risk', 
+        description: 'Significant security risk',
+        color: 'danger'
+    }
+];
 
 // Final Review Form Component
 const FinalReviewForm = ({ 
@@ -657,16 +808,43 @@ const FinalReviewForm = ({
     onSubmit, 
     onCancel 
 }) => {
-    const riskOptions = [
-        { value: 'low', label: 'Low Risk', color: 'success' },
-        { value: 'medium', label: 'Medium Risk', color: 'warning' },
-        { value: 'high', label: 'High Risk', color: 'danger' }
-    ];
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [validationError, setValidationError] = useState('');
+
+    const handleSubmit = async () => {
+        try {
+            setValidationError('');
+            setIsSubmitting(true);
+
+            if (!adminOverallRisk) {
+                setValidationError('Please select a risk level');
+                return;
+            }
+
+            if (!adminSummary.trim()) {
+                setValidationError('Please provide an executive summary');
+                return;
+            }
+
+            await onSubmit();
+        } catch (error) {
+            setValidationError(error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     return (
         <div className="mt-3 p-3 border rounded bg-light">
             <h6 className="mb-3">Final Risk Assessment</h6>
             
+            {validationError && (
+                <div className="alert alert-danger mb-3">
+                    <AlertCircle size={16} className="me-2" />
+                    {validationError}
+                </div>
+            )}
+
             <div className="row">
                 <div className="col-md-6">
                     <label className="form-label fw-medium">Overall Risk Level</label>
@@ -710,17 +888,27 @@ const FinalReviewForm = ({
                     type="button"
                     className="btn btn-secondary"
                     onClick={onCancel}
+                    disabled={isSubmitting}
                 >
                     Cancel
                 </button>
                 <button
                     type="button"
                     className="btn btn-success"
-                    onClick={onSubmit}
-                    disabled={!adminOverallRisk || !adminSummary.trim()}
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !adminOverallRisk || !adminSummary.trim()}
                 >
-                    <CheckSquare size={16} className="me-1" />
-                    Complete Review
+                    {isSubmitting ? (
+                        <>
+                            <span className="spinner-border spinner-border-sm me-2" />
+                            Completing Review...
+                        </>
+                    ) : (
+                        <>
+                            <CheckSquare size={16} className="me-1" />
+                            Complete Review
+                        </>
+                    )}
                 </button>
             </div>
         </div>
@@ -733,20 +921,147 @@ export default ManageSubmissions;
 const SubmissionDetails = ({ 
     submission, 
     onAnswerReview, 
-    onFinalReview,
-    onCompleteReview, 
-    editingAnswer, 
-    setEditingAnswer, 
-    getRiskColor, 
-    getRiskIcon, 
-    formatDate 
+    onCompleteReview,
+    editingAnswer,
+    setEditingAnswer,
+    getRiskColor,
+    getRiskIcon,
+    formatDate,
+    calculateOverallRisk,
+    fetchSubmissionDetails
 }) => {
     const [finalReviewMode, setFinalReviewMode] = useState(false);
-    const [adminOverallRisk, setAdminOverallRisk] = useState(submission.admin_overall_risk || '');
-    const [adminSummary, setAdminSummary] = useState(submission.admin_summary || '');
+    const [adminOverallRisk, setAdminOverallRisk] = useState('');
+    const [adminSummary, setAdminSummary] = useState('');
+    const [error, setError] = useState(null);
 
-    const canFinalize = submission.status === 'under_review' && 
-                       submission.answers?.every(answer => answer.reviewed_by);
+    // Enhanced canFinalize logic with detailed status tracking
+    const canFinalize = useMemo(() => {
+        const hasAnswers = submission.answers?.length > 0;
+        const isUnderReview = submission.status === 'under_review';
+        
+        const allReviewed = submission.answers?.every(answer => {
+            const isValid = answer.reviewed_by && 
+                        answer.admin_risk_level && 
+                        answer.recommendation?.trim();
+            
+            if (!isValid) {
+                console.log('Unreviewed Answer:', {
+                    id: answer.id,
+                    reviewed_by: answer.reviewed_by,
+                    admin_risk_level: answer.admin_risk_level,
+                    recommendation: answer.recommendation,
+                    recommendation_length: answer.recommendation?.length,
+                    isValid
+                });
+            }
+            return isValid;
+        });
+
+        console.log('canFinalize Check:', {
+            hasAnswers,
+            isUnderReview,
+            allReviewed,
+            answers: submission.answers?.map(a => ({
+                id: a.id,
+                reviewed_by: Boolean(a.reviewed_by),
+                hasRiskLevel: Boolean(a.admin_risk_level),
+                hasRecommendation: Boolean(a.recommendation?.trim()),
+                recommendation: a.recommendation
+            }))
+        });
+
+        return isUnderReview && hasAnswers && allReviewed;
+    }, [submission]);
+
+    useEffect(() => {
+        console.log('Submission Status:', submission.status);
+        console.log('Can Finalize:', canFinalize);
+        console.log('Final Review Mode:', finalReviewMode);
+        console.log('All Answers Reviewed:', submission.answers?.every(answer => answer.reviewed_by));
+    }, [submission, canFinalize, finalReviewMode]);
+
+    // Reset review states when submission changes
+    useEffect(() => {
+        setFinalReviewMode(false);
+        setAdminOverallRisk('');
+        setAdminSummary('');
+        setError(null);
+    }, [submission.id]);
+
+    // Add logging for answer reviews
+    useEffect(() => {
+        console.log('Submission Answers Updated:', {
+            answersCount: submission.answers?.length,
+            answers: submission.answers?.map(answer => ({
+                id: answer.id,
+                reviewed_by: answer.reviewed_by,
+                admin_risk_level: answer.admin_risk_level,
+                recommendation: answer.recommendation,
+                isFullyReviewed: Boolean(
+                    answer.reviewed_by && 
+                    answer.admin_risk_level && 
+                    answer.recommendation
+                )
+            }))
+        });
+    }, [submission.answers]);
+
+    // Monitor canFinalize changes
+    useEffect(() => {
+        console.log('canFinalize changed:', canFinalize, {
+            status: submission.status,
+            hasAnswers: submission.answers?.length > 0,
+            allReviewed: submission.answers?.every(a => 
+                a.reviewed_by && 
+                a.admin_risk_level && 
+                a.recommendation
+            ),
+            answerDetails: submission.answers?.map(a => ({
+                id: a.id,
+                reviewed_by: Boolean(a.reviewed_by),
+                hasRiskLevel: Boolean(a.admin_risk_level),
+                hasRecommendation: Boolean(a.recommendation)
+            }))
+        });
+    }, [canFinalize, submission]);
+
+    // Enhanced handleAnswerReview with validation and error handling
+    const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
+        try {
+            if (!adminRiskLevel || !recommendation?.trim()) {
+                setError('Risk level and recommendation are required');
+                return;
+            }
+
+            // Use onAnswerReview prop instead of making the API call directly
+            await onAnswerReview(answerId, {
+                admin_risk_level: adminRiskLevel,
+                admin_notes: adminNotes || '',
+                recommendation: recommendation || ''
+            });
+
+            // Refresh submission details after successful review
+            await fetchSubmissionDetails(submission.id);
+            setEditingAnswer(null);
+            setError(null);
+
+            console.log('Answer review completed successfully:', {
+                answerId,
+                adminRiskLevel,
+                recommendationLength: recommendation?.length
+            });
+        } catch (err) {
+            console.error('Error reviewing answer:', err);
+            setError(
+                err.response?.status === 500
+                    ? 'Server error while reviewing answer. Please try again.'
+                    : err.response?.status === 422
+                    ? err.response.data.message || 'Validation error in answer review.'
+                    : err.response?.data?.message || 'Failed to update answer review.'
+            );
+        }
+    };
 
     return (
         <div className="card border-0 shadow-sm">
@@ -793,6 +1108,16 @@ const SubmissionDetails = ({
             </div>
 
             <div className="card-body">
+                {/* Error Display */}
+                {error && (
+                    <div className="alert alert-danger mb-4">
+                        <div className="d-flex align-items-center">
+                            <AlertCircle size={20} className="me-2" />
+                            {error}
+                        </div>
+                    </div>
+                )}
+
                 {/* Final Review Section */}
                 {(canFinalize || submission.status === 'completed') && (
                     <div className="alert alert-info mb-4">
@@ -809,25 +1134,119 @@ const SubmissionDetails = ({
                             {submission.status !== 'completed' && (
                                 <button
                                     className="btn btn-primary btn-sm"
-                                    onClick={() => setFinalReviewMode(!finalReviewMode)}
+                                    onClick={() => {
+                                        // Enhanced logging
+                                        console.log('Final Review Toggle:', {
+                                            currentMode: finalReviewMode,
+                                            newMode: !finalReviewMode,
+                                            canFinalize,
+                                            submissionStatus: submission.status,
+                                            answersCount: submission.answers?.length,
+                                            answersReviewed: submission.answers?.every(a => 
+                                                a.reviewed_by && 
+                                                a.admin_risk_level && 
+                                                a.recommendation
+                                            ),
+                                            answers: submission.answers?.map(a => ({
+                                                id: a.id,
+                                                adminRisk: a.admin_risk_level,
+                                                systemRisk: a.system_risk_level
+                                            }))
+                                        });
+
+                                        setFinalReviewMode(!finalReviewMode);
+                                        
+                                        // Initialize with calculated risk if starting review
+                                        if (!finalReviewMode) {
+                                            const calculatedRisk = calculateOverallRisk(submission.answers);
+                                            console.log('Setting initial risk level:', {
+                                                calculatedRisk,
+                                                answers: submission.answers?.map(a => ({
+                                                    id: a.id,
+                                                    adminRisk: a.admin_risk_level,
+                                                    systemRisk: a.system_risk_level
+                                                }))
+                                            });
+                                            setAdminOverallRisk(calculatedRisk);
+                                        } else {
+                                            // Reset values when cancelling
+                                            console.log('Resetting review state');
+                                            setAdminOverallRisk('');
+                                            setAdminSummary('');
+                                        }
+                                    }}
                                 >
-                                    {finalReviewMode ? 'Cancel' : 'Finalize Review'}
+                                    {finalReviewMode ? (
+                                        <>
+                                            <X size={16} className="me-1" />
+                                            Cancel Review
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckSquare size={16} className="me-1" />
+                                            Finalize Review
+                                        </>
+                                    )}
                                 </button>
                             )}
                         </div>
                         
                         {finalReviewMode && (
-                            <FinalReviewForm
-                                adminOverallRisk={adminOverallRisk}
-                                setAdminOverallRisk={setAdminOverallRisk}
-                                adminSummary={adminSummary}
-                                setAdminSummary={setAdminSummary}
-                                onSubmit={() => {
-                                    onFinalReview(submission.id, adminOverallRisk, adminSummary);
-                                    setFinalReviewMode(false);
-                                }}
-                                onCancel={() => setFinalReviewMode(false)}
-                            />
+                            <div className="mt-3">
+                                <FinalReviewForm
+                                    adminOverallRisk={adminOverallRisk}
+                                    setAdminOverallRisk={setAdminOverallRisk}
+                                    adminSummary={adminSummary}
+                                    setAdminSummary={setAdminSummary}
+                                    onSubmit={async () => {
+                                        try {
+                                            if (!adminOverallRisk || !adminSummary.trim()) {
+                                                setError('Please provide both risk level and summary');
+                                                return;
+                                            }
+
+                                            // Log the payload for debugging
+                                            console.log('Submitting final review:', {
+                                                admin_overall_risk: adminOverallRisk,
+                                                admin_summary: adminSummary.trim()
+                                            });
+
+                                            const response = await api.put(
+                                                `/audit-submissions/${submission.id}/complete`,
+                                                {
+                                                    admin_overall_risk: adminOverallRisk,
+                                                    admin_summary: adminSummary.trim(),
+                                                    status: 'completed' // Explicitly set the status
+                                                }
+                                            );
+
+                                            console.log('Response:', response.data);
+
+                                            if (response.data?.submission) {
+                                                // Update local state
+                                                await fetchSubmissionDetails(submission.id);
+                                                setFinalReviewMode(false);
+                                                setAdminOverallRisk('');
+                                                setAdminSummary('');
+                                                setError(null);
+                                            } else {
+                                                throw new Error('Invalid response format');
+                                            }
+                                        } catch (err) {
+                                            console.error('Error completing review:', err.response || err);
+                                            setError(
+                                                err.response?.data?.message || 
+                                                'Failed to complete review. Please ensure all answers are reviewed.'
+                                            );
+                                        }
+                                    }}
+                                    onCancel={() => {
+                                        setFinalReviewMode(false);
+                                        setAdminOverallRisk('');
+                                        setAdminSummary('');
+                                    }}
+                                />
+                            </div>
                         )}
                     </div>
                 )}
@@ -878,16 +1297,36 @@ const SubmissionDetails = ({
 
         // Answer Card Component
         const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRiskColor, getRiskIcon, formatDate, canEdit }) => {
-            const [adminRiskLevel, setAdminRiskLevel] = useState(answer.admin_risk_level || answer.system_risk_level || 'low');
-            const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
-            const [recommendation, setRecommendation] = useState(answer.recommendation || '');
+        const [adminRiskLevel, setAdminRiskLevel] = useState(answer.admin_risk_level || answer.system_risk_level || 'low');
+        const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
+        const [recommendation, setRecommendation] = useState(answer.recommendation || 'Review required to address potential security concerns.');
+        const [error, setError] = useState('');
 
-            const handleSave = () => {
-                onSave(answer.id, adminRiskLevel, adminNotes, recommendation);
-            };
+        const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
+        const isReviewed = Boolean(answer.reviewed_by && answer.admin_risk_level && answer.recommendation?.trim());
 
-            const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
-            const isReviewed = answer.reviewed_by;
+        const handleSave = async () => {
+            try {
+                if (!adminRiskLevel) {
+                    setError('Please select a risk level');
+                    return;
+                }
+                if (!recommendation.trim()) {
+                    setError('Please provide a recommendation');
+                    return;
+                }
+                const reviewData = {
+                    admin_risk_level: adminRiskLevel,
+                    admin_notes: adminNotes.trim(),
+                    recommendation: recommendation.trim()
+                };
+                await onSave(answer.id, reviewData.admin_risk_level, reviewData.admin_notes, reviewData.recommendation);
+                setError('');
+            } catch (error) {
+                console.error('Failed to save review:', error);
+                setError(error.response?.data?.message || 'Failed to save review');
+            }
+        };
 
             return (
                 <div className="accordion-item">
@@ -902,13 +1341,13 @@ const SubmissionDetails = ({
                             <div className="d-flex justify-content-between align-items-center w-100 me-3">
                                 <div className="flex-grow-1">
                                     <div className="fw-medium">{answer.question?.question}</div>
-                                    <div className="small text-muted">
-                                        Category: {answer.question?.category}
+                                    <div className="small text-muted d-flex align-items-center gap-3">
+                                        <div>Category: <span className="badge bg-secondary bg-opacity-25 text-dark">{answer.question?.category}</span></div>
                                         {isReviewed && (
-                                            <span className="ms-2">
+                                            <div>
                                                 <CheckCircle size={12} className="text-success me-1" />
                                                 Reviewed
-                                            </span>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -921,6 +1360,12 @@ const SubmissionDetails = ({
                     </h2>
                     <div id={`answer${answer.id}`} className="accordion-collapse collapse">
                         <div className="accordion-body">
+                            {error && (
+                                <div className="alert alert-danger mb-3">
+                                    <AlertCircle size={16} className="me-2" />
+                                    {error}
+                                </div>
+                            )}
                             {/* User's Answer */}
                             <div className="mb-3">
                                 <h6>User's Response:</h6>
