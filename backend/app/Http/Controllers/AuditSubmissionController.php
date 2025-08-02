@@ -45,19 +45,24 @@ class AuditSubmissionController extends Controller
                         ]);
                     }
                     
-                    // Validate answer is in possible answers
+                    // Validate answer is in possible answers or allowed as custom
                     if (!$question->isValidAnswer($answerData['answer'])) {
                         throw ValidationException::withMessages([
-                            'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$questionId}"
+                            'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$questionId}. Please select a valid option or use 'Others' for custom answers."
                         ]);
                     }
                     
+                    // Determine if this is a custom answer
+                    $isCustomAnswer = in_array('Others', $question->possible_answers ?? [], true) && 
+                                    !in_array($answerData['answer'], $question->possible_answers ?? [], true);
+
                     // Create answer with system risk assessment
                     $answer = AuditAnswer::create([
                         'audit_submission_id' => $submission->id,
                         'audit_question_id' => $questionId,
                         'answer' => $answerData['answer'],
                         'status' => 'pending',
+                        'is_custom_answer' => $isCustomAnswer,
                     ]);
                     
                     // Calculate and set system risk level
@@ -217,6 +222,7 @@ class AuditSubmissionController extends Controller
                         'recommendation' => $answer->recommendation,
                         'reviewed_by' => $answer->reviewed_by ? (int) $answer->reviewed_by : null,
                         'reviewed_at' => $answer->reviewed_at,
+                        'is_custom_answer' => (bool) $answer->is_custom_answer,
                         'question' => $answer->question instanceof \App\Models\AuditQuestion ? [
                             'id' => (int) $answer->question->id,
                             'question' => (string) $answer->question->question,
@@ -265,19 +271,18 @@ class AuditSubmissionController extends Controller
             }
 
             $validated = $request->validate([
-                    'admin_risk_level' => 'required|in:low,medium,high',
-                    'admin_notes' => 'nullable|string|max:1000',
-                    'recommendation' => 'required|string|min:5|max:1000', // Minimum 5 characters
-                ]);
+                'admin_risk_level' => 'required|in:low,medium,high',
+                'admin_notes' => 'nullable|string|max:1000',
+                'recommendation' => 'required|string|min:5|max:1000',
+            ]);
 
             DB::beginTransaction();
             try {
-                // Don't pass null values - use the validated data directly
                 $answer->reviewByAdmin(
                     auth()->user(),
                     $validated['admin_risk_level'],
                     $validated['admin_notes'] ?? '',
-                    $validated['recommendation'] // This will never be null due to validation
+                    $validated['recommendation']
                 );
                 
                 if ($submission->status === 'submitted') {
@@ -286,7 +291,6 @@ class AuditSubmissionController extends Controller
 
                 DB::commit();
 
-                // Return more detailed response for debugging
                 $updatedAnswer = $answer->fresh(['question', 'reviewer']);
                 
                 return response()->json([
@@ -294,7 +298,6 @@ class AuditSubmissionController extends Controller
                     'answer' => $updatedAnswer,
                     'submission_status' => $submission->fresh()->status,
                     'submission_progress' => $this->calculateReviewProgress($submission->fresh()),
-                    // Add debugging info
                     'debug' => [
                         'answer_id' => $updatedAnswer->id,
                         'reviewed_by' => $updatedAnswer->reviewed_by,

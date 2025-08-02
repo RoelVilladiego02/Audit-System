@@ -19,6 +19,7 @@ class AuditAnswer extends Model
         'admin_notes',
         'recommendation',
         'status',
+        'is_custom_answer',
     ];
 
     protected $casts = [
@@ -29,6 +30,7 @@ class AuditAnswer extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'is_custom_answer' => 'boolean',
     ];
 
     public function auditSubmission(): BelongsTo
@@ -79,6 +81,11 @@ class AuditAnswer extends Model
 
         $criteria = $question->risk_criteria;
         
+        // If this is a custom answer, default to low risk
+        if ($this->is_custom_answer) {
+            return 'low';
+        }
+
         // Match answer against risk criteria
         foreach (['high', 'medium', 'low'] as $level) {
             if (isset($criteria[$level])) {

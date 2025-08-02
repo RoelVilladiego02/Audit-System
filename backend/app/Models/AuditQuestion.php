@@ -69,13 +69,13 @@ class AuditQuestion extends Model
         $formatted = [];
 
         if (!empty($criteria['high'])) {
-            $formatted[] = "High: {$criteria['high']}";
+            $formatted[] = "High: " . (is_array($criteria['high']) ? implode(', ', $criteria['high']) : $criteria['high']);
         }
         if (!empty($criteria['medium'])) {
-            $formatted[] = "Medium: {$criteria['medium']}";
+            $formatted[] = "Medium: " . (is_array($criteria['medium']) ? implode(', ', $criteria['medium']) : $criteria['medium']);
         }
         if (!empty($criteria['low'])) {
-            $formatted[] = "Low: {$criteria['low']}";
+            $formatted[] = "Low: " . (is_array($criteria['low']) ? implode(', ', $criteria['low']) : $criteria['low']);
         }
 
         return implode(' | ', $formatted);
@@ -94,6 +94,11 @@ class AuditQuestion extends Model
     {
         if (!is_array($this->possible_answers)) {
             return false;
+        }
+
+        // Allow any string if "Others" is a valid option
+        if (in_array('Others', $this->possible_answers, true)) {
+            return true;
         }
 
         return in_array($answer, $this->possible_answers, true);

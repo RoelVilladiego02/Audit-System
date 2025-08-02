@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('admin_notes')->nullable();
             $table->text('recommendation')->default('Review required to address potential security concerns.');
             $table->enum('status', ['pending', 'reviewed'])->default('pending');
+            $table->boolean('is_custom_answer')->default(false);
             $table->timestamps();
         });
     }

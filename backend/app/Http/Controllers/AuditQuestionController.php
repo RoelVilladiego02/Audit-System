@@ -51,7 +51,7 @@ class AuditQuestionController extends Controller
             // Ensure unique possible answers
             $validated['possible_answers'] = array_unique($validated['possible_answers']);
 
-            // Validate that risk criteria answers exist in possible answers
+            // Validate that risk criteria answers exist in possible answers (excluding "Others")
             $this->validateRiskCriteria($validated['risk_criteria'], $validated['possible_answers']);
 
             $question = AuditQuestion::create($validated);
@@ -284,17 +284,20 @@ class AuditQuestionController extends Controller
     }
 
     /**
-     * Validate that risk criteria answers exist in possible answers.
+     * Validate that risk criteria answers exist in possible answers, excluding "Others".
      */
     private function validateRiskCriteria(array $riskCriteria, array $possibleAnswers): void
     {
+        // Remove "Others" from validation since it allows custom answers not in risk_criteria
+        $possibleAnswersWithoutOthers = array_diff($possibleAnswers, ['Others']);
+        
         foreach ($riskCriteria as $level => $answers) {
             if (!is_array($answers)) continue;
             
             foreach ($answers as $answer) {
-                if (!in_array($answer, $possibleAnswers, true)) {
+                if (!in_array($answer, $possibleAnswersWithoutOthers, true)) {
                     throw ValidationException::withMessages([
-                        "risk_criteria.{$level}" => "Risk criteria answer '{$answer}' must be one of the possible answers."
+                        "risk_criteria.{$level}" => "Risk criteria answer '{$answer}' must be one of the possible answers (excluding 'Others')."
                     ]);
                 }
             }
