@@ -8,49 +8,88 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Initialize authentication state
     useEffect(() => {
-        const initAuth = async () => {
+        const initializeAuth = async () => {
+            setLoading(true);
             const token = localStorage.getItem('token');
-            if (token) {
+            const storedUser = localStorage.getItem('user');
+
+            if (token && storedUser) {
                 try {
+                    // Parse stored user data
+                    const userData = JSON.parse(storedUser);
+                    
+                    // Verify token is still valid by checking with server
                     const response = await axios.get('/user', {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
                     });
-                    setUser(response.data);
+
+                    if (response.data) {
+                        // Update user data with fresh data from server
+                        const freshUserData = response.data;
+                        localStorage.setItem('user', JSON.stringify(freshUserData));
+                        setUser(freshUserData);
+                        
+                        // Set default auth header for axios
+                        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                        
+                        console.log('Auth initialized successfully:', {
+                            id: freshUserData.id,
+                            email: freshUserData.email,
+                            role: freshUserData.role
+                        });
+                    } else {
+                        throw new Error('Invalid user data received');
+                    }
                 } catch (err) {
                     console.error('Auth initialization failed:', err);
-                    localStorage.removeItem('token');
-                    setUser(null);
+                    // Clear invalid tokens/data
+                    clearAuthData();
                 }
             }
             setLoading(false);
         };
-        
-        initAuth();
+
+        initializeAuth();
     }, []);
+
+    const clearAuthData = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        delete axios.defaults.headers.common['Authorization'];
+        setUser(null);
+        setError('');
+    };
 
     const checkAuth = async () => {
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No token found');
+            }
+
             const response = await axios.get('/user', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
             console.log('Auth check successful:', response.data);
             
-            // Store user data including role
-            const userData = response.data;
-            localStorage.setItem('user', JSON.stringify(userData));
-            setUser(userData);
-            return userData;
+            if (response.data) {
+                const userData = response.data;
+                localStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+                return userData;
+            } else {
+                throw new Error('No user data received');
+            }
         } catch (error) {
             console.error('Auth check failed:', error);
-            setUser(null);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            clearAuthData();
             return null;
         } finally {
             setLoading(false);
@@ -60,53 +99,70 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         setLoading(true);
         setError('');
+        
         try {
+            console.log('Attempting login for:', email);
+            
             const response = await axios.post('/auth/login', { 
-                email, 
+                email: email.toLowerCase().trim(), 
                 password 
             });
 
-            console.log('Login response:', response.data);
+            console.log('Login response:', {
+                status: response.status,
+                hasToken: !!response.data.access_token,
+                hasUser: !!response.data.user
+            });
 
-            if (response.data.access_token) {
-                // Store the token
-                localStorage.setItem('token', response.data.access_token);
+            if (response.data.access_token && response.data.user) {
+                const { access_token, user: userData } = response.data;
                 
-                // Store user data including role
-                if (response.data.user) {
-                    const userData = response.data.user;
-                    
-                    // Make sure we have the required role information
-                    if (!userData.role) {
-                        console.error('No role information in user data:', userData);
-                        throw new Error('User role information missing');
-                    }
-                    
-                    // Store complete user data
-                    localStorage.setItem('user', JSON.stringify(userData));
-                    setUser(userData);
-                    
-                    console.log('User logged in successfully:', {
-                        id: userData.id,
-                        email: userData.email,
-                        role: userData.role
-                    });
-                    
-                    // Also set the authorization header for subsequent requests
-                    axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
-                    
-                    return userData;
+                // Validate user data
+                if (!userData.id || !userData.email || !userData.role) {
+                    throw new Error('Incomplete user data received from server');
                 }
+                
+                // Store authentication data
+                localStorage.setItem('token', access_token);
+                localStorage.setItem('user', JSON.stringify(userData));
+                
+                // Set default authorization header
+                axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+                
+                // Update state
+                setUser(userData);
+                setError('');
+                
+                console.log('Login successful:', {
+                    id: userData.id,
+                    email: userData.email,
+                    role: userData.role
+                });
+                
+                return userData;
+            } else {
+                throw new Error('Invalid response: missing token or user data');
             }
-
-            throw new Error('Invalid response from server');
         } catch (error) {
-            const message = error.response?.data?.message || 
-                           error.message || 
-                           'Login failed. Please check your credentials.';
             console.error('Login error:', error);
-            setError(message);
-            throw error;
+            
+            let errorMessage = 'Login failed. Please try again.';
+            
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Invalid email or password. Please check your credentials.';
+            } else if (error.response?.status === 422) {
+                errorMessage = 'Invalid input format. Please check your email and password.';
+            } else if (error.response?.status >= 500) {
+                errorMessage = 'Server error. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
+            clearAuthData();
+            throw new Error(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -115,52 +171,142 @@ export const AuthProvider = ({ children }) => {
     const register = async (name, email, password, password_confirmation) => {
         setLoading(true);
         setError('');
+        
         try {
+            console.log('Attempting registration for:', email);
+            
             const response = await axios.post('/auth/register', {
-                name,
-                email,
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
                 password,
                 password_confirmation
             });
 
-            if (response.data.access_token) {
-                localStorage.setItem('token', response.data.access_token);
-                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
-                
-                if (response.data.user) {
-                    setUser(response.data.user);
-                    return response.data.user;
-                }
-            }
+            console.log('Registration response:', {
+                status: response.status,
+                hasToken: !!response.data.access_token,
+                hasUser: !!response.data.user
+            });
 
-            throw new Error('Invalid response from server');
+            if (response.data.access_token && response.data.user) {
+                const { access_token, user: userData } = response.data;
+                
+                // Validate user data
+                if (!userData.id || !userData.email) {
+                    throw new Error('Incomplete user data received from server');
+                }
+                
+                // Store authentication data
+                localStorage.setItem('token', access_token);
+                localStorage.setItem('user', JSON.stringify(userData));
+                
+                // Set default authorization header
+                axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+                
+                // Update state
+                setUser(userData);
+                setError('');
+                
+                console.log('Registration successful:', {
+                    id: userData.id,
+                    email: userData.email,
+                    role: userData.role || 'user'
+                });
+                
+                return userData;
+            } else {
+                throw new Error('Invalid response: missing token or user data');
+            }
         } catch (error) {
-            setError(error.response?.data?.message || 'Registration failed');
-            throw error;
+            console.error('Registration error:', error);
+            
+            let errorMessage = 'Registration failed. Please try again.';
+            
+            if (error.response?.data?.errors) {
+                // Handle validation errors
+                const errors = error.response.data.errors;
+                const errorMessages = Object.values(errors).flat();
+                errorMessage = errorMessages.join('. ');
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.response?.status === 422) {
+                errorMessage = 'Invalid input. Please check your information and try again.';
+            } else if (error.response?.status >= 500) {
+                errorMessage = 'Server error. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
+            clearAuthData();
+            throw error; // Re-throw to let component handle specific error details
         } finally {
             setLoading(false);
         }
     };
 
     const logout = async () => {
+        setLoading(true);
+        
         try {
-            // Call logout endpoint if available
-            if (user) {
-                                await axios.post('/auth/logout');
+            // Attempt to call logout endpoint
+            if (user && localStorage.getItem('token')) {
+                console.log('Calling logout endpoint...');
+                await axios.post('/auth/logout');
+                console.log('Logout endpoint called successfully');
             }
         } catch (error) {
-            console.error('Logout error:', error);
+            console.error('Logout endpoint error (continuing with cleanup):', error);
+            // Continue with local logout even if server call fails
         } finally {
-            // Always clear local state regardless of server response
-            setUser(null);
-            localStorage.removeItem('token');
-            delete axios.defaults.headers.common['Authorization'];
-            // Redirect to login page
-            window.location.href = '/login';
+            // Always clear local state
+            console.log('Clearing authentication data...');
+            clearAuthData();
+            setLoading(false);
+            
+            // Force navigation to login page
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 100);
         }
     };
 
-    const value = {
+    const refreshToken = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No token to refresh');
+            }
+
+            // Check if current token is still valid
+            const response = await axios.get('/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.data) {
+                const userData = response.data;
+                localStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+                return userData;
+            } else {
+                throw new Error('Token refresh failed');
+            }
+        } catch (error) {
+            console.error('Token refresh failed:', error);
+            clearAuthData();
+            return null;
+        }
+    };
+
+    const updateUser = (updatedUserData) => {
+        const newUserData = { ...user, ...updatedUserData };
+        localStorage.setItem('user', JSON.stringify(newUserData));
+        setUser(newUserData);
+    };
+
+    const contextValue = {
         user,
         loading,
         error,
@@ -168,30 +314,58 @@ export const AuthProvider = ({ children }) => {
         logout,
         register,
         checkAuth,
+        refreshToken,
+        updateUser,
+        clearError: () => setError(''),
+        
+        // Role checking utilities
         isAdmin: user?.role === 'admin',
         isUser: user?.role === 'user',
+        isAuthenticated: !!user,
+        
         hasRole: (role) => {
+            if (!user?.role) return false;
+            
             // Handle comma-separated roles
             if (role.includes(',')) {
-                const allowedRoles = role.split(',').map(r => r.trim());
-                return user?.role && allowedRoles.includes(user.role);
+                const allowedRoles = role.split(',').map(r => r.trim().toLowerCase());
+                return allowedRoles.includes(user.role.toLowerCase());
             }
-            return user?.role === role;
-        }
+            
+            return user.role.toLowerCase() === role.toLowerCase();
+        },
+        
+        hasAnyRole: (roles) => {
+            if (!user?.role) return false;
+            
+            const roleArray = Array.isArray(roles) ? roles : [roles];
+            return roleArray.some(role => user.role.toLowerCase() === role.toLowerCase());
+        },
+        
+        // User info getters
+        getUserId: () => user?.id,
+        getUserEmail: () => user?.email,
+        getUserName: () => user?.name,
+        getUserRole: () => user?.role
     };
 
-    if (loading) {
+    // Loading spinner component
+    if (loading && !user) {
         return (
-            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
+            <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }} role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 className="text-muted">Loading...</h5>
+                    <p className="text-muted">Please wait while we initialize your session.</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

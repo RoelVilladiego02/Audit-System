@@ -96,9 +96,13 @@ useEffect(() => {
     // Show loading while checking authentication
     if (authLoading) {
         return (
-            <div className="min-vh-100 d-flex align-items-center justify-content-center">
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
+            <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 className="text-muted">Loading Questions Management...</h5>
+                    <p className="text-muted small">Please wait while we fetch your data</p>
                 </div>
             </div>
         );
@@ -158,11 +162,14 @@ useEffect(() => {
             )}
 
             {loading ? (
-                <div className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading questions...</span>
+                <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+                    <div className="text-center">
+                        <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <h5 className="text-muted">Loading Questions...</h5>
+                        <p className="text-muted small">Please wait while we fetch the questions</p>
                     </div>
-                    <p className="mt-2 text-muted">Loading questions...</p>
                 </div>
             ) : questions.length === 0 && !error ? (
                 <div className="card">

@@ -111,10 +111,22 @@ const AdminAnalyticsDashboard = () => {
 
   if (!isAdmin) {
     return (
-      <div className="container mt-5">
-        <div className="alert alert-danger" role="alert">
-          <h4 className="alert-heading">Access Denied</h4>
-          <p>You must be an administrator to access this page.</p>
+      <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+        <div className="text-center">
+          <div className="mb-4">
+            <i className="fas fa-shield-alt fa-4x text-danger mb-3"></i>
+          </div>
+          <div className="card shadow-lg border-0" style={{maxWidth: '400px'}}>
+            <div className="card-body p-5">
+              <h3 className="card-title text-danger mb-3">
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                Access Denied
+              </h3>
+              <p className="card-text text-muted mb-0">
+                Administrator privileges are required to access this dashboard.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -122,11 +134,13 @@ const AdminAnalyticsDashboard = () => {
 
   if (loading) {
     return (
-      <div className="container mt-5">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border text-primary" role="status">
+      <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+        <div className="text-center">
+          <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
             <span className="visually-hidden">Loading...</span>
           </div>
+          <h5 className="text-muted">Loading Analytics Dashboard...</h5>
+          <p className="text-muted small">Please wait while we fetch your data</p>
         </div>
       </div>
     );
@@ -134,66 +148,99 @@ const AdminAnalyticsDashboard = () => {
 
   if (error) {
     return (
-      <div className="container mt-5">
-        <div className="alert alert-danger" role="alert">
-          <h4 className="alert-heading">Error</h4>
-          <p>{error}</p>
-          <button className="btn btn-outline-danger" onClick={fetchAnalytics}>
-            Try Again
-          </button>
+      <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+        <div className="text-center">
+          <div className="mb-4">
+            <i className="fas fa-exclamation-circle fa-4x text-danger mb-3"></i>
+          </div>
+          <div className="card shadow-lg border-0" style={{maxWidth: '500px'}}>
+            <div className="card-body p-5">
+              <h3 className="card-title text-danger mb-3">
+                <i className="fas fa-times-circle me-2"></i>
+                Error Loading Data
+              </h3>
+              <div className="alert alert-danger border-0 mb-4">
+                <p className="mb-0">{error}</p>
+              </div>
+              <button className="btn btn-outline-danger btn-lg px-4" onClick={fetchAnalytics}>
+                <i className="fas fa-redo me-2"></i>
+                Try Again
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  const renderVulnerabilityAnalytics = (data) => (
-    <div className="row">
-      {/* Summary Cards */}
-      <div className="col-12 mb-4">
-        <div className="row">
-          <div className="col-md-3">
-            <div className="card bg-primary text-white">
-              <div className="card-body">
-                <h5 className="card-title">Total Submissions</h5>
-                <h2>{data.totalSubmissions}</h2>
-              </div>
+  const StatCard = ({ title, value, icon, color, subtitle }) => (
+    <div className="col-md-3 col-sm-6 mb-4">
+      <div className={`card border-0 shadow-sm h-100 border-start border-4 border-${color}`}>
+        <div className="card-body p-4">
+          <div className="d-flex align-items-center">
+            <div className={`rounded-circle bg-${color} bg-opacity-10 p-3 me-3`}>
+              <i className={`${icon} fa-lg text-${color}`}></i>
             </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-info text-white">
-              <div className="card-body">
-                <h5 className="card-title">Avg Risk Score</h5>
-                <h2>{data.averageRiskScore}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-success text-white">
-              <div className="card-body">
-                <h5 className="card-title">Assignment Rate</h5>
-                <h2>{data.assignmentStats?.assignmentRate || 0}%</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-warning text-white">
-              <div className="card-body">
-                <h5 className="card-title">Unassigned</h5>
-                <h2>{data.assignmentStats?.unassigned || 0}</h2>
-              </div>
+            <div className="flex-grow-1">
+              <h6 className="card-title text-muted mb-1 fw-normal">{title}</h6>
+              <h2 className="mb-0 fw-bold">{value}</h2>
+              {subtitle && <small className="text-muted">{subtitle}</small>}
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
 
-      {/* Risk Distribution */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Risk Level Distribution</h5>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
+  const ChartCard = ({ title, children, icon }) => (
+    <div className="card border-0 shadow-sm h-100">
+      <div className="card-header bg-white border-0 py-3">
+        <h5 className="card-title mb-0 d-flex align-items-center">
+          {icon && <i className={`${icon} me-2 text-primary`}></i>}
+          {title}
+        </h5>
+      </div>
+      <div className="card-body p-4">
+        {children}
+      </div>
+    </div>
+  );
+
+  const renderVulnerabilityAnalytics = (data) => (
+    <div>
+      {/* Summary Cards */}
+      <div className="row mb-5">
+        <StatCard
+          title="Total Submissions"
+          value={data.totalSubmissions}
+          icon="fas fa-bug"
+          color="primary"
+        />
+        <StatCard
+          title="Average Risk Score"
+          value={data.averageRiskScore}
+          icon="fas fa-tachometer-alt"
+          color="info"
+        />
+        <StatCard
+          title="Assignment Rate"
+          value={`${data.assignmentStats?.assignmentRate || 0}%`}
+          icon="fas fa-check-circle"
+          color="success"
+        />
+        <StatCard
+          title="Unassigned"
+          value={data.assignmentStats?.unassigned || 0}
+          icon="fas fa-clock"
+          color="warning"
+        />
+      </div>
+
+      <div className="row mb-4">
+        {/* Risk Distribution */}
+        <div className="col-lg-4 col-md-6 mb-4">
+          <ChartCard title="Risk Level Distribution" icon="fas fa-exclamation-triangle">
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
                   data={formatPieData(data.riskDistribution, riskColors)}
@@ -201,7 +248,7 @@ const AdminAnalyticsDashboard = () => {
                   cy="50%"
                   labelLine={false}
                   label={renderCustomLabel}
-                  outerRadius={80}
+                  outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -213,18 +260,13 @@ const AdminAnalyticsDashboard = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
-      </div>
 
-      {/* Status Distribution */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Status Distribution</h5>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
+        {/* Status Distribution */}
+        <div className="col-lg-4 col-md-6 mb-4">
+          <ChartCard title="Status Distribution" icon="fas fa-tasks">
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
                   data={formatPieData(data.statusDistribution, statusColors)}
@@ -232,7 +274,7 @@ const AdminAnalyticsDashboard = () => {
                   cy="50%"
                   labelLine={false}
                   label={renderCustomLabel}
-                  outerRadius={80}
+                  outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -244,18 +286,13 @@ const AdminAnalyticsDashboard = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
-      </div>
 
-      {/* Severity Distribution */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Severity Distribution</h5>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
+        {/* Severity Distribution */}
+        <div className="col-lg-4 col-md-6 mb-4">
+          <ChartCard title="Severity Distribution" icon="fas fa-signal">
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
                   data={formatPieData(data.severityDistribution, severityColors)}
@@ -263,7 +300,7 @@ const AdminAnalyticsDashboard = () => {
                   cy="50%"
                   labelLine={false}
                   label={renderCustomLabel}
-                  outerRadius={80}
+                  outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -275,94 +312,75 @@ const AdminAnalyticsDashboard = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </div>
 
-      {/* Submission Trends */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Submission Trends</h5>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
+      <div className="row">
+        {/* Submission Trends */}
+        <div className="col-lg-6 mb-4">
+          <ChartCard title="Submission Trends" icon="fas fa-chart-line">
+            <ResponsiveContainer width="100%" height={320}>
               <LineChart data={data.submissionTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" stroke="#6c757d" />
+                <YAxis stroke="#6c757d" />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+                <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={3} dot={{ fill: '#007bff', strokeWidth: 2, r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
-      </div>
 
-      {/* Common Vulnerabilities */}
-      <div className="col-12 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Common Vulnerability Categories</h5>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={400}>
+        {/* Common Vulnerabilities */}
+        <div className="col-lg-6 mb-4">
+          <ChartCard title="Common Vulnerability Categories" icon="fas fa-list">
+            <ResponsiveContainer width="100%" height={320}>
               <BarChart data={data.commonVulnerabilities}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="category" stroke="#6c757d" />
+                <YAxis stroke="#6c757d" />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="count" fill="#8884d8" name="Total" />
-                <Bar dataKey="resolvedCount" fill="#82ca9d" name="Resolved" />
+                <Bar dataKey="count" fill="#007bff" name="Total" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="resolvedCount" fill="#28a745" name="Resolved" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </div>
     </div>
   );
 
   const renderAuditAnalytics = (data) => (
-    <div className="row">
+    <div>
       {/* Summary Cards */}
-      <div className="col-12 mb-4">
-        <div className="row">
-          <div className="col-md-4">
-            <div className="card bg-primary text-white">
-              <div className="card-body">
-                <h5 className="card-title">Total Submissions</h5>
-                <h2>{data.totalSubmissions}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-4">
-            <div className="card bg-info text-white">
-              <div className="card-body">
-                <h5 className="card-title">Avg Risk Score</h5>
-                <h2>{data.averageRiskScore}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-4">
-            <div className="card bg-warning text-white">
-              <div className="card-body">
-                <h5 className="card-title">High Risk Audits</h5>
-                <h2>{data.riskDistribution?.high || 0}</h2>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="row mb-5">
+        <StatCard
+          title="Total Submissions"
+          value={data.totalSubmissions}
+          icon="fas fa-clipboard-check"
+          color="primary"
+        />
+        <StatCard
+          title="Average Risk Score"
+          value={data.averageRiskScore}
+          icon="fas fa-tachometer-alt"
+          color="info"
+        />
+        <StatCard
+          title="High Risk Audits"
+          value={data.riskDistribution?.high || 0}
+          icon="fas fa-exclamation-triangle"
+          color="warning"
+        />
       </div>
 
-      {/* Risk Distribution */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Risk Level Distribution</h5>
-          </div>
-          <div className="card-body">
+      <div className="row">
+        {/* Risk Distribution */}
+        <div className="col-lg-6 mb-4">
+          <ChartCard title="Risk Level Distribution" icon="fas fa-exclamation-triangle">
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -371,7 +389,7 @@ const AdminAnalyticsDashboard = () => {
                   cy="50%"
                   labelLine={false}
                   label={renderCustomLabel}
-                  outerRadius={80}
+                  outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -383,176 +401,198 @@ const AdminAnalyticsDashboard = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
-      </div>
 
-      {/* Submission Trends */}
-      <div className="col-md-6 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Submission Trends</h5>
-          </div>
-          <div className="card-body">
+        {/* Submission Trends */}
+        <div className="col-lg-6 mb-4">
+          <ChartCard title="Submission Trends" icon="fas fa-chart-line">
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data.submissionTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" stroke="#6c757d" />
+                <YAxis stroke="#6c757d" />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+                <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={3} dot={{ fill: '#007bff', strokeWidth: 2, r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </div>
 
       {/* Common High Risk Questions */}
-      <div className="col-12 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h5>Common High-Risk Audit Questions</h5>
-          </div>
-          <div className="card-body">
+      <div className="row">
+        <div className="col-12 mb-4">
+          <ChartCard title="Common High-Risk Audit Questions" icon="fas fa-question-circle">
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={data.commonHighRisks} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="question" type="category" width={200} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis type="number" stroke="#6c757d" />
+                <YAxis dataKey="question" type="category" width={250} stroke="#6c757d" />
                 <Tooltip />
-                <Bar dataKey="count" fill="#dc3545" />
+                <Bar dataKey="count" fill="#dc3545" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </div>
     </div>
   );
 
   const renderCombinedAnalytics = (data) => (
-    <div className="row">
+    <div>
       {/* Summary Cards */}
-      <div className="col-12 mb-4">
-        <div className="row">
-          <div className="col-md-3">
-            <div className="card bg-primary text-white">
-              <div className="card-body">
-                <h5 className="card-title">Total Submissions</h5>
-                <h2>{data.summary.totalSubmissions}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-success text-white">
-              <div className="card-body">
-                <h5 className="card-title">Vulnerability Submissions</h5>
-                <h2>{data.summary.vulnerabilitySubmissions}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-info text-white">
-              <div className="card-body">
-                <h5 className="card-title">Audit Submissions</h5>
-                <h2>{data.summary.auditSubmissions}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-warning text-white">
-              <div className="card-body">
-                <h5 className="card-title">High Risk Items</h5>
-                <h2>{(data.vulnerability.riskDistribution?.high || 0) + (data.audit.riskDistribution?.high || 0)}</h2>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="row mb-5">
+        <StatCard
+          title="Total Submissions"
+          value={data.summary.totalSubmissions}
+          icon="fas fa-chart-bar"
+          color="primary"
+        />
+        <StatCard
+          title="Vulnerability Submissions"
+          value={data.summary.vulnerabilitySubmissions}
+          icon="fas fa-bug"
+          color="success"
+        />
+        <StatCard
+          title="Audit Submissions"
+          value={data.summary.auditSubmissions}
+          icon="fas fa-clipboard-check"
+          color="info"
+        />
+        <StatCard
+          title="High Risk Items"
+          value={(data.vulnerability.riskDistribution?.high || 0) + (data.audit.riskDistribution?.high || 0)}
+          icon="fas fa-exclamation-triangle"
+          color="warning"
+        />
       </div>
 
       {/* Vulnerability Section */}
-      <div className="col-12 mb-4">
-        <h4 className="text-primary">Vulnerability Analytics</h4>
+      <div className="mb-5">
+        <div className="d-flex align-items-center mb-4">
+          <div className="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
+            <i className="fas fa-bug text-primary"></i>
+          </div>
+          <h3 className="mb-0 text-primary fw-bold">Vulnerability Analytics</h3>
+        </div>
         {renderVulnerabilityAnalytics(data.vulnerability)}
       </div>
 
       {/* Audit Section */}
-      <div className="col-12 mb-4">
-        <h4 className="text-info">Audit Analytics</h4>
+      <div className="mb-5">
+        <div className="d-flex align-items-center mb-4">
+          <div className="bg-info bg-opacity-10 rounded-circle p-2 me-3">
+            <i className="fas fa-clipboard-check text-info"></i>
+          </div>
+          <h3 className="mb-0 text-info fw-bold">Audit Analytics</h3>
+        </div>
         {renderAuditAnalytics(data.audit)}
       </div>
     </div>
   );
 
   return (
-    <div className="container-fluid mt-4">
-      <div className="row">
+    <div className="container-fluid py-4 bg-light min-vh-100">
+      {/* Header */}
+      <div className="row mb-4">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h1 className="h2">Analytics Dashboard</h1>
-            <button className="btn btn-outline-primary" onClick={fetchAnalytics}>
-              <i className="fas fa-sync-alt me-2"></i>
-              Refresh
-            </button>
+          <div className="bg-white rounded shadow-sm p-4">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+              <div className="mb-3 mb-md-0">
+                <h1 className="h2 mb-2 fw-bold text-dark">
+                  <i className="fas fa-chart-line me-3 text-primary"></i>
+                  Analytics Dashboard
+                </h1>
+                <p className="text-muted mb-0">Comprehensive insights into your security data</p>
+              </div>
+              <button 
+                className="btn btn-primary btn-lg px-4 shadow-sm" 
+                onClick={fetchAnalytics}
+                disabled={loading}
+              >
+                <i className="fas fa-sync-alt me-2"></i>
+                {loading ? 'Refreshing...' : 'Refresh Data'}
+              </button>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Filters */}
-          <div className="card mb-4">
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-3">
-                  <label className="form-label">Data Type</label>
+      {/* Filters */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card border-0 shadow-sm">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="card-title mb-0 d-flex align-items-center">
+                <i className="fas fa-filter me-2 text-primary"></i>
+                Filters & Options
+              </h5>
+            </div>
+            <div className="card-body p-4">
+              <div className="row g-3">
+                <div className="col-lg-3 col-md-6">
+                  <label className="form-label fw-semibold text-muted">
+                    <i className="fas fa-database me-1"></i>
+                    Data Type
+                  </label>
                   <select
-                    className="form-select"
+                    className="form-select form-select-lg shadow-sm"
                     value={dataType}
                     onChange={(e) => setDataType(e.target.value)}
                   >
-                    <option value="all">Combined</option>
-                    <option value="vulnerability">Vulnerabilities</option>
-                    <option value="audit">Audits</option>
+                    <option value="all">📊 Combined Analytics</option>
+                    <option value="vulnerability">🐛 Vulnerabilities</option>
+                    <option value="audit">📋 Audits</option>
                   </select>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label">Time Range</label>
+                <div className="col-lg-3 col-md-6">
+                  <label className="form-label fw-semibold text-muted">
+                    <i className="fas fa-calendar me-1"></i>
+                    Time Range
+                  </label>
                   <select
-                    className="form-select"
+                    className="form-select form-select-lg shadow-sm"
                     value={timeRange}
                     onChange={(e) => setTimeRange(e.target.value)}
                   >
-                    <option value="week">Last Week</option>
-                    <option value="month">Last Month</option>
-                    <option value="quarter">Last Quarter</option>
-                    <option value="year">Last Year</option>
-                    <option value="all">All Time</option>
-                    <option value="custom">Custom Range</option>
+                    <option value="week">📅 Last Week</option>
+                    <option value="month">📅 Last Month</option>
+                    <option value="quarter">📅 Last Quarter</option>
+                    <option value="year">📅 Last Year</option>
+                    <option value="all">📅 All Time</option>
+                    <option value="custom">🗓️ Custom Range</option>
                   </select>
                 </div>
                 {timeRange === 'custom' && (
                   <>
-                    <div className="col-md-2">
-                      <label className="form-label">Start Date</label>
+                    <div className="col-lg-2 col-md-4">
+                      <label className="form-label fw-semibold text-muted">Start Date</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-lg shadow-sm"
                         value={customStartDate}
                         onChange={(e) => setCustomStartDate(e.target.value)}
                       />
                     </div>
-                    <div className="col-md-2">
-                      <label className="form-label">End Date</label>
+                    <div className="col-lg-2 col-md-4">
+                      <label className="form-label fw-semibold text-muted">End Date</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-lg shadow-sm"
                         value={customEndDate}
                         onChange={(e) => setCustomEndDate(e.target.value)}
                       />
                     </div>
-                    <div className="col-md-2 d-flex align-items-end">
+                    <div className="col-lg-2 col-md-4 d-flex align-items-end">
                       <button
-                        className="btn btn-primary"
+                        className="btn btn-success btn-lg w-100 shadow-sm"
                         onClick={handleCustomDateSubmit}
                         disabled={!customStartDate || !customEndDate}
                       >
+                        <i className="fas fa-check me-2"></i>
                         Apply
                       </button>
                     </div>
@@ -561,17 +601,17 @@ const AdminAnalyticsDashboard = () => {
               </div>
             </div>
           </div>
-
-          {/* Analytics Content */}
-          {analyticsData && (
-            <div className="analytics-content">
-              {analyticsData.type === 'vulnerability' && renderVulnerabilityAnalytics(analyticsData)}
-              {analyticsData.type === 'audit' && renderAuditAnalytics(analyticsData)}
-              {analyticsData.type === 'combined' && renderCombinedAnalytics(analyticsData)}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Analytics Content */}
+      {analyticsData && (
+        <div className="analytics-content">
+          {analyticsData.type === 'vulnerability' && renderVulnerabilityAnalytics(analyticsData)}
+          {analyticsData.type === 'audit' && renderAuditAnalytics(analyticsData)}
+          {analyticsData.type === 'combined' && renderCombinedAnalytics(analyticsData)}
+        </div>
+      )}
     </div>
   );
 };

@@ -5,178 +5,159 @@ import axios from '../../api/axios';
 
 const AdminDashboard = () => {
     const { user } = useAuth();
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState({
-        totalQuestions: 0,
-        totalSubmissions: 0,
-        highRiskSubmissions: 0,
-        recentSubmissions: [],
-        riskDistribution: {
-            high: 0,
-            medium: 0,
-            low: 0
-        }
+        pending_reviews: 0,
+        under_review: 0,
+        completed_today: 0,
+        high_risk_submissions: 0,
+        pending_answers: 0,
+        recent_submissions: [],
     });
+    const [questionStats, setQuestionStats] = useState([]);
 
-    const fetchDashboardStats = async () => {
+    const fetchDashboardData = async () => {
         try {
-            const [questionsResponse, analyticsResponse] = await Promise.all([
-                axios.get('/api/questions'),
-                axios.get('/api/analytics')
+            setLoading(true);
+            const [dashboardResponse, questionStatsResponse] = await Promise.all([
+                axios.get('audit-submissions/admin/dashboard'),
+                axios.get('audit-questions-statistics'),
             ]);
 
-            const questions = questionsResponse.data;
-            const analytics = analyticsResponse.data;
-
-            const lastFiveSubmissions = analytics.submissionTrends?.data?.slice(-5) || [];
-
-            setStats({
-                totalQuestions: questions.length || 0,
-                totalSubmissions: analytics.totalSubmissions || 0,
-                highRiskSubmissions: analytics.riskDistribution?.high || 0,
-                recentSubmissions: lastFiveSubmissions.map((submission, index) => ({
-                    id: index + 1,
-                    user_name: 'User', // Placeholder; replace with real user name if backend supports it
-                    created_at: new Date().toISOString(), // Placeholder; update with real timestamp
-                    risk_level: submission.risk_level || 'low'
-                })),
-                riskDistribution: analytics.riskDistribution || { high: 0, medium: 0, low: 0 }
-            });
-
+            setStats(dashboardResponse.data);
+            setQuestionStats(questionStatsResponse.data);
         } catch (err) {
-            setError(err.message || 'An error occurred while fetching dashboard stats');
+            setError(err.response?.data?.message || 'Failed to fetch dashboard data');
+        } finally {
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchDashboardStats();
+        fetchDashboardData();
     }, []);
 
+    if (loading) {
+        return (
+            <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }} role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 className="text-muted mb-2">Loading Dashboard...</h5>
+                    <p className="text-muted small">Please wait while we fetch your data</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="container py-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h1>Welcome, {user?.name}</h1>
-                <Link to="/admin/questions/create" className="btn btn-primary">
+        <div className="container py-5">
+            <div className="d-flex justify-content-between align-items-center mb-5">
+                <h1 className="display-5 fw-bold">Welcome, {user?.name}</h1>
+                <Link to="/admin/questions/create" className="btn btn-primary btn-lg">
                     Create New Question
                 </Link>
             </div>
 
-            <div className="row g-4">
-                <div className="col-md-6 col-lg-4">
-                    <div className="card h-100">
+            {error && (
+                <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                    {error}
+                    <button type="button" className="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            )}
+
+            {/* Quick Stats */}
+            <div className="row g-4 mb-5">
+                <div className="col-md-4">
+                    <div className="card border-0 shadow-sm h-100">
                         <div className="card-body">
-                            <h5 className="card-title">Manage Questions</h5>
-                            <p className="card-text">View, edit, and manage audit questions and their categories.</p>
-                            <Link to="/admin/questions" className="btn btn-primary">
+                            <div className="d-flex align-items-center">
+                                <div className="flex-shrink-0 bg-primary rounded-circle p-3 me-3">
+                                    <svg className="bi text-white" width="24" height="24" fill="currentColor">
+                                        <use xlinkHref="/bootstrap-icons.svg#file-earmark-text" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h6 className="text-muted mb-1">Pending Reviews</h6>
+                                    <h3 className="fw-bold mb-0">{stats.pending_reviews}</h3>
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Link to="/admin/submissions?status=pending" className="text-primary small text-decoration-none">
+                                    View pending submissions
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-4">
+                    <div className="card border-0 shadow-sm h-100">
+                        <div className="card-body">
+                            <div className="d-flex align-items-center">
+                                <div className="flex-shrink-0 bg-success rounded-circle p-3 me-3">
+                                    <svg className="bi text-white" width="24" height="24" fill="currentColor">
+                                        <use xlinkHref="/bootstrap-icons.svg#check-circle" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h6 className="text-muted mb-1">Under Review</h6>
+                                    <h3 className="fw-bold mb-0">{stats.under_review}</h3>
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Link to="/admin/submissions?status=under_review" className="text-primary small text-decoration-none">
+                                    View submissions under review
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-4">
+                    <div className="card border-0 shadow-sm h-100">
+                        <div className="card-body">
+                            <div className="d-flex align-items-center">
+                                <div className="flex-shrink-0 bg-danger rounded-circle p-3 me-3">
+                                    <svg className="bi text-white" width="24" height="24" fill="currentColor">
+                                        <use xlinkHref="/bootstrap-icons.svg#exclamation-triangle" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h6 className="text-muted mb-1">High Risk Submissions</h6>
+                                    <h3 className="fw-bold mb-0">{stats.high_risk_submissions}</h3>
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Link to="/analytics" className="text-primary small text-decoration-none">
+                                    View risk analysis
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Action Cards */}
+            <div className="row g-4 mb-5">
+                <div className="col-md-6">
+                    <div className="card border-0 shadow-sm h-100">
+                        <div className="card-body">
+                            <h5 className="card-title fw-bold">Manage Questions</h5>
+                            <p className="card-text text-muted">Create, edit, and manage audit questions and their categories.</p>
+                            <Link to="/admin/questions" className="btn btn-outline-primary">
                                 Manage Questions
                             </Link>
                         </div>
                     </div>
                 </div>
-
-                <div className="col-md-6 col-lg-4">
-                    <div className="card h-100">
+                <div className="col-md-6">
+                    <div className="card border-0 shadow-sm h-100">
                         <div className="card-body">
-                            <h5 className="card-title">Analytics Dashboard</h5>
-                            <p className="card-text">View comprehensive analytics and reports from all submissions.</p>
-                            <Link to="/analytics" className="btn btn-primary">
+                            <h5 className="card-title fw-bold">Analytics Dashboard</h5>
+                            <p className="card-text text-muted">View detailed analytics and reports for all submissions.</p>
+                            <Link to="/analytics" className="btn btn-outline-primary">
                                 View Analytics
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="col-md-6 col-lg-4">
-                    <div className="card h-100">
-                        <div className="card-body">
-                            <h5 className="card-title">System Settings</h5>
-                            <p className="card-text">Configure system settings and manage user permissions.</p>
-                            <button className="btn btn-primary" disabled>
-                                Coming Soon
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {error && (
-                <div className="rounded-md bg-red-50 p-4 mb-6">
-                    <div className="text-sm text-red-700">{error}</div>
-                </div>
-            )}
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-                                <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">Total Questions</dt>
-                                    <dd className="text-3xl font-semibold text-gray-900">{stats.totalQuestions}</dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 px-5 py-3">
-                        <div className="text-sm">
-                            <Link to="/admin/questions" className="font-medium text-indigo-600 hover:text-indigo-900">
-                                Manage questions
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
-                                <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">Total Submissions</dt>
-                                    <dd className="text-3xl font-semibold text-gray-900">{stats.totalSubmissions}</dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 px-5 py-3">
-                        <div className="text-sm">
-                            <Link to="/analytics" className="font-medium text-indigo-600 hover:text-indigo-900">
-                                View analytics
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
-                                <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">High Risk Submissions</dt>
-                                    <dd className="text-3xl font-semibold text-gray-900">{stats.highRiskSubmissions}</dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 px-5 py-3">
-                        <div className="text-sm">
-                            <Link to="/analytics" className="font-medium text-indigo-600 hover:text-indigo-900">
-                                View risk analysis
                             </Link>
                         </div>
                     </div>
@@ -184,43 +165,120 @@ const AdminDashboard = () => {
             </div>
 
             {/* Recent Submissions */}
-            <div className="bg-white shadow rounded-lg">
-                <div className="px-4 py-5 sm:px-6">
-                    <h2 className="text-lg font-medium text-gray-900">Recent Submissions</h2>
-                    <p className="mt-1 text-sm text-gray-500">
-                        Latest security audit submissions from users.
-                    </p>
+            <div className="card border-0 shadow-sm">
+                <div className="card-header bg-white py-3">
+                    <h5 className="mb-0 fw-bold">Recent Submissions</h5>
+                    <p className="text-muted small mb-0">Latest security audit submissions from users</p>
                 </div>
-                <div className="border-t border-gray-200">
-                    <ul className="divide-y divide-gray-200">
-                        {stats.recentSubmissions.map((submission) => (
-                            <li key={submission.id} className="px-4 py-4 sm:px-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <p className="text-sm font-medium text-indigo-600">
-                                            Submission #{submission.id}
-                                        </p>
-                                        <p className="mt-1 text-xs text-gray-500">
-                                            by {submission.user_name} on {new Date(submission.created_at).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        submission.risk_level === 'high' ? 'bg-red-100 text-red-800' :
-                                        submission.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-green-100 text-green-800'
-                                    }`}>
-                                        {submission.risk_level.toUpperCase()} RISK
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
+                <div className="card-body p-0">
+                    <div className="table-responsive">
+                        <table className="table table-hover mb-0">
+                            <thead className="bg-light">
+                                <tr>
+                                    <th className="border-0 ps-4">Submission</th>
+                                    <th className="border-0">User</th>
+                                    <th className="border-0">Status</th>
+                                    <th className="border-0">Risk Level</th>
+                                    <th className="border-0">Progress</th>
+                                    <th className="border-0">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {stats.recent_submissions.map((submission) => (
+                                    <tr key={submission.id}>
+                                        <td className="ps-4">
+                                            <Link to={`/admin/submissions/${submission.id}`} className="text-primary text-decoration-none">
+                                                {submission.title}
+                                            </Link>
+                                        </td>
+                                        <td>{submission.user}</td>
+                                        <td>
+                                            <span className={`badge ${
+                                                submission.status === 'pending' ? 'bg-warning' :
+                                                submission.status === 'under_review' ? 'bg-info' :
+                                                'bg-success'
+                                            } text-white`}>
+                                                {submission.status.replace('_', ' ').toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className={`badge ${
+                                                submission.effective_overall_risk === 'high' ? 'bg-danger' :
+                                                submission.effective_overall_risk === 'medium' ? 'bg-warning' :
+                                                submission.effective_overall_risk === 'low' ? 'bg-success' :
+                                                'bg-secondary'
+                                            } text-white`}>
+                                                {submission.effective_overall_risk.toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="progress" style={{ height: '8px' }}>
+                                                <div
+                                                    className="progress-bar bg-primary"
+                                                    role="progressbar"
+                                                    style={{ width: `${submission.review_progress}%` }}
+                                                    aria-valuenow={submission.review_progress}
+                                                    aria-valuemin="0"
+                                                    aria-valuemax="100"
+                                                ></div>
+                                            </div>
+                                        </td>
+                                        <td>{new Date(submission.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Question Statistics */}
+            <div className="card border-0 shadow-sm mt-5">
+                <div className="card-header bg-white py-3">
+                    <h5 className="mb-0 fw-bold">Question Statistics</h5>
+                    <p className="text-muted small mb-0">Overview of audit question performance and risk distribution</p>
+                </div>
+                <div className="card-body p-0">
+                    <div className="table-responsive">
+                        <table className="table table-hover mb-0">
+                            <thead className="bg-light">
+                                <tr>
+                                    <th className="border-0 ps-4">Question</th>
+                                    <th className="border-0">Category</th>
+                                    <th className="border-0">Total Answers</th>
+                                    <th className="border-0">High Risk</th>
+                                    <th className="border-0">Pending Review</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {questionStats.map((question) => (
+                                    <tr key={question.id}>
+                                        <td className="ps-4">
+                                            <Link to={`/admin/questions/${question.id}`} className="text-primary text-decoration-none">
+                                                {question.question}
+                                            </Link>
+                                        </td>
+                                        <td>{question.category}</td>
+                                        <td>{question.answers_count}</td>
+                                        <td>
+                                            <span className={`badge ${question.high_risk_count > 0 ? 'bg-danger' : 'bg-success'} text-white`}>
+                                                {question.high_risk_count}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className="badge bg-warning text-white">
+                                                {question.pending_review_count}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-    
     );
 };
 
 export default AdminDashboard;
-

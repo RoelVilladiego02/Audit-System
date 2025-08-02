@@ -11,20 +11,77 @@ const getXsrfToken = () => {
     return null;
 };
 
+// Cleanup function to remove unnecessary cookies
+const cleanupCookies = () => {
+    const cookies = document.cookie.split(';');
+    cookies.forEach(cookie => {
+        const [name] = cookie.split('=');
+        document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+    });
+};
+
+// Clean up cookies on initialization
+cleanupCookies();
+
 const instance = axios.create({
     baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest' // Required for Laravel to detect AJAX requests
     },
-    timeout: 10000, // 10 second timeout
-    withCredentials: true // Important for handling cookies
+    timeout: 30000, // Increased timeout for larger requests
+    withCredentials: true, // Required for Laravel Sanctum
 });
 
 // Add a request interceptor for error handling
 instance.interceptors.request.use(
-    (config) => {
+    async (config) => {
+        // Clean up cookies before every request
+        cleanupCookies();
+
+        // Log total header size including cookies
+        const allHeaders = { ...config.headers, Cookie: document.cookie };
+        console.log('Total Header Size with Cookies:', JSON.stringify(allHeaders).length);
+
+        // Get the token from localStorage
+        const token = localStorage.getItem('token');
+        
+        // Clean up headers
+        config.headers = {
+            ...config.headers,
+            'Authorization': token ? `Bearer ${token}` : undefined,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+
+        // Apply CSRF protection only for API/auth requests
+        if (config.url && (config.url.startsWith('/api') || config.url.startsWith('/auth')) && config.method !== 'get') {
+            try {
+                const csrfToken = getXsrfToken();
+                if (!csrfToken) {
+                    await axios.get('/sanctum/csrf-cookie', {
+                        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+                        withCredentials: true
+                    });
+                }
+                const newCsrfToken = getXsrfToken();
+                if (newCsrfToken) {
+                    config.headers['X-XSRF-TOKEN'] = newCsrfToken;
+                }
+            } catch (error) {
+                console.error('CSRF token fetch failed:', error);
+            }
+        }
+
+        // Remove undefined headers
+        Object.keys(config.headers).forEach(key => {
+            if (config.headers[key] === undefined) {
+                delete config.headers[key];
+            }
+        });
+
         return config;
     },
     (error) => {
@@ -35,6 +92,11 @@ instance.interceptors.request.use(
 // Enhanced request interceptor for CSRF and logging
 instance.interceptors.request.use(
     async (config) => {
+        // Skip non-API/auth requests to avoid unnecessary header additions
+        if (!config.url || (!config.url.startsWith('/api') && !config.url.startsWith('/auth'))) {
+            return config;
+        }
+
         const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
         const authToken = localStorage.getItem('token');
 
@@ -59,8 +121,8 @@ instance.interceptors.request.use(
             config.headers.Authorization = `Bearer ${authToken}`;
         }
 
-        // Handle CSRF token
-        if (!config.url?.includes('sanctum/csrf-cookie')) {
+        // Handle CSRF token only for API/auth requests
+        if (!config.url.includes('sanctum/csrf-cookie')) {
             const csrfToken = getXsrfToken();
             if (!csrfToken) {
                 console.log('No CSRF token found, fetching new one...');

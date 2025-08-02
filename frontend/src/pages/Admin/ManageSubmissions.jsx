@@ -106,7 +106,7 @@ const ManageSubmissions = () => {
         let filtered = submissions.filter(submission => {
             const matchesSearch = submission.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 submission.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                submission.user?.email.toLowerCase().includes(searchTerm.toLowerCase());
+                                submission.user?.n?.email.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
             const matchesRisk = riskFilter === 'all' || submission.effective_overall_risk === riskFilter;
             return matchesSearch && matchesStatus && matchesRisk;
@@ -349,8 +349,6 @@ const ManageSubmissions = () => {
         }
     };
 
-    // Removed handleSubmissionFinalReview as it's handled directly in FinalReviewForm
-
     const getRiskColor = (risk) => {
         switch (risk) {
             case 'high': return 'text-danger bg-danger-subtle border-danger';
@@ -404,9 +402,13 @@ const ManageSubmissions = () => {
 
     if (authLoading) {
         return (
-            <div className="min-vh-100 d-flex align-items-center justify-content-center">
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
+            <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 className="text-muted">Loading Submissions Management...</h5>
+                    <p className="text-muted small">Please wait while we fetch your data</p>
                 </div>
             </div>
         );
@@ -426,11 +428,13 @@ const ManageSubmissions = () => {
 
     if (loading) {
         return (
-            <div className="container-fluid py-4">
-                <div className="d-flex justify-content-center">
-                    <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading submissions...</span>
+            <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                        <span className="visually-hidden">Loading...</span>
                     </div>
+                    <h5 className="text-muted">Loading Submissions...</h5>
+                    <p className="text-muted small">Please wait while we fetch your data</p>
                 </div>
             </div>
         );
@@ -639,165 +643,203 @@ const ManageSubmissions = () => {
     );
 };
 
-        // Answer Review Form Component
-        const AnswerReviewForm = ({ 
-            adminRiskLevel, 
-            setAdminRiskLevel, 
-            adminNotes, 
-            setAdminNotes, 
-            recommendation, 
-            setRecommendation, 
-            onSave, 
-            onCancel, 
-            getRiskColor 
-        }) => {
-            const [error, setError] = useState('');
+const AnswerReviewForm = ({ 
+    adminRiskLevel, 
+    setAdminRiskLevel, 
+    adminNotes, 
+    setAdminNotes, 
+    recommendation, 
+    setRecommendation, 
+    onSave, 
+    onCancel, 
+    getRiskColor 
+}) => {
+    const [error, setError] = useState('');
 
-            const riskOptions = [
-                { value: 'low', label: 'Low Risk', description: 'Minimal security impact' },
-                { value: 'medium', label: 'Medium Risk', description: 'Moderate security concern' },
-                { value: 'high', label: 'High Risk', description: 'Significant security risk' }
-            ];
+    const riskOptions = [
+        { value: 'low', label: 'Low Risk', description: 'Minimal security impact' },
+        { value: 'medium', label: 'Medium Risk', description: 'Moderate security concern' },
+        { value: 'high', label: 'High Risk', description: 'Significant security risk' }
+    ];
 
-            const handleSave = () => {
-                if (!adminRiskLevel) {
-                    setError('Please select a risk level');
-                    return;
-                }
-                if (!recommendation.trim()) {
-                    setError('Please provide a recommendation');
-                    return;
-                }
-                // Ensure we don't send empty strings
-                const cleanedNotes = adminNotes.trim();
-                const cleanedRecommendation = recommendation.trim();
-                
-                if (cleanedRecommendation.length < 5) {
-                    setError('Recommendation must be at least 5 characters long');
-                    return;
-                }
-                
-                setError('');
-                onSave(adminRiskLevel, cleanedNotes, cleanedRecommendation);
-            };
+    const handleSave = () => {
+        if (!adminRiskLevel) {
+            setError('Please select a risk level');
+            return;
+        }
+        if (!recommendation.trim()) {
+            setError('Please provide a recommendation');
+            return;
+        }
+        if (recommendation.trim().length < 5) {
+            setError('Recommendation must be at least 5 characters long');
+            return;
+        }
+        
+        setError('');
+        onSave(adminRiskLevel, adminNotes.trim(), recommendation.trim());
+    };
 
-            return (
-                <div className="border border-primary rounded p-3 bg-primary-subtle">
-                    <h6 className="text-primary mb-3">
-                        <Edit3 size={16} className="me-1" />
-                        Risk Assessment
-                    </h6>
+    return (
+        <div className="border border-primary rounded p-3 bg-primary-subtle">
+            <h6 className="text-primary mb-3">
+                <Edit3 size={16} className="me-1" />
+                Risk Assessment
+            </h6>
 
-                    {error && (
-                        <div className="alert alert-danger mb-3">
-                            <AlertCircle size={16} className="me-2" />
-                            {error}
-                        </div>
-                    )}
-                    
-                    <div className="row">
-                        <div className="col-md-6">
-                            <label className="form-label fw-medium">Risk Level</label>
-                            <div className="d-grid gap-2">
-                                {riskOptions.map((option) => (
-                                    <div key={option.value} className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="riskLevel"
-                                            id={`risk-${option.value}`}
-                                            value={option.value}
-                                            checked={adminRiskLevel === option.value}
-                                            onChange={(e) => {
-                                                setAdminRiskLevel(e.target.value);
-                                                setError(''); // Clear error when selection is made
-                                            }}
-                                        />
-                                        <label className="form-check-label d-flex align-items-center" htmlFor={`risk-${option.value}`}>
-                                            <span className={`badge ${getRiskColor(option.value)} me-2`}>
-                                                {option.label}
-                                            </span>
-                                            <small className="text-muted">{option.description}</small>
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        
-                        <div className="col-md-6">
-                            <div className="mb-3">
-                                <label className="form-label fw-medium">Admin Notes</label>
-                                <textarea
-                                    className="form-control"
-                                    rows={3}
-                                    value={adminNotes}
-                                    onChange={(e) => setAdminNotes(e.target.value)}
-                                    placeholder="Internal notes about this assessment..."
+            {error && (
+                <div className="alert alert-danger mb-3">
+                    <AlertCircle size={16} className="me-2" />
+                    {error}
+                </div>
+            )}
+            
+            <div className="row">
+                <div className="col-md-6">
+                    <label className="form-label fw-medium">Risk Level</label>
+                    <div className="d-grid gap-2">
+                        {riskOptions.map((option) => (
+                            <div key={option.value} className="form-check">
+                                <input
+                                    className="form-check-input"
+                                    type="radio"
+                                    name="riskLevel"
+                                    id={`risk-${option.value}`}
+                                    value={option.value}
+                                    checked={adminRiskLevel === option.value}
+                                    onChange={(e) => {
+                                        setAdminRiskLevel(e.target.value);
+                                        setError('');
+                                    }}
                                 />
-                                <div className="form-text">These notes are for internal review purposes.</div>
+                                <label className="form-check-label d-flex align-items-center" htmlFor={`risk-${option.value}`}>
+                                    <span className={`badge ${getRiskColor(option.value)} me-2`}>
+                                        {option.label}
+                                    </span>
+                                    <small className="text-muted">{option.description}</small>
+                                </label>
                             </div>
-                        </div>
+                        ))}
                     </div>
-
+                </div>
+                
+                <div className="col-md-6">
                     <div className="mb-3">
-                        <label className="form-label fw-medium">Recommendation</label>
+                        <label className="form-label fw-medium">Admin Notes</label>
                         <textarea
                             className="form-control"
                             rows={3}
-                            value={recommendation}
-                            onChange={(e) => {
-                                setRecommendation(e.target.value);
-                                setError(''); // Clear error when input changes
-                            }}
-                            placeholder="Recommendations for addressing this issue..."
+                            value={adminNotes}
+                            onChange={(e) => setAdminNotes(e.target.value)}
+                            placeholder="Internal notes about this assessment..."
                         />
-                        <div className="form-text">Provide actionable recommendations for the user.</div>
-                    </div>
-
-                    <div className="d-flex justify-content-end gap-2">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={onCancel}
-                        >
-                            <X size={16} className="me-1" />
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleSave}
-                            style={{ display: 'inline-block' }}
-                        >
-                            <Save size={16} className="me-1" />
-                            Save Assessment
-                        </button>
+                        <div className="form-text">These notes are for internal review purposes.</div>
                     </div>
                 </div>
-            );
-        };
+            </div>
 
-// Add this before the FinalReviewForm component
-const riskOptions = [
-    { 
-        value: 'low', 
-        label: 'Low Risk', 
-        description: 'Minimal security impact',
-        color: 'success'
-    },
-    { 
-        value: 'medium', 
-        label: 'Medium Risk', 
-        description: 'Moderate security concern',
-        color: 'warning'
-    },
-    { 
-        value: 'high', 
-        label: 'High Risk', 
-        description: 'Significant security risk',
-        color: 'danger'
-    }
-];
+            <div className="mb-3">
+                <label className="form-label fw-medium">Recommendation</label>
+                <textarea
+                    className="form-control"
+                    rows={3}
+                    value={recommendation}
+                    onChange={(e) => {
+                        setRecommendation(e.target.value);
+                        setError('');
+                    }}
+                    placeholder="Recommendations for addressing this issue..."
+                />
+                <div className="form-text">Provide actionable recommendations for the user.</div>
+            </div>
+
+            <div className="d-flex justify-content-end gap-2">
+                <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onCancel}
+                >
+                    <X size={16} className="me-1" />
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSave}
+                    style={{ display: 'inline-block' }}
+                >
+                    <Save size={16} className="me-1" />
+                    Save Assessment
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Risk Level Confirmation Modal Component
+const RiskConfirmationModal = ({ 
+    show, 
+    onClose, 
+    onConfirm, 
+    message,
+    isSubmitting 
+}) => {
+    if (!show) return null;
+
+    return (
+        <>
+            <div className="modal fade show" 
+                style={{ display: 'block' }}
+                tabIndex="-1" 
+                role="dialog"
+                aria-labelledby="riskConfirmationModal"
+                aria-hidden="false"
+            >
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h5 className="modal-title">Confirm Risk Assessment</h5>
+                            <button type="button" 
+                                className="btn-close" 
+                                onClick={onClose}
+                                aria-label="Close"
+                            ></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="alert alert-warning">
+                                <AlertTriangle size={20} className="me-2" />
+                                {message}
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button type="button" 
+                                className="btn btn-secondary" 
+                                onClick={onClose}
+                            >
+                                Cancel
+                            </button>
+                            <button type="button" 
+                                className="btn btn-primary" 
+                                onClick={onConfirm}
+                                disabled={isSubmitting}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" />
+                                        Confirming...
+                                    </>
+                                ) : (
+                                    'Confirm Assessment'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="modal-backdrop fade show"></div>
+        </>
+    );
+};
 
 // Final Review Form Component
 const FinalReviewForm = ({ 
@@ -806,10 +848,65 @@ const FinalReviewForm = ({
     adminSummary, 
     setAdminSummary, 
     onSubmit, 
-    onCancel 
+    onCancel,
+    submission 
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [validationError, setValidationError] = useState('');
+    const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+    const [confirmationMessage, setConfirmationMessage] = useState('');
+
+    const riskOptions = [
+        { value: 'low', label: 'Low Risk', description: 'Minimal security impact', color: 'success' },
+        { value: 'medium', label: 'Medium Risk', description: 'Moderate security concern', color: 'warning' },
+        { value: 'high', label: 'High Risk', description: 'Significant security risk', color: 'danger' }
+    ];
+
+    const needsConfirmation = (selectedRisk) => {
+        if (!submission?.answers) return false;
+
+        // Count risk levels in answers
+        const riskCounts = submission.answers.reduce((acc, answer) => {
+            const risk = answer.admin_risk_level || answer.system_risk_level || 'low';
+            acc[risk] = (acc[risk] || 0) + 1;
+            return acc;
+        }, {});
+
+        // Calculate percentage of each risk level
+        const total = submission.answers.length;
+        const percentages = Object.keys(riskCounts).reduce((acc, risk) => {
+            acc[risk] = (riskCounts[risk] / total) * 100;
+            return acc;
+        }, {});
+
+        console.log('Risk Distribution:', {
+            selectedRisk,
+            riskCounts,
+            percentages,
+            totalAnswers: total
+        });
+
+        // Check for high risk override when most answers are low
+        if (selectedRisk === 'high' && percentages['low'] >= 70) {
+            setConfirmationMessage(
+                'You are setting a HIGH overall risk level, but more than 70% of the answers are assessed as LOW risk. ' +
+                'Are you sure you want to proceed with this assessment?'
+            );
+            return true;
+        }
+
+        // Check for low risk override when significant medium/high answers exist
+        if (selectedRisk === 'low' && (percentages['high'] >= 30 || percentages['medium'] >= 50)) {
+            setConfirmationMessage(
+                'You are setting a LOW overall risk level, but there are significant MEDIUM or HIGH risk answers ' +
+                `(High: ${percentages['high']?.toFixed(1) || 0}%, Medium: ${percentages['medium']?.toFixed(1) || 0}%). ` +
+                'Are you sure you want to proceed with this assessment?'
+            );
+            return true;
+        }
+
+        return false;
+    };
 
     const handleSubmit = async () => {
         try {
@@ -826,98 +923,134 @@ const FinalReviewForm = ({
                 return;
             }
 
+            if (needsConfirmation(adminOverallRisk)) {
+                setShowConfirmationModal(true);
+                return;
+            }
+
             await onSubmit();
         } catch (error) {
-            setValidationError(error.message);
+            console.error('Submit error:', error);
+            setValidationError(error.message || 'Failed to complete review');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleConfirm = async () => {
+        try {
+            setIsSubmitting(true);
+            await onSubmit();
+            setShowConfirmationModal(false);
+        } catch (error) {
+            console.error('Confirm error:', error);
+            setValidationError(error.message || 'Failed to complete review');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="mt-3 p-3 border rounded bg-light">
-            <h6 className="mb-3">Final Risk Assessment</h6>
-            
-            {validationError && (
-                <div className="alert alert-danger mb-3">
-                    <AlertCircle size={16} className="me-2" />
-                    {validationError}
-                </div>
-            )}
+        <>
+            <div className="mt-3 p-3 border rounded bg-light">
+                <h6 className="mb-3">Final Risk Assessment</h6>
+                
+                {validationError && (
+                    <div className="alert alert-danger mb-3">
+                        <AlertCircle size={16} className="me-2" />
+                        {validationError}
+                    </div>
+                )}
 
-            <div className="row">
-                <div className="col-md-6">
-                    <label className="form-label fw-medium">Overall Risk Level</label>
-                    <div className="d-grid gap-2">
-                        {riskOptions.map((option) => (
-                            <div key={option.value} className="form-check">
-                                <input
-                                    className="form-check-input"
-                                    type="radio"
-                                    name="overallRisk"
-                                    id={`overall-risk-${option.value}`}
-                                    value={option.value}
-                                    checked={adminOverallRisk === option.value}
-                                    onChange={(e) => setAdminOverallRisk(e.target.value)}
-                                />
-                                <label className="form-check-label" htmlFor={`overall-risk-${option.value}`}>
-                                    <span className={`badge bg-${option.color} me-2`}>
-                                        {option.label}
-                                    </span>
-                                </label>
-                            </div>
-                        ))}
+                <div className="row">
+                    <div className="col-md-6">
+                        <label className="form-label fw-medium">Overall Risk Level</label>
+                        <div className="d-grid gap-2">
+                            {riskOptions.map((option) => (
+                                <div key={option.value} className="form-check">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        name="overallRisk"
+                                        id={`overall-risk-${option.value}`}
+                                        value={option.value}
+                                        checked={adminOverallRisk === option.value}
+                                        onChange={(e) => {
+                                            setAdminOverallRisk(e.target.value);
+                                            setValidationError('');
+                                        }}
+                                    />
+                                    <label className="form-check-label" htmlFor={`overall-risk-${option.value}`}>
+                                        <span className={`badge bg-${option.color} me-2`}>
+                                            {option.label}
+                                        </span>
+                                        <small className="text-muted">{option.description}</small>
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                        <label className="form-label fw-medium">Executive Summary</label>
+                        <textarea
+                            className="form-control"
+                            rows={4}
+                            value={adminSummary}
+                            onChange={(e) => {
+                                setAdminSummary(e.target.value);
+                                setValidationError('');
+                            }}
+                            placeholder="Provide an overall assessment and key recommendations..."
+                            required
+                        />
                     </div>
                 </div>
-                
-                <div className="col-md-6">
-                    <label className="form-label fw-medium">Executive Summary</label>
-                    <textarea
-                        className="form-control"
-                        rows={4}
-                        value={adminSummary}
-                        onChange={(e) => setAdminSummary(e.target.value)}
-                        placeholder="Provide an overall assessment and key recommendations..."
-                        required
-                    />
+
+                <div className="d-flex justify-content-end gap-2 mt-3">
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={onCancel}
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !adminOverallRisk || !adminSummary.trim()}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" />
+                                Completing Review...
+                            </>
+                        ) : (
+                            <>
+                                <CheckSquare size={16} className="me-1" />
+                                Complete Review
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
 
-            <div className="d-flex justify-content-end gap-2 mt-3">
-                <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={onCancel}
-                    disabled={isSubmitting}
-                >
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !adminOverallRisk || !adminSummary.trim()}
-                >
-                    {isSubmitting ? (
-                        <>
-                            <span className="spinner-border spinner-border-sm me-2" />
-                            Completing Review...
-                        </>
-                    ) : (
-                        <>
-                            <CheckSquare size={16} className="me-1" />
-                            Complete Review
-                        </>
-                    )}
-                </button>
-            </div>
-        </div>
+            <RiskConfirmationModal
+                show={showConfirmationModal}
+                onClose={() => {
+                    setShowConfirmationModal(false);
+                    setIsSubmitting(false);
+                }}
+                onConfirm={handleConfirm}
+                message={confirmationMessage}
+                isSubmitting={isSubmitting}
+            />
+        </>
     );
 };
 
-export default ManageSubmissions;
-
-// Submission Details Component
 const SubmissionDetails = ({ 
     submission, 
     onAnswerReview, 
@@ -935,7 +1068,6 @@ const SubmissionDetails = ({
     const [adminSummary, setAdminSummary] = useState('');
     const [error, setError] = useState(null);
 
-    // Enhanced canFinalize logic with detailed status tracking
     const canFinalize = useMemo(() => {
         const hasAnswers = submission.answers?.length > 0;
         const isUnderReview = submission.status === 'under_review';
@@ -981,7 +1113,6 @@ const SubmissionDetails = ({
         console.log('All Answers Reviewed:', submission.answers?.every(answer => answer.reviewed_by));
     }, [submission, canFinalize, finalReviewMode]);
 
-    // Reset review states when submission changes
     useEffect(() => {
         setFinalReviewMode(false);
         setAdminOverallRisk('');
@@ -989,7 +1120,6 @@ const SubmissionDetails = ({
         setError(null);
     }, [submission.id]);
 
-    // Add logging for answer reviews
     useEffect(() => {
         console.log('Submission Answers Updated:', {
             answersCount: submission.answers?.length,
@@ -1007,7 +1137,6 @@ const SubmissionDetails = ({
         });
     }, [submission.answers]);
 
-    // Monitor canFinalize changes
     useEffect(() => {
         console.log('canFinalize changed:', canFinalize, {
             status: submission.status,
@@ -1026,7 +1155,6 @@ const SubmissionDetails = ({
         });
     }, [canFinalize, submission]);
 
-    // Enhanced handleAnswerReview with validation and error handling
     const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
         try {
             if (!adminRiskLevel || !recommendation?.trim()) {
@@ -1034,14 +1162,7 @@ const SubmissionDetails = ({
                 return;
             }
 
-            // Use onAnswerReview prop instead of making the API call directly
-            await onAnswerReview(answerId, {
-                admin_risk_level: adminRiskLevel,
-                admin_notes: adminNotes || '',
-                recommendation: recommendation || ''
-            });
-
-            // Refresh submission details after successful review
+            await onAnswerReview(answerId, adminRiskLevel, adminNotes || '', recommendation || '');
             await fetchSubmissionDetails(submission.id);
             setEditingAnswer(null);
             setError(null);
@@ -1065,7 +1186,6 @@ const SubmissionDetails = ({
 
     return (
         <div className="card border-0 shadow-sm">
-            {/* Submission Header */}
             <div className="card-header bg-white">
                 <div className="d-flex justify-content-between align-items-start">
                     <div>
@@ -1108,7 +1228,6 @@ const SubmissionDetails = ({
             </div>
 
             <div className="card-body">
-                {/* Error Display */}
                 {error && (
                     <div className="alert alert-danger mb-4">
                         <div className="d-flex align-items-center">
@@ -1118,7 +1237,6 @@ const SubmissionDetails = ({
                     </div>
                 )}
 
-                {/* Final Review Section */}
                 {(canFinalize || submission.status === 'completed') && (
                     <div className="alert alert-info mb-4">
                         <div className="d-flex justify-content-between align-items-center">
@@ -1135,7 +1253,6 @@ const SubmissionDetails = ({
                                 <button
                                     className="btn btn-primary btn-sm"
                                     onClick={() => {
-                                        // Enhanced logging
                                         console.log('Final Review Toggle:', {
                                             currentMode: finalReviewMode,
                                             newMode: !finalReviewMode,
@@ -1156,7 +1273,6 @@ const SubmissionDetails = ({
 
                                         setFinalReviewMode(!finalReviewMode);
                                         
-                                        // Initialize with calculated risk if starting review
                                         if (!finalReviewMode) {
                                             const calculatedRisk = calculateOverallRisk(submission.answers);
                                             console.log('Setting initial risk level:', {
@@ -1169,7 +1285,6 @@ const SubmissionDetails = ({
                                             });
                                             setAdminOverallRisk(calculatedRisk);
                                         } else {
-                                            // Reset values when cancelling
                                             console.log('Resetting review state');
                                             setAdminOverallRisk('');
                                             setAdminSummary('');
@@ -1198,32 +1313,18 @@ const SubmissionDetails = ({
                                     setAdminOverallRisk={setAdminOverallRisk}
                                     adminSummary={adminSummary}
                                     setAdminSummary={setAdminSummary}
+                                    submission={submission}
                                     onSubmit={async () => {
                                         try {
-                                            if (!adminOverallRisk || !adminSummary.trim()) {
-                                                setError('Please provide both risk level and summary');
-                                                return;
-                                            }
-
-                                            // Log the payload for debugging
-                                            console.log('Submitting final review:', {
-                                                admin_overall_risk: adminOverallRisk,
-                                                admin_summary: adminSummary.trim()
-                                            });
-
                                             const response = await api.put(
                                                 `/audit-submissions/${submission.id}/complete`,
                                                 {
                                                     admin_overall_risk: adminOverallRisk,
-                                                    admin_summary: adminSummary.trim(),
-                                                    status: 'completed' // Explicitly set the status
+                                                    admin_summary: adminSummary.trim()
                                                 }
                                             );
 
-                                            console.log('Response:', response.data);
-
                                             if (response.data?.submission) {
-                                                // Update local state
                                                 await fetchSubmissionDetails(submission.id);
                                                 setFinalReviewMode(false);
                                                 setAdminOverallRisk('');
@@ -1233,8 +1334,7 @@ const SubmissionDetails = ({
                                                 throw new Error('Invalid response format');
                                             }
                                         } catch (err) {
-                                            console.error('Error completing review:', err.response || err);
-                                            setError(
+                                            throw new Error(
                                                 err.response?.data?.message || 
                                                 'Failed to complete review. Please ensure all answers are reviewed.'
                                             );
@@ -1251,202 +1351,198 @@ const SubmissionDetails = ({
                     </div>
                 )}
 
-                {/* Admin Summary Display */}
-                        {submission.admin_summary && (
-                            <div className="alert alert-success mb-4">
-                                <h6 className="alert-heading">Admin Summary</h6>
-                                <p className="mb-0">{submission.admin_summary}</p>
-                                {submission.reviewer && (
-                                    <small className="text-muted">
-                                        Reviewed by {submission.reviewer.name || submission.reviewer.email}
-                                    </small>
+                {submission.admin_summary && (
+                    <div className="alert alert-success mb-4">
+                        <h6 className="alert-heading">Admin Summary</h6>
+                        <p className="mb-0">{submission.admin_summary}</p>
+                        {submission.reviewer && (
+                            <small className="text-muted">
+                                Reviewed by {submission.reviewer.name || submission.reviewer.email}
+                            </small>
+                        )}
+                    </div>
+                )}
+
+                <h5 className="mb-3">Audit Answers</h5>
+                <div className="accordion" id="answersAccordion">
+                    {submission.answers?.map((answer, index) => (
+                        <AnswerCard
+                            key={answer.id}
+                            answer={answer}
+                            index={index}
+                            isEditing={editingAnswer === answer.id}
+                            onEdit={(answerId) => setEditingAnswer(editingAnswer === answerId ? null : answerId)}
+                            onSave={handleAnswerReview}
+                            onCancel={() => setEditingAnswer(null)}
+                            getRiskColor={getRiskColor}
+                            getRiskIcon={getRiskIcon}
+                            formatDate={formatDate}
+                            canEdit={submission.status !== 'completed'}
+                        />
+                    ))}
+                </div>
+
+                {!submission.answers?.length && (
+                    <div className="text-center py-4">
+                        <AlertCircle size={48} className="text-muted mb-3" />
+                        <p className="text-muted">No answers found for this submission.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRiskColor, getRiskIcon, formatDate, canEdit }) => {
+    const [adminRiskLevel, setAdminRiskLevel] = useState(answer.admin_risk_level || answer.system_risk_level || 'low');
+    const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
+    const [recommendation, setRecommendation] = useState(answer.recommendation || 'Review required to address potential security concerns.');
+    const [error, setError] = useState('');
+
+    const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
+    const isReviewed = Boolean(answer.reviewed_by && answer.admin_risk_level && answer.recommendation?.trim());
+
+    const handleSave = async () => {
+        try {
+            if (!adminRiskLevel) {
+                setError('Please select a risk level');
+                return;
+            }
+            if (!recommendation.trim()) {
+                setError('Please provide a recommendation');
+                return;
+            }
+            const reviewData = {
+                admin_risk_level: adminRiskLevel,
+                admin_notes: adminNotes.trim(),
+                recommendation: recommendation.trim()
+            };
+            await onSave(answer.id, reviewData.admin_risk_level, reviewData.admin_notes, reviewData.recommendation);
+            setError('');
+        } catch (error) {
+            console.error('Failed to save review:', error);
+            setError(error.response?.data?.message || 'Failed to save review');
+        }
+    };
+
+    return (
+        <div className="accordion-item">
+            <h2 className="accordion-header">
+                <button
+                    className="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target={`#answer${answer.id}`}
+                    aria-expanded="false"
+                >
+                    <div className="d-flex justify-content-between align-items-center w-100 me-3">
+                        <div className="flex-grow-1">
+                            <div className="fw-medium">{answer.question?.question}</div>
+                            <div className="small text-muted d-flex align-items-center gap-3">
+                                <div>Category: <span className="badge bg-secondary bg-opacity-25 text-dark">{answer.question?.category}</span></div>
+                                {isReviewed && (
+                                    <div>
+                                        <CheckCircle size={12} className="text-success me-1" />
+                                        Reviewed
+                                    </div>
                                 )}
                             </div>
-                        )}
-
-                        {/* Answers Section */}
-                        <h5 className="mb-3">Audit Answers</h5>
-                        <div className="accordion" id="answersAccordion">
-                            {submission.answers?.map((answer, index) => (
-                                <AnswerCard
-                                    key={answer.id}
-                                    answer={answer}
-                                    index={index}
-                                    isEditing={editingAnswer === answer.id}
-                                    onEdit={(answerId) => setEditingAnswer(editingAnswer === answerId ? null : answerId)}
-                                    onSave={onAnswerReview}
-                                    onCancel={() => setEditingAnswer(null)}
-                                    getRiskColor={getRiskColor}
-                                    getRiskIcon={getRiskIcon}
-                                    formatDate={formatDate}
-                                    canEdit={submission.status !== 'completed'}
-                                />
-                            ))}
                         </div>
-
-                        {!submission.answers?.length && (
-                            <div className="text-center py-4">
-                                <AlertCircle size={48} className="text-muted mb-3" />
-                                <p className="text-muted">No answers found for this submission.</p>
-                            </div>
-                        )}
+                        <span className={`badge ${getRiskColor(effectiveRiskLevel)}`}>
+                            {getRiskIcon(effectiveRiskLevel)}
+                            {effectiveRiskLevel.toUpperCase()}
+                        </span>
                     </div>
-                </div>
-            );
-        };
-
-        // Answer Card Component
-        const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRiskColor, getRiskIcon, formatDate, canEdit }) => {
-        const [adminRiskLevel, setAdminRiskLevel] = useState(answer.admin_risk_level || answer.system_risk_level || 'low');
-        const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
-        const [recommendation, setRecommendation] = useState(answer.recommendation || 'Review required to address potential security concerns.');
-        const [error, setError] = useState('');
-
-        const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
-        const isReviewed = Boolean(answer.reviewed_by && answer.admin_risk_level && answer.recommendation?.trim());
-
-        const handleSave = async () => {
-            try {
-                if (!adminRiskLevel) {
-                    setError('Please select a risk level');
-                    return;
-                }
-                if (!recommendation.trim()) {
-                    setError('Please provide a recommendation');
-                    return;
-                }
-                const reviewData = {
-                    admin_risk_level: adminRiskLevel,
-                    admin_notes: adminNotes.trim(),
-                    recommendation: recommendation.trim()
-                };
-                await onSave(answer.id, reviewData.admin_risk_level, reviewData.admin_notes, reviewData.recommendation);
-                setError('');
-            } catch (error) {
-                console.error('Failed to save review:', error);
-                setError(error.response?.data?.message || 'Failed to save review');
-            }
-        };
-
-            return (
-                <div className="accordion-item">
-                    <h2 className="accordion-header">
-                        <button
-                            className="accordion-button collapsed"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target={`#answer${answer.id}`}
-                            aria-expanded="false"
-                        >
-                            <div className="d-flex justify-content-between align-items-center w-100 me-3">
-                                <div className="flex-grow-1">
-                                    <div className="fw-medium">{answer.question?.question}</div>
-                                    <div className="small text-muted d-flex align-items-center gap-3">
-                                        <div>Category: <span className="badge bg-secondary bg-opacity-25 text-dark">{answer.question?.category}</span></div>
-                                        {isReviewed && (
-                                            <div>
-                                                <CheckCircle size={12} className="text-success me-1" />
-                                                Reviewed
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <span className={`badge ${getRiskColor(effectiveRiskLevel)}`}>
-                                    {getRiskIcon(effectiveRiskLevel)}
-                                    {effectiveRiskLevel.toUpperCase()}
-                                </span>
-                            </div>
-                        </button>
-                    </h2>
-                    <div id={`answer${answer.id}`} className="accordion-collapse collapse">
-                        <div className="accordion-body">
-                            {error && (
-                                <div className="alert alert-danger mb-3">
-                                    <AlertCircle size={16} className="me-2" />
-                                    {error}
-                                </div>
-                            )}
-                            {/* User's Answer */}
-                            <div className="mb-3">
-                                <h6>User's Response:</h6>
-                                <div className="p-3 bg-light rounded">
-                                    {answer.answer}
-                                </div>
-                            </div>
-
-                            {/* System Risk Level Display */}
-                            {answer.system_risk_level && (
-                                <div className="mb-3">
-                                    <h6>System Assessment:</h6>
-                                    <span className={`badge ${getRiskColor(answer.system_risk_level)}`}>
-                                        {getRiskIcon(answer.system_risk_level)}
-                                        System Risk: {answer.system_risk_level.toUpperCase()}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Review Section */}
-                            {isEditing ? (
-                                <AnswerReviewForm
-                                    adminRiskLevel={adminRiskLevel}
-                                    setAdminRiskLevel={setAdminRiskLevel}
-                                    adminNotes={adminNotes}
-                                    setAdminNotes={setAdminNotes}
-                                    recommendation={recommendation}
-                                    setRecommendation={setRecommendation}
-                                    onSave={handleSave}
-                                    onCancel={onCancel}
-                                    getRiskColor={getRiskColor}
-                                />
-                            ) : (
-                                <div className="d-flex justify-content-between align-items-start">
-                                    <div className="flex-grow-1">
-                                        {answer.admin_risk_level && (
-                                            <div className="mb-2">
-                                                <strong>Admin Assessment:</strong>
-                                                <span className={`badge ${getRiskColor(answer.admin_risk_level)} ms-2`}>
-                                                    {getRiskIcon(answer.admin_risk_level)}
-                                                    {answer.admin_risk_level.toUpperCase()}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {answer.admin_notes && (
-                                            <div className="mb-2">
-                                                <strong>Admin Notes:</strong>
-                                                <p className="mb-0 mt-1">{answer.admin_notes}</p>
-                                            </div>
-                                        )}
-                                        {answer.recommendation && (
-                                            <div className="mb-2">
-                                                <strong>Recommendation:</strong>
-                                                <p className="mb-0 mt-1">{answer.recommendation}</p>
-                                            </div>
-                                        )}
-                                        {answer.reviewed_by && (
-                                            <small className="text-muted">
-                                                Reviewed by {answer.reviewer?.name || answer.reviewer?.email || 'Admin'} 
-                                                {answer.reviewed_at && ` on ${formatDate(answer.reviewed_at)}`}
-                                            </small>
-                                        )}
-                                        {!isReviewed && (
-                                            <div className="alert alert-warning alert-sm">
-                                                <small><Eye size={14} className="me-1" />This answer is pending admin review.</small>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {canEdit && (
-                                        <button
-                                            className="btn btn-outline-primary btn-sm"
-                                            onClick={() => onEdit(answer.id)}
-                                        >
-                                            <Edit3 size={14} className="me-1" />
-                                            {isReviewed ? 'Edit Review' : 'Review'}
-                                        </button>
-                                    )}
-                                </div>
-                            )}
+                </button>
+            </h2>
+            <div id={`answer${answer.id}`} className="accordion-collapse collapse">
+                <div className="accordion-body">
+                    {error && (
+                        <div className="alert alert-danger mb-3">
+                            <AlertCircle size={16} className="me-2" />
+                            {error}
+                        </div>
+                    )}
+                    <div className="mb-3">
+                        <h6>User's Response:</h6>
+                        <div className="p-3 bg-light rounded">
+                            {answer.answer}
                         </div>
                     </div>
+
+                    {answer.system_risk_level && (
+                        <div className="mb-3">
+                            <h6>System Assessment:</h6>
+                            <span className={`badge ${getRiskColor(answer.system_risk_level)}`}>
+                                {getRiskIcon(answer.system_risk_level)}
+                                System Risk: {answer.system_risk_level.toUpperCase()}
+                            </span>
+                        </div>
+                    )}
+
+                    {isEditing ? (
+                        <AnswerReviewForm
+                            adminRiskLevel={adminRiskLevel}
+                            setAdminRiskLevel={setAdminRiskLevel}
+                            adminNotes={adminNotes}
+                            setAdminNotes={setAdminNotes}
+                            recommendation={recommendation}
+                            setRecommendation={setRecommendation}
+                            onSave={handleSave}
+                            onCancel={onCancel}
+                            getRiskColor={getRiskColor}
+                        />
+                    ) : (
+                        <div className="d-flex justify-content-between align-items-start">
+                            <div className="flex-grow-1">
+                                {answer.admin_risk_level && (
+                                    <div className="mb-2">
+                                        <strong>Admin Assessment:</strong>
+                                        <span className={`badge ${getRiskColor(answer.admin_risk_level)} ms-2`}>
+                                            {getRiskIcon(answer.admin_risk_level)}
+                                            {answer.admin_risk_level.toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
+                                {answer.admin_notes && (
+                                    <div className="mb-2">
+                                        <strong>Admin Notes:</strong>
+                                        <p className="mb-0 mt-1">{answer.admin_notes}</p>
+                                    </div>
+                                )}
+                                {answer.recommendation && (
+                                    <div className="mb-2">
+                                        <strong>Recommendation:</strong>
+                                        <p className="mb-0 mt-1">{answer.recommendation}</p>
+                                    </div>
+                                )}
+                                {answer.reviewed_by && (
+                                    <small className="text-muted">
+                                        Reviewed by {answer.reviewer?.name || answer.reviewer?.email || 'Admin'} 
+                                        {answer.reviewed_at && ` on ${formatDate(answer.reviewed_at)}`}
+                                    </small>
+                                )}
+                                {!isReviewed && (
+                                    <div className="alert alert-warning alert-sm">
+                                        <small><Eye size={14} className="me-1" />This answer is pending admin review.</small>
+                                    </div>
+                                )}
+                            </div>
+                            {canEdit && (
+                                <button
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => onEdit(answer.id)}
+                                >
+                                    <Edit3 size={14} className="me-1" />
+                                    {isReviewed ? 'Edit Review' : 'Review'}
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-            );
-        };
+            </div>
+        </div>
+    );
+};
+
+export default ManageSubmissions;
