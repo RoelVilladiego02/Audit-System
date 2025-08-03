@@ -96,12 +96,24 @@ class AuditQuestion extends Model
             return false;
         }
 
-        // Allow any string if "Others" is a valid option
-        if (in_array('Others', $this->possible_answers, true)) {
+        // Direct match with possible answers
+        if (in_array($answer, $this->possible_answers, true)) {
             return true;
         }
 
-        return in_array($answer, $this->possible_answers, true);
+        // If "Others" is a valid option, any non-empty string is valid
+        // This handles the case where custom text is passed but "Others" is allowed
+        if (in_array('Others', $this->possible_answers, true) && !empty(trim($answer))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Also add a helper method to check if custom answers are allowed
+    public function allowsCustomAnswers(): bool
+    {
+        return is_array($this->possible_answers) && in_array('Others', $this->possible_answers, true);
     }
 
     public function getUsageStats(): array

@@ -12,6 +12,7 @@ class AuditAnswer extends Model
         'audit_submission_id',
         'audit_question_id',
         'answer',
+        'selected_answer', // Add this if you're using the enhanced approach
         'system_risk_level',
         'admin_risk_level',
         'reviewed_by',
@@ -83,20 +84,40 @@ class AuditAnswer extends Model
         
         // If this is a custom answer, default to low risk
         if ($this->is_custom_answer) {
+            Log::info('Custom answer detected, defaulting to low risk', [
+                'answer_id' => $this->id,
+                'answer' => $this->answer,
+                'is_custom' => $this->is_custom_answer
+            ]);
             return 'low';
         }
 
+        // For regular answers, use the selected answer for risk assessment
+        $answerToCheck = $this->selected_answer ?? $this->answer;
+        
         // Match answer against risk criteria
         foreach (['high', 'medium', 'low'] as $level) {
             if (isset($criteria[$level])) {
                 // Handle both string and array criteria
                 $levelCriteria = is_array($criteria[$level]) ? $criteria[$level] : [$criteria[$level]];
-                if (in_array($this->answer, $levelCriteria, true)) {
+                if (in_array($answerToCheck, $levelCriteria, true)) {
+                    Log::info('Risk level determined from criteria', [
+                        'answer_id' => $this->id,
+                        'answer_to_check' => $answerToCheck,
+                        'determined_level' => $level,
+                        'criteria_matched' => $levelCriteria
+                    ]);
                     return $level;
                 }
             }
         }
 
+        Log::info('No risk criteria matched, defaulting to low', [
+            'answer_id' => $this->id,
+            'answer_to_check' => $answerToCheck,
+            'available_criteria' => $criteria
+        ]);
+        
         return 'low'; // Default fallback
     }
 

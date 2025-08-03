@@ -21,7 +21,12 @@ return new class extends Migration
             $table->text('recommendation')->default('Review required to address potential security concerns.');
             $table->enum('status', ['pending', 'reviewed'])->default('pending');
             $table->boolean('is_custom_answer')->default(false);
+            $table->string('selected_answer')->nullable(); // Store what was actually selected (e.g., "Others")
             $table->timestamps();
+
+            // Add indexes
+            $table->index('audit_submission_id'); // Index for better performance
+            $table->index('is_custom_answer'); // Index for custom answer queries
         });
     }
 

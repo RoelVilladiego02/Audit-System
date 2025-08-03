@@ -35,17 +35,24 @@ class AuditSubmissionSeeder extends Seeder
             'Business Continuity Plan Review'
         ];
 
-        // Create 20 sample audit submissions
-        for ($i = 0; $i < 20; $i++) {
-            $status = $statuses[array_rand($statuses)];
-            $systemRisk = $riskLevels[array_rand($riskLevels)];
+        // Create 15 sample audit submissions
+        for ($i = 0; $i < 15; $i++) {
             $createdAt = fake()->dateTimeBetween('-6 months', 'now');
+            // Weight the statuses to have more completed ones
+            $status = fake()->randomElement([
+                'completed', 'completed', 'completed', // Higher chance for completed
+                'under_review', 'under_review',        // Medium chance for under_review
+                'submitted', 'draft'                   // Lower chance for others
+            ]);
+            
+            // Only set risk levels and review data for non-draft submissions
+            $systemRisk = $status !== 'draft' ? $riskLevels[array_rand($riskLevels)] : null;
             $reviewedAt = $status === 'completed' ? fake()->dateTimeBetween($createdAt, 'now') : null;
             $adminRisk = $status === 'completed' ? $riskLevels[array_rand($riskLevels)] : null;
 
             $submission = AuditSubmission::create([
                 'user_id' => (int)$users->random()->id,
-                'title' => $auditTitles[array_rand($auditTitles)] . ' - ' . fake()->year(),
+                'title' => $auditTitles[array_rand($auditTitles)] . ' - ' . fake()->date('Y-m'),
                 'system_overall_risk' => $systemRisk,
                 'admin_overall_risk' => $adminRisk,
                 'status' => $status,

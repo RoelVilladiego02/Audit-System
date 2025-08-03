@@ -24,6 +24,8 @@ class AuditSubmissionController extends Controller
                 'answers' => 'required|array|min:1',
                 'answers.*.audit_question_id' => 'required|integer|exists:audit_questions,id',
                 'answers.*.answer' => 'required|string',
+                'answers.*.custom_answer' => 'nullable|string|max:1000', // Add custom answer validation
+                'answers.*.is_custom_answer' => 'nullable|boolean',
             ]);
 
             return DB::transaction(function () use ($validated, $request) {
@@ -45,22 +47,35 @@ class AuditSubmissionController extends Controller
                         ]);
                     }
                     
-                    // Validate answer is in possible answers or allowed as custom
-                    if (!$question->isValidAnswer($answerData['answer'])) {
-                        throw ValidationException::withMessages([
-                            'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$questionId}. Please select a valid option or use 'Others' for custom answers."
-                        ]);
-                    }
+                    // Handle custom answers
+                    $isCustomAnswer = false;
+                    $finalAnswer = $answerData['answer'];
                     
-                    // Determine if this is a custom answer
-                    $isCustomAnswer = in_array('Others', $question->possible_answers ?? [], true) && 
-                                    !in_array($answerData['answer'], $question->possible_answers ?? [], true);
+                    if ($answerData['answer'] === 'Others' && !empty($answerData['custom_answer'])) {
+                        // This is a custom answer
+                        $isCustomAnswer = true;
+                        $finalAnswer = trim($answerData['custom_answer']);
+                        
+                        // Validate that "Others" is actually a valid option for this question
+                        if (!in_array('Others', $question->possible_answers ?? [], true)) {
+                            throw ValidationException::withMessages([
+                                'answers' => "Custom answers are not allowed for question ID {$questionId}."
+                            ]);
+                        }
+                    } else {
+                        // Regular answer - validate against possible answers
+                        if (!$question->isValidAnswer($answerData['answer'])) {
+                            throw ValidationException::withMessages([
+                                'answers' => "Invalid answer '{$answerData['answer']}' for question ID {$questionId}. Please select a valid option or use 'Others' for custom answers."
+                            ]);
+                        }
+                    }
 
                     // Create answer with system risk assessment
                     $answer = AuditAnswer::create([
                         'audit_submission_id' => $submission->id,
                         'audit_question_id' => $questionId,
-                        'answer' => $answerData['answer'],
+                        'answer' => $finalAnswer, // Use the final answer (custom text or selected option)
                         'status' => 'pending',
                         'is_custom_answer' => $isCustomAnswer,
                     ]);

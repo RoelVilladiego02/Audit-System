@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\VulnerabilitySubmission;
 use App\Models\AuditSubmission;
 use App\Models\Vulnerability;
+use App\Models\AuditAnswer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -39,7 +40,6 @@ class AnalyticsController extends Controller
                 return response()->json(['message' => 'Unauthorized to access other users\' analytics'], 403);
             }
             // Restrict non-admins from accessing global analytics (no userId)
-            // Current logic might be preventing admin access
             if (!$userId && !$request->user()->isAdmin()) {
                 return response()->json(['message' => 'Unauthorized: Non-admin users can only access their own analytics'], 403);
             }
@@ -137,6 +137,8 @@ class AnalyticsController extends Controller
             'type' => 'audit',
             'totalSubmissions' => (int) $query->count(),
             'riskDistribution' => $this->getAuditRiskDistribution($query->clone()),
+            'riskProportion' => $this->getAuditRiskProportion($query->clone()),
+            'answerRiskDistribution' => $this->getAnswerRiskDistribution($query->clone()),
             'averageRiskScore' => $this->getAuditAverageRiskScore($query->clone()),
             'submissionTrends' => $this->getAuditTrends($query->clone()),
             'commonHighRisks' => $this->getCommonHighRiskAudits($query->clone()),
@@ -194,6 +196,48 @@ class AnalyticsController extends Controller
             'high' => (int) ($distribution['high'] ?? 0),
             'medium' => (int) ($distribution['medium'] ?? 0),
             'low' => (int) ($distribution['low'] ?? 0)
+        ];
+    }
+
+    /**
+     * Get proportional risk distribution for audit submissions.
+     */
+    private function getAuditRiskProportion($query): array
+    {
+        $totalSubmissions = $query->count();
+
+        $distribution = $this->getAuditRiskDistribution($query);
+
+        return [
+            'high' => $totalSubmissions > 0 ? round($distribution['high'] / $totalSubmissions * 100, 1) : 0,
+            'medium' => $totalSubmissions > 0 ? round($distribution['medium'] / $totalSubmissions * 100, 1) : 0,
+            'low' => $totalSubmissions > 0 ? round($distribution['low'] / $totalSubmissions * 100, 1) : 0,
+            'total_submissions' => (int) $totalSubmissions
+        ];
+    }
+
+    /**
+     * Get risk level distribution for individual audit answers.
+     */
+    private function getAnswerRiskDistribution($query): array
+    {
+        $totalAnswers = AuditAnswer::whereIn('audit_submission_id', $query->pluck('id'))
+            ->count();
+
+        $distribution = AuditAnswer::whereIn('audit_submission_id', $query->pluck('id'))
+            ->groupBy(DB::raw('COALESCE(admin_risk_level, system_risk_level)'))
+            ->select(
+                DB::raw('COALESCE(admin_risk_level, system_risk_level) as risk_level'),
+                DB::raw('count(*) as count')
+            )
+            ->pluck('count', 'risk_level')
+            ->toArray();
+
+        return [
+            'high' => $totalAnswers > 0 ? round(($distribution['high'] ?? 0) / $totalAnswers * 100, 1) : 0,
+            'medium' => $totalAnswers > 0 ? round(($distribution['medium'] ?? 0) / $totalAnswers * 100, 1) : 0,
+            'low' => $totalAnswers > 0 ? round(($distribution['low'] ?? 0) / $totalAnswers * 100, 1) : 0,
+            'total_answers' => (int) $totalAnswers
         ];
     }
 
