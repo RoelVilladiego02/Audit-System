@@ -1,21 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-    Search, 
-    AlertTriangle, 
-    CheckCircle, 
-    AlertCircle, 
-    Edit3, 
-    Save, 
-    X,
-    Calendar,
-    User,
-    FileText,
-    TrendingUp,
-    AlertOctagon,
-    Clock,
-    Eye,
-    CheckSquare
-} from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -106,7 +89,7 @@ const ManageSubmissions = () => {
         let filtered = submissions.filter(submission => {
             const matchesSearch = submission.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 submission.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                submission.user?.n?.email.toLowerCase().includes(searchTerm.toLowerCase());
+                                submission.user?.email?.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
             const matchesRisk = riskFilter === 'all' || submission.effective_overall_risk === riskFilter;
             return matchesSearch && matchesStatus && matchesRisk;
@@ -149,14 +132,13 @@ const ManageSubmissions = () => {
                 throw new Error('Invalid submission data received');
             }
 
-            // Enhanced data transformation with validation
             const transformedSubmission = {
                 ...submission,
                 answers: submission.answers.map(answer => {
                     const recommendation = answer.recommendation?.trim() || 'Default: Review required to address potential security concerns.';
                     const transformed = {
                         ...answer,
-                        recommendation, // Ensure recommendation is always set
+                        recommendation,
                         effective_risk_level: answer.admin_risk_level || answer.system_risk_level || 'pending',
                         isReviewed: Boolean(
                             answer.reviewed_by && 
@@ -196,7 +178,6 @@ const ManageSubmissions = () => {
         }
     };
 
-    // Helper function to calculate review progress
     const calculateReviewProgress = (answers) => {
         if (!answers || answers.length === 0) return 0;
         const reviewedCount = answers.filter(answer => 
@@ -207,7 +188,6 @@ const ManageSubmissions = () => {
 
     const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
         try {
-            // Add validation
             if (!adminRiskLevel || !recommendation) {
                 setError('Risk level and recommendation are required');
                 return;
@@ -240,7 +220,6 @@ const ManageSubmissions = () => {
                     : err.response?.data?.message || 'Failed to update answer review.'
             );
             
-            // Log additional error details
             if (err.response?.status === 500) {
                 console.error('Server Error Details:', {
                     status: err.response.status,
@@ -257,23 +236,19 @@ const ManageSubmissions = () => {
             return 'low';
         }
 
-        // Get all risk levels, preferring admin_risk_level over system_risk_level
         const riskLevels = answers.map(answer => 
             answer.admin_risk_level || answer.system_risk_level || 'low'
         );
 
-        // Count occurrences
         const riskCounts = {
             high: riskLevels.filter(r => r === 'high').length,
             medium: riskLevels.filter(r => r === 'medium').length,
             low: riskLevels.filter(r => r === 'low').length
         };
 
-        // Decision logic
         if (riskCounts.high > 0) {
             return 'high';
         } else if (riskCounts.medium > Math.floor(answers.length * 0.3)) {
-            // If more than 30% are medium risk
             return 'medium';
         } else {
             return 'low';
@@ -287,7 +262,6 @@ const ManageSubmissions = () => {
                 return;
             }
 
-            // Verify all answers have been properly reviewed
             const pendingAnswers = selectedSubmission.answers.filter(answer => 
                 !answer.reviewed_by || !answer.admin_risk_level || !answer.admin_notes
             );
@@ -302,7 +276,6 @@ const ManageSubmissions = () => {
                 return;
             }
 
-            // Calculate overall risk based on admin risk levels
             const calculatedRisk = calculateOverallRisk(selectedSubmission.answers);
             
             const payload = {
@@ -323,14 +296,12 @@ const ManageSubmissions = () => {
                 throw new Error('Invalid server response');
             }
 
-            // Verify the data was saved correctly
             const savedSubmission = response.data.submission;
             if (savedSubmission.admin_overall_risk !== calculatedRisk || 
                 savedSubmission.admin_summary !== summaryText.trim()) {
                 throw new Error('Data verification failed');
             }
 
-            // Reset state and refresh data
             setError(null);
             setSelectedRiskLevel('');
             setSummaryText('');
@@ -351,9 +322,9 @@ const ManageSubmissions = () => {
 
     const getRiskColor = (risk) => {
         switch (risk) {
-            case 'high': return 'text-danger bg-danger-subtle border-danger';
-            case 'medium': return 'text-warning bg-warning-subtle border-warning';
-            case 'low': return 'text-success bg-success-subtle border-success';
+            case 'high': return 'text-danger bg-danger bg-opacity-10 border-danger';
+            case 'medium': return 'text-warning bg-warning bg-opacity-10 border-warning';
+            case 'low': return 'text-success bg-success bg-opacity-10 border-success';
             case 'pending': return 'text-secondary bg-light border-secondary';
             default: return 'text-muted bg-light border-secondary';
         }
@@ -362,20 +333,20 @@ const ManageSubmissions = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'draft': return 'text-muted bg-light';
-            case 'submitted': return 'text-primary bg-primary-subtle';
-            case 'under_review': return 'text-warning bg-warning-subtle';
-            case 'completed': return 'text-success bg-success-subtle';
+            case 'submitted': return 'text-primary bg-primary bg-opacity-10';
+            case 'under_review': return 'text-warning bg-warning bg-opacity-10';
+            case 'completed': return 'text-success bg-success bg-opacity-10';
             default: return 'text-muted bg-light';
         }
     };
 
     const getRiskIcon = (risk) => {
         switch (risk) {
-            case 'high': return <AlertOctagon className="me-1" size={16} />;
-            case 'medium': return <AlertTriangle className="me-1" size={16} />;
-            case 'low': return <CheckCircle className="me-1" size={16} />;
-            case 'pending': return <Clock className="me-1" size={16} />;
-            default: return <AlertCircle className="me-1" size={16} />;
+            case 'high': return <i className="bi bi-exclamation-octagon me-1"></i>;
+            case 'medium': return <i className="bi bi-exclamation-triangle me-1"></i>;
+            case 'low': return <i className="bi bi-check-circle me-1"></i>;
+            case 'pending': return <i className="bi bi-clock me-1"></i>;
+            default: return <i className="bi bi-info-circle me-1"></i>;
         }
     };
 
@@ -402,12 +373,12 @@ const ManageSubmissions = () => {
 
     if (authLoading) {
         return (
-            <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+            <div className="container-fluid d-flex align-items-center justify-content-center min-vh-100 bg-light">
                 <div className="text-center">
                     <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
                         <span className="visually-hidden">Loading...</span>
                     </div>
-                    <h5 className="text-muted">Loading Submissions Management...</h5>
+                    <h5 className="text-muted fw-bold">Loading Submissions Management...</h5>
                     <p className="text-muted small">Please wait while we fetch your data</p>
                 </div>
             </div>
@@ -418,8 +389,8 @@ const ManageSubmissions = () => {
         return (
             <div className="container py-4">
                 <div className="alert alert-warning">
-                    <h4>Access Denied</h4>
-                    <p>You must be logged in as an admin to access this page.</p>
+                    <h4 className="alert-heading fw-bold">Access Denied</h4>
+                    <p className="text-muted">You must be logged in as an admin to access this page.</p>
                     <a href="/login" className="btn btn-primary">Go to Login</a>
                 </div>
             </div>
@@ -428,12 +399,12 @@ const ManageSubmissions = () => {
 
     if (loading) {
         return (
-            <div className="container-fluid d-flex align-items-center justify-content-center vh-100 bg-light">
+            <div className="container-fluid d-flex align-items-center justify-content-center min-vh-100 bg-light">
                 <div className="text-center">
                     <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
                         <span className="visually-hidden">Loading...</span>
                     </div>
-                    <h5 className="text-muted">Loading Submissions...</h5>
+                    <h5 className="text-muted fw-bold">Loading Submissions...</h5>
                     <p className="text-muted small">Please wait while we fetch your data</p>
                 </div>
             </div>
@@ -444,8 +415,8 @@ const ManageSubmissions = () => {
         return (
             <div className="container-fluid py-4">
                 <div className="alert alert-danger">
-                    <h4>Error Loading Submissions</h4>
-                    <p>{error}</p>
+                    <h4 className="alert-heading fw-bold">Error Loading Submissions</h4>
+                    <p className="text-muted">{error}</p>
                     <button 
                         className="btn btn-outline-danger" 
                         onClick={() => {
@@ -464,21 +435,20 @@ const ManageSubmissions = () => {
 
     return (
         <div className="container-fluid py-4 bg-light min-vh-100">
-            {/* Header */}
             <div className="row mb-4">
                 <div className="col">
                     <div className="card border-0 shadow-sm">
-                        <div className="card-body">
+                        <div className="card-header bg-white">
                             <div className="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h1 className="card-title h3 mb-2">Audit Submissions Management</h1>
+                                    <h1 className="h3 mb-2 fw-bold">Audit Submissions Management</h1>
                                     <p className="text-muted mb-0">Review and assess security audit submissions</p>
                                 </div>
-                                <div className="d-flex align-items-center">
-                                    <span className="badge bg-primary me-2">Total: {stats.total}</span>
-                                    <span className="badge bg-warning me-2">Pending: {stats.pending}</span>
-                                    <span className="badge bg-info me-2">Under Review: {stats.underReview}</span>
-                                    <span className="badge bg-success me-2">Completed: {stats.completed}</span>
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="badge bg-primary">Total: {stats.total}</span>
+                                    <span className="badge bg-warning">Pending: {stats.pending}</span>
+                                    <span className="badge bg-info">Under Review: {stats.underReview}</span>
+                                    <span className="badge bg-success">Completed: {stats.completed}</span>
                                     <span className="badge bg-danger">High Risk: {stats.highRisk}</span>
                                 </div>
                             </div>
@@ -488,16 +458,14 @@ const ManageSubmissions = () => {
             </div>
 
             <div className="row">
-                {/* Left Panel - Submissions List */}
                 <div className="col-lg-4">
                     <div className="card border-0 shadow-sm">
-                        {/* Search and Filter Controls */}
                         <div className="card-header bg-white border-bottom">
                             <div className="row g-2">
                                 <div className="col-12">
                                     <div className="input-group">
                                         <span className="input-group-text bg-light border-end-0">
-                                            <Search size={16} />
+                                            <i className="bi bi-search"></i>
                                         </span>
                                         <input
                                             type="text"
@@ -505,6 +473,7 @@ const ManageSubmissions = () => {
                                             placeholder="Search submissions..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
+                                            aria-label="Search submissions"
                                         />
                                     </div>
                                 </div>
@@ -513,6 +482,7 @@ const ManageSubmissions = () => {
                                         className="form-select form-select-sm"
                                         value={statusFilter}
                                         onChange={(e) => setStatusFilter(e.target.value)}
+                                        aria-label="Filter by status"
                                     >
                                         <option value="all">All Status</option>
                                         <option value="submitted">Submitted</option>
@@ -525,6 +495,7 @@ const ManageSubmissions = () => {
                                         className="form-select form-select-sm"
                                         value={riskFilter}
                                         onChange={(e) => setRiskFilter(e.target.value)}
+                                        aria-label="Filter by risk level"
                                     >
                                         <option value="all">All Risk Levels</option>
                                         <option value="high">High Risk</option>
@@ -538,6 +509,7 @@ const ManageSubmissions = () => {
                                         className="form-select form-select-sm"
                                         value={sortBy}
                                         onChange={(e) => setSortBy(e.target.value)}
+                                        aria-label="Sort submissions"
                                     >
                                         <option value="date_desc">Newest First</option>
                                         <option value="date_asc">Oldest First</option>
@@ -549,71 +521,70 @@ const ManageSubmissions = () => {
                             </div>
                         </div>
 
-                        {/* Submissions List */}
                         <div className="card-body p-0" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                             {filteredSubmissions.length === 0 ? (
                                 <div className="text-center py-5">
-                                    <FileText size={48} className="text-muted mb-3" />
-                                    <h5 className="text-muted">No submissions found</h5>
+                                    <i className="bi bi-file-text fs-1 text-muted mb-3"></i>
+                                    <h5 className="text-muted fw-bold">No submissions found</h5>
                                     <p className="text-muted">Try adjusting your search or filters</p>
                                 </div>
                             ) : (
-                                filteredSubmissions.map((submission, index) => (
-                                    <div
-                                        key={submission.id}
-                                        className={`p-3 border-bottom cursor-pointer ${
-                                            selectedSubmission?.id === submission.id 
-                                                ? 'bg-primary-subtle border-primary' 
-                                                : 'hover-bg-light'
-                                        }`}
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={() => fetchSubmissionDetails(submission.id)}
-                                    >
-                                        <div className="d-flex justify-content-between align-items-start">
-                                            <div className="flex-grow-1 min-w-0">
-                                                <h6 className="mb-1 text-truncate">{submission.title}</h6>
-                                                <div className="small text-muted mb-2">
-                                                    <div className="d-flex align-items-center mb-1">
-                                                        <User size={12} className="me-1" />
-                                                        <span className="text-truncate">{submission.user?.name || submission.user?.email}</span>
-                                                    </div>
-                                                    <div className="d-flex align-items-center">
-                                                        <Calendar size={12} className="me-1" />
-                                                        <span>{formatDate(submission.created_at)}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <span className={`badge ${getStatusColor(submission.status)}`}>
-                                                        {submission.status.replace('_', ' ').toUpperCase()}
-                                                    </span>
-                                                    {submission.review_progress > 0 && (
-                                                        <div className="d-flex align-items-center">
-                                                            <div className="progress me-2" style={{ width: '60px', height: '4px' }}>
-                                                                <div 
-                                                                    className="progress-bar bg-info" 
-                                                                    style={{ width: `${submission.review_progress}%` }}
-                                                                ></div>
+                                <table className="table table-hover align-middle mb-0">
+                                    <tbody>
+                                        {filteredSubmissions.map((submission, index) => (
+                                            <tr
+                                                key={submission.id}
+                                                className={`cursor-pointer ${selectedSubmission?.id === submission.id ? 'table-primary' : ''}`}
+                                                onClick={() => fetchSubmissionDetails(submission.id)}
+                                            >
+                                                <td className="p-3">
+                                                    <div className="d-flex justify-content-between align-items-start">
+                                                        <div className="flex-grow-1 min-w-0">
+                                                            <h6 className="mb-1 text-truncate fw-bold">{submission.title}</h6>
+                                                            <div className="small text-muted mb-2">
+                                                                <div className="d-flex align-items-center mb-1">
+                                                                    <i className="bi bi-person me-1"></i>
+                                                                    <span className="text-truncate">{submission.user?.name || submission.user?.email}</span>
+                                                                </div>
+                                                                <div className="d-flex align-items-center">
+                                                                    <i className="bi bi-calendar me-1"></i>
+                                                                    <span>{formatDate(submission.created_at)}</span>
+                                                                </div>
                                                             </div>
-                                                            <small className="text-muted">{Math.round(submission.review_progress)}%</small>
+                                                            <div className="d-flex align-items-center justify-content-between">
+                                                                <span className={`badge ${getStatusColor(submission.status)}`}>
+                                                                    {submission.status.replace('_', ' ').toUpperCase()}
+                                                                </span>
+                                                                {submission.review_progress > 0 && (
+                                                                    <div className="d-flex align-items-center">
+                                                                        <div className="progress me-2" style={{ width: '60px', height: '4px' }}>
+                                                                            <div 
+                                                                                className="progress-bar bg-info" 
+                                                                                style={{ width: `${submission.review_progress}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <small className="text-muted">{Math.round(submission.review_progress)}%</small>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="ms-2">
-                                                <span className={`badge ${getRiskColor(submission.effective_overall_risk)}`}>
-                                                    {getRiskIcon(submission.effective_overall_risk)}
-                                                    {submission.effective_overall_risk.toUpperCase()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
+                                                        <div className="ms-2">
+                                                            <span className={`badge ${getRiskColor(submission.effective_overall_risk)}`}>
+                                                                {getRiskIcon(submission.effective_overall_risk)}
+                                                                {submission.effective_overall_risk.toUpperCase()}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Right Panel - Submission Details */}
                 <div className="col-lg-8">
                     {selectedSubmission ? (
                         <SubmissionDetails
@@ -631,8 +602,8 @@ const ManageSubmissions = () => {
                     ) : (
                         <div className="card border-0 shadow-sm">
                             <div className="card-body text-center py-5">
-                                <TrendingUp size={64} className="text-muted mb-3" />
-                                <h4 className="text-muted">Select a Submission</h4>
+                                <i className="bi bi-graph-up fs-1 text-muted mb-3"></i>
+                                <h4 className="text-muted fw-bold">Select a Submission</h4>
                                 <p className="text-muted">Choose a submission from the list to view and assess its details.</p>
                             </div>
                         </div>
@@ -681,22 +652,22 @@ const AnswerReviewForm = ({
     };
 
     return (
-        <div className="border border-primary rounded p-3 bg-primary-subtle">
-            <h6 className="text-primary mb-3">
-                <Edit3 size={16} className="me-1" />
+        <div className="border border-primary rounded p-3 bg-primary bg-opacity-10">
+            <h6 className="text-primary mb-3 fw-bold">
+                <i className="bi bi-pencil-fill me-1"></i>
                 Risk Assessment
             </h6>
 
             {error && (
                 <div className="alert alert-danger mb-3">
-                    <AlertCircle size={16} className="me-2" />
+                    <i className="bi bi-info-circle me-2"></i>
                     {error}
                 </div>
             )}
             
             <div className="row">
                 <div className="col-md-6">
-                    <label className="form-label fw-medium">Risk Level</label>
+                    <label className="form-label fw-semibold text-muted">Risk Level</label>
                     <div className="d-grid gap-2">
                         {riskOptions.map((option) => (
                             <div key={option.value} className="form-check">
@@ -711,6 +682,7 @@ const AnswerReviewForm = ({
                                         setAdminRiskLevel(e.target.value);
                                         setError('');
                                     }}
+                                    aria-label={`Select ${option.label}`}
                                 />
                                 <label className="form-check-label d-flex align-items-center" htmlFor={`risk-${option.value}`}>
                                     <span className={`badge ${getRiskColor(option.value)} me-2`}>
@@ -725,21 +697,22 @@ const AnswerReviewForm = ({
                 
                 <div className="col-md-6">
                     <div className="mb-3">
-                        <label className="form-label fw-medium">Admin Notes</label>
+                        <label className="form-label fw-semibold text-muted">Admin Notes</label>
                         <textarea
                             className="form-control"
                             rows={3}
                             value={adminNotes}
                             onChange={(e) => setAdminNotes(e.target.value)}
                             placeholder="Internal notes about this assessment..."
+                            aria-label="Admin notes"
                         />
-                        <div className="form-text">These notes are for internal review purposes.</div>
+                        <div className="form-text text-muted">These notes are for internal review purposes.</div>
                     </div>
                 </div>
             </div>
 
             <div className="mb-3">
-                <label className="form-label fw-medium">Recommendation</label>
+                <label className="form-label fw-semibold text-muted">Recommendation</label>
                 <textarea
                     className="form-control"
                     rows={3}
@@ -749,8 +722,9 @@ const AnswerReviewForm = ({
                         setError('');
                     }}
                     placeholder="Recommendations for addressing this issue..."
+                    aria-label="Recommendation"
                 />
-                <div className="form-text">Provide actionable recommendations for the user.</div>
+                <div className="form-text text-muted">Provide actionable recommendations for the user.</div>
             </div>
 
             <div className="d-flex justify-content-end gap-2">
@@ -758,17 +732,18 @@ const AnswerReviewForm = ({
                     type="button"
                     className="btn btn-secondary"
                     onClick={onCancel}
+                    aria-label="Cancel assessment"
                 >
-                    <X size={16} className="me-1" />
+                    <i className="bi bi-x me-1"></i>
                     Cancel
                 </button>
                 <button
                     type="button"
                     className="btn btn-primary"
                     onClick={handleSave}
-                    style={{ display: 'inline-block' }}
+                    aria-label="Save assessment"
                 >
-                    <Save size={16} className="me-1" />
+                    <i className="bi bi-save me-1"></i>
                     Save Assessment
                 </button>
             </div>
@@ -776,7 +751,6 @@ const AnswerReviewForm = ({
     );
 };
 
-// Risk Level Confirmation Modal Component
 const RiskConfirmationModal = ({ 
     show, 
     onClose, 
@@ -795,10 +769,10 @@ const RiskConfirmationModal = ({
                 aria-labelledby="riskConfirmationModal"
                 aria-hidden="false"
             >
-                <div className="modal-dialog">
+                <div className="modal-dialog modal-dialog-centered border-0 shadow-sm">
                     <div className="modal-content">
-                        <div className="modal-header">
-                            <h5 className="modal-title">Confirm Risk Assessment</h5>
+                        <div className="modal-header bg-white">
+                            <h5 className="modal-title fw-bold" id="riskConfirmationModal">Confirm Risk Assessment</h5>
                             <button type="button" 
                                 className="btn-close" 
                                 onClick={onClose}
@@ -807,14 +781,15 @@ const RiskConfirmationModal = ({
                         </div>
                         <div className="modal-body">
                             <div className="alert alert-warning">
-                                <AlertTriangle size={20} className="me-2" />
+                                <i className="bi bi-exclamation-triangle me-2"></i>
                                 {message}
                             </div>
                         </div>
-                        <div className="modal-footer">
+                        <div className="modal-footer bg-light">
                             <button type="button" 
                                 className="btn btn-secondary" 
                                 onClick={onClose}
+                                aria-label="Cancel confirmation"
                             >
                                 Cancel
                             </button>
@@ -822,6 +797,7 @@ const RiskConfirmationModal = ({
                                 className="btn btn-primary" 
                                 onClick={onConfirm}
                                 disabled={isSubmitting}
+                                aria-label="Confirm assessment"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -841,7 +817,6 @@ const RiskConfirmationModal = ({
     );
 };
 
-// Final Review Form Component
 const FinalReviewForm = ({ 
     adminOverallRisk, 
     setAdminOverallRisk, 
@@ -865,14 +840,12 @@ const FinalReviewForm = ({
     const needsConfirmation = (selectedRisk) => {
         if (!submission?.answers) return false;
 
-        // Count risk levels in answers
         const riskCounts = submission.answers.reduce((acc, answer) => {
             const risk = answer.admin_risk_level || answer.system_risk_level || 'low';
             acc[risk] = (acc[risk] || 0) + 1;
             return acc;
         }, {});
 
-        // Calculate percentage of each risk level
         const total = submission.answers.length;
         const percentages = Object.keys(riskCounts).reduce((acc, risk) => {
             acc[risk] = (riskCounts[risk] / total) * 100;
@@ -886,7 +859,6 @@ const FinalReviewForm = ({
             totalAnswers: total
         });
 
-        // Check for high risk override when most answers are low
         if (selectedRisk === 'high' && percentages['low'] >= 70) {
             setConfirmationMessage(
                 'You are setting a HIGH overall risk level, but more than 70% of the answers are assessed as LOW risk. ' +
@@ -895,7 +867,6 @@ const FinalReviewForm = ({
             return true;
         }
 
-        // Check for low risk override when significant medium/high answers exist
         if (selectedRisk === 'low' && (percentages['high'] >= 30 || percentages['medium'] >= 50)) {
             setConfirmationMessage(
                 'You are setting a LOW overall risk level, but there are significant MEDIUM or HIGH risk answers ' +
@@ -953,18 +924,18 @@ const FinalReviewForm = ({
     return (
         <>
             <div className="mt-3 p-3 border rounded bg-light">
-                <h6 className="mb-3">Final Risk Assessment</h6>
+                <h6 className="mb-3 fw-bold">Final Risk Assessment</h6>
                 
                 {validationError && (
                     <div className="alert alert-danger mb-3">
-                        <AlertCircle size={16} className="me-2" />
+                        <i className="bi bi-info-circle me-2"></i>
                         {validationError}
                     </div>
                 )}
 
                 <div className="row">
                     <div className="col-md-6">
-                        <label className="form-label fw-medium">Overall Risk Level</label>
+                        <label className="form-label fw-semibold text-muted">Overall Risk Level</label>
                         <div className="d-grid gap-2">
                             {riskOptions.map((option) => (
                                 <div key={option.value} className="form-check">
@@ -979,6 +950,7 @@ const FinalReviewForm = ({
                                             setAdminOverallRisk(e.target.value);
                                             setValidationError('');
                                         }}
+                                        aria-label={`Select ${option.label}`}
                                     />
                                     <label className="form-check-label" htmlFor={`overall-risk-${option.value}`}>
                                         <span className={`badge bg-${option.color} me-2`}>
@@ -992,7 +964,7 @@ const FinalReviewForm = ({
                     </div>
                     
                     <div className="col-md-6">
-                        <label className="form-label fw-medium">Executive Summary</label>
+                        <label className="form-label fw-semibold text-muted">Executive Summary</label>
                         <textarea
                             className="form-control"
                             rows={4}
@@ -1003,6 +975,7 @@ const FinalReviewForm = ({
                             }}
                             placeholder="Provide an overall assessment and key recommendations..."
                             required
+                            aria-label="Executive summary"
                         />
                     </div>
                 </div>
@@ -1013,6 +986,7 @@ const FinalReviewForm = ({
                         className="btn btn-secondary"
                         onClick={onCancel}
                         disabled={isSubmitting}
+                        aria-label="Cancel final review"
                     >
                         Cancel
                     </button>
@@ -1021,6 +995,7 @@ const FinalReviewForm = ({
                         className="btn btn-success"
                         onClick={handleSubmit}
                         disabled={isSubmitting || !adminOverallRisk || !adminSummary.trim()}
+                        aria-label="Complete review"
                     >
                         {isSubmitting ? (
                             <>
@@ -1029,7 +1004,7 @@ const FinalReviewForm = ({
                             </>
                         ) : (
                             <>
-                                <CheckSquare size={16} className="me-1" />
+                                <i className="bi bi-check-square-fill me-1"></i>
                                 Complete Review
                             </>
                         )}
@@ -1189,19 +1164,19 @@ const SubmissionDetails = ({
             <div className="card-header bg-white">
                 <div className="d-flex justify-content-between align-items-start">
                     <div>
-                        <h4 className="mb-2">{submission.title}</h4>
+                        <h4 className="mb-2 fw-bold">{submission.title}</h4>
                         <div className="d-flex align-items-center text-muted small">
                             <div className="me-4">
-                                <User size={14} className="me-1" />
+                                <i className="bi bi-person me-1"></i>
                                 {submission.user?.name || submission.user?.email}
                             </div>
                             <div className="me-4">
-                                <Calendar size={14} className="me-1" />
+                                <i className="bi bi-calendar me-1"></i>
                                 {formatDate(submission.created_at)}
                             </div>
                             {submission.reviewed_at && (
                                 <div>
-                                    <CheckSquare size={14} className="me-1" />
+                                    <i className="bi bi-check-square-fill me-1"></i>
                                     Reviewed {formatDate(submission.reviewed_at)}
                                 </div>
                             )}
@@ -1231,7 +1206,7 @@ const SubmissionDetails = ({
                 {error && (
                     <div className="alert alert-danger mb-4">
                         <div className="d-flex align-items-center">
-                            <AlertCircle size={20} className="me-2" />
+                            <i className="bi bi-info-circle me-2"></i>
                             {error}
                         </div>
                     </div>
@@ -1241,8 +1216,8 @@ const SubmissionDetails = ({
                     <div className="alert alert-info mb-4">
                         <div className="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 className="alert-heading mb-1">Final Review</h6>
-                                <p className="mb-0">
+                                <h6 className="alert-heading mb-1 fw-bold">Final Review</h6>
+                                <p className="mb-0 text-muted">
                                     {submission.status === 'completed' 
                                         ? 'This submission has been completed.'
                                         : 'All answers have been reviewed. Ready for final assessment.'
@@ -1290,15 +1265,16 @@ const SubmissionDetails = ({
                                             setAdminSummary('');
                                         }
                                     }}
+                                    aria-label={finalReviewMode ? 'Cancel final review' : 'Finalize review'}
                                 >
                                     {finalReviewMode ? (
                                         <>
-                                            <X size={16} className="me-1" />
+                                            <i className="bi bi-x me-1"></i>
                                             Cancel Review
                                         </>
                                     ) : (
                                         <>
-                                            <CheckSquare size={16} className="me-1" />
+                                            <i className="bi bi-check-square-fill me-1"></i>
                                             Finalize Review
                                         </>
                                     )}
@@ -1353,8 +1329,8 @@ const SubmissionDetails = ({
 
                 {submission.admin_summary && (
                     <div className="alert alert-success mb-4">
-                        <h6 className="alert-heading">Admin Summary</h6>
-                        <p className="mb-0">{submission.admin_summary}</p>
+                        <h6 className="alert-heading fw-bold">Admin Summary</h6>
+                        <p className="mb-0 text-muted">{submission.admin_summary}</p>
                         {submission.reviewer && (
                             <small className="text-muted">
                                 Reviewed by {submission.reviewer.name || submission.reviewer.email}
@@ -1363,7 +1339,7 @@ const SubmissionDetails = ({
                     </div>
                 )}
 
-                <h5 className="mb-3">Audit Answers</h5>
+                <h5 className="mb-3 fw-bold">Audit Answers</h5>
                 <div className="accordion" id="answersAccordion">
                     {submission.answers?.map((answer, index) => (
                         <AnswerCard
@@ -1384,7 +1360,7 @@ const SubmissionDetails = ({
 
                 {!submission.answers?.length && (
                     <div className="text-center py-4">
-                        <AlertCircle size={48} className="text-muted mb-3" />
+                        <i className="bi bi-info-circle fs-1 text-muted mb-3"></i>
                         <p className="text-muted">No answers found for this submission.</p>
                     </div>
                 )}
@@ -1434,15 +1410,16 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                     data-bs-toggle="collapse"
                     data-bs-target={`#answer${answer.id}`}
                     aria-expanded="false"
+                    aria-controls={`answer${answer.id}`}
                 >
                     <div className="d-flex justify-content-between align-items-center w-100 me-3">
                         <div className="flex-grow-1">
-                            <div className="fw-medium">{answer.question?.question}</div>
+                            <div className="fw-bold">{answer.question?.question}</div>
                             <div className="small text-muted d-flex align-items-center gap-3">
                                 <div>Category: <span className="badge bg-secondary bg-opacity-25 text-dark">{answer.question?.category}</span></div>
                                 {isReviewed && (
                                     <div>
-                                        <CheckCircle size={12} className="text-success me-1" />
+                                        <i className="bi bi-check-circle me-1"></i>
                                         Reviewed
                                     </div>
                                 )}
@@ -1459,12 +1436,12 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                 <div className="accordion-body">
                     {error && (
                         <div className="alert alert-danger mb-3">
-                            <AlertCircle size={16} className="me-2" />
+                            <i className="bi bi-info-circle me-2"></i>
                             {error}
                         </div>
                     )}
                     <div className="mb-3">
-                        <h6>User's Response:</h6>
+                        <h6 className="fw-bold">User's Response:</h6>
                         <div className="p-3 bg-light rounded">
                             {answer.answer}
                         </div>
@@ -1472,7 +1449,7 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
 
                     {answer.system_risk_level && (
                         <div className="mb-3">
-                            <h6>System Assessment:</h6>
+                            <h6 className="fw-bold">System Assessment:</h6>
                             <span className={`badge ${getRiskColor(answer.system_risk_level)}`}>
                                 {getRiskIcon(answer.system_risk_level)}
                                 System Risk: {answer.system_risk_level.toUpperCase()}
@@ -1497,7 +1474,7 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                             <div className="flex-grow-1">
                                 {answer.admin_risk_level && (
                                     <div className="mb-2">
-                                        <strong>Admin Assessment:</strong>
+                                        <strong className="fw-semibold">Admin Assessment:</strong>
                                         <span className={`badge ${getRiskColor(answer.admin_risk_level)} ms-2`}>
                                             {getRiskIcon(answer.admin_risk_level)}
                                             {answer.admin_risk_level.toUpperCase()}
@@ -1506,14 +1483,14 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                                 )}
                                 {answer.admin_notes && (
                                     <div className="mb-2">
-                                        <strong>Admin Notes:</strong>
-                                        <p className="mb-0 mt-1">{answer.admin_notes}</p>
+                                        <strong className="fw-semibold">Admin Notes:</strong>
+                                        <p className="mb-0 mt-1 text-muted">{answer.admin_notes}</p>
                                     </div>
                                 )}
                                 {answer.recommendation && (
                                     <div className="mb-2">
-                                        <strong>Recommendation:</strong>
-                                        <p className="mb-0 mt-1">{answer.recommendation}</p>
+                                        <strong className="fw-semibold">Recommendation:</strong>
+                                        <p className="mb-0 mt-1 text-muted">{answer.recommendation}</p>
                                     </div>
                                 )}
                                 {answer.reviewed_by && (
@@ -1524,7 +1501,7 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                                 )}
                                 {!isReviewed && (
                                     <div className="alert alert-warning alert-sm">
-                                        <small><Eye size={14} className="me-1" />This answer is pending admin review.</small>
+                                        <small><i className="bi bi-eye me-1"></i>This answer is pending admin review.</small>
                                     </div>
                                 )}
                             </div>
@@ -1532,8 +1509,9 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                                 <button
                                     className="btn btn-outline-primary btn-sm"
                                     onClick={() => onEdit(answer.id)}
+                                    aria-label={isReviewed ? 'Edit review' : 'Review answer'}
                                 >
-                                    <Edit3 size={14} className="me-1" />
+                                    <i className="bi bi-pencil-fill me-1"></i>
                                     {isReviewed ? 'Edit Review' : 'Review'}
                                 </button>
                             )}

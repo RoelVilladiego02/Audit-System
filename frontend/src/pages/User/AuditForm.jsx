@@ -15,31 +15,7 @@ const AuditForm = () => {
     const [success, setSuccess] = useState(null);
     const [expandedQuestions, setExpandedQuestions] = useState({});
 
-    useEffect(() => {
-        // Wait for auth to finish loading
-        if (authLoading) return;
-
-        // Redirect to login if not authenticated
-        if (!user) {
-            navigate('/login', { 
-                state: { 
-                    from: '/audit-form',
-                    message: 'Please log in to access the audit form.'
-                }
-            });
-            return;
-        }
-
-        // Only users can submit audits as per API routes
-        if (!user.role || user.role !== 'user') {
-            setError('You do not have permission to submit audits. Required role: user');
-            return;
-        }
-        
-        fetchQuestions();
-    }, [user, authLoading, navigate]);
-
-    const fetchQuestions = async () => {
+    const fetchQuestions = React.useCallback(async () => {
         try {
             console.log('Fetching questions with user:', user);
             const response = await api.get('audit-questions');
@@ -74,66 +50,90 @@ const AuditForm = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user, navigate]);
+
+    useEffect(() => {
+        // Wait for auth to finish loading
+        if (authLoading) return;
+
+        // Redirect to login if not authenticated
+        if (!user) {
+            navigate('/login', { 
+                state: { 
+                    from: '/audit-form',
+                    message: 'Please log in to access the audit form.'
+                }
+            });
+            return;
+        }
+
+        // Only users can submit audits as per API routes
+        if (!user.role || user.role !== 'user') {
+            setError('You do not have permission to submit audits. Required role: user');
+            return;
+        }
+        
+        fetchQuestions();
+    }, [user, authLoading, navigate, fetchQuestions]);
 
     const handleAnswerChange = (questionId, value) => {
-        setAnswers(prev => ({
-            ...prev,
-            [questionId]: value
-        }));
-        
-        // Clear custom answer if not "Others"
-        if (value !== 'Others') {
+            setAnswers(prev => ({
+                ...prev,
+                [questionId]: value
+            }));
+            
+            // Clear custom answer if not "Others"
+            if (value !== 'Others') {
+                setCustomAnswers(prev => ({
+                    ...prev,
+                    [questionId]: ''
+                }));
+            }
+        };
+
+        const handleCustomAnswerChange = (questionId, value) => {
             setCustomAnswers(prev => ({
                 ...prev,
-                [questionId]: ''
+                [questionId]: value
             }));
-        }
-    };
+        };
 
-    const handleCustomAnswerChange = (questionId, value) => {
-        setCustomAnswers(prev => ({
-            ...prev,
-            [questionId]: value
-        }));
-    };
+        const toggleQuestionExpansion = (questionId) => {
+            setExpandedQuestions(prev => ({
+                ...prev,
+                [questionId]: !prev[questionId]
+            }));
+        };
 
-    const toggleQuestionExpansion = (questionId) => {
-        setExpandedQuestions(prev => ({
-            ...prev,
-            [questionId]: !prev[questionId]
-        }));
-    };
+        const getFinalAnswer = (questionId) => {
+            const answer = answers[questionId];
+            if (answer === 'Others' && customAnswers[questionId]?.trim()) {
+                return customAnswers[questionId].trim();
+            }
+            return answer;
+        };
 
-    const getFinalAnswer = (questionId) => {
-        const answer = answers[questionId];
-        if (answer === 'Others' && customAnswers[questionId]?.trim()) {
-            return customAnswers[questionId].trim();
-        }
-        return answer;
-    };
+        const getRiskLevelForAnswer = (question, answer) => {
+            if (!question.risk_criteria) return 'low';
+            
+            if (question.risk_criteria.high?.includes(answer)) {
+                return 'high';
+            } else if (question.risk_criteria.medium?.includes(answer)) {
+                return 'medium';
+            }
+            return 'low';
+        };
 
-    const getRiskLevelForAnswer = (question, answer) => {
-        if (!question.risk_criteria) return 'low';
-        
-        if (question.risk_criteria.high?.includes(answer)) {
-            return 'high';
-        } else if (question.risk_criteria.medium?.includes(answer)) {
-            return 'medium';
-        }
-        return 'low';
-    };
+        const getRiskBadgeClass = (riskLevel) => {
+            switch (riskLevel) {
+                case 'high': return 'bg-danger';
+                case 'medium': return 'bg-warning text-dark';
+                case 'low': return 'bg-success';
+                default: return 'bg-secondary';
+            }
+        };
 
-    const getRiskBadgeClass = (riskLevel) => {
-        switch (riskLevel) {
-            case 'high': return 'bg-danger';
-            case 'medium': return 'bg-warning text-dark';
-            case 'low': return 'bg-success';
-            default: return 'bg-secondary';
-        }
-    };
-
-    const handleSubmit = async (e) => {
+        const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError(null);
@@ -162,24 +162,25 @@ const AuditForm = () => {
                     return finalAnswer && finalAnswer.trim() !== '';
                 })
                 .map(([questionId, answer]) => {
-                    const question = questions.find(q => q.id === parseInt(questionId));
-                    const finalAnswer = getFinalAnswer(parseInt(questionId));
-                    let risk_level = 'low';
-
-                    // For custom answers, default to low risk
-                    if (answer !== 'Others') {
-                        if (question.risk_criteria?.high?.includes(finalAnswer)) {
-                            risk_level = 'high';
-                        } else if (question.risk_criteria?.medium?.includes(finalAnswer)) {
-                            risk_level = 'medium';
-                        }
+                    const questionIdInt = parseInt(questionId);
+                    
+                    // Handle custom answers differently
+                    if (answer === 'Others' && customAnswers[questionIdInt]?.trim()) {
+                        // For custom answers, send "Others" as the answer and include custom text
+                        return {
+                            audit_question_id: questionIdInt,
+                            answer: 'Others',
+                            custom_answer: customAnswers[questionIdInt].trim(), // Add custom answer field
+                            is_custom_answer: true
+                        };
+                    } else {
+                        // For regular answers
+                        return {
+                            audit_question_id: questionIdInt,
+                            answer: answer,
+                            is_custom_answer: false
+                        };
                     }
-
-                    return {
-                        audit_question_id: parseInt(questionId),
-                        answer: finalAnswer,
-                        risk_level: risk_level
-                    };
                 });
 
             if (validAnswers.length === 0) {
@@ -201,6 +202,7 @@ const AuditForm = () => {
             console.log('Number of questions:', questions.length);
             console.log('Number of valid answers:', validAnswers.length);
             console.log('Current answers state:', answers);
+            console.log('Current custom answers state:', customAnswers);
             
             const response = await api.post('audit-submissions', submissionData);
             console.log('Submission successful:', response.data);

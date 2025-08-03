@@ -11,281 +11,213 @@ const getXsrfToken = () => {
     return null;
 };
 
-// Cleanup function to remove unnecessary cookies
-const cleanupCookies = () => {
+// Selective cookie cleanup - only remove problematic cookies, keep essential ones
+const cleanupUnnecessaryCookies = () => {
     const cookies = document.cookie.split(';');
+    const keepCookies = ['XSRF-TOKEN', 'laravel_session', 'laravel_token'];
+    
     cookies.forEach(cookie => {
         const [name] = cookie.split('=');
-        document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+        const cookieName = name.trim();
+        
+        // Only remove cookies that aren't essential for Laravel Sanctum
+        if (!keepCookies.includes(cookieName) && cookieName !== '') {
+            document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+            document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        }
     });
 };
 
-// Clean up cookies on initialization
-cleanupCookies();
+// Clean up unnecessary cookies on initialization
+cleanupUnnecessaryCookies();
 
 const instance = axios.create({
     baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest' // Required for Laravel to detect AJAX requests
+        'X-Requested-With': 'XMLHttpRequest'
     },
-    timeout: 30000, // Increased timeout for larger requests
-    withCredentials: true, // Required for Laravel Sanctum
+    timeout: 30000,
+    withCredentials: true,
 });
 
-// Add a request interceptor for error handling
+// Single request interceptor to handle all authentication and CSRF
 instance.interceptors.request.use(
     async (config) => {
-        // Clean up cookies before every request
-        cleanupCookies();
+        // Clean up unnecessary cookies before each request
+        cleanupUnnecessaryCookies();
 
-        // Log total header size including cookies
-        const allHeaders = { ...config.headers, Cookie: document.cookie };
-        console.log('Total Header Size with Cookies:', JSON.stringify(allHeaders).length);
-
-        // Get the token from localStorage
+        // Get auth token
         const token = localStorage.getItem('token');
         
-        // Clean up headers
+        // Set base headers
         config.headers = {
-            ...config.headers,
-            'Authorization': token ? `Bearer ${token}` : undefined,
-            'X-Requested-With': 'XMLHttpRequest',
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token && { 'Authorization': `Bearer ${token}` })
         };
 
-        // Apply CSRF protection only for API/auth requests
-        if (config.url && (config.url.startsWith('/api') || config.url.startsWith('/auth')) && config.method !== 'get') {
-            try {
-                const csrfToken = getXsrfToken();
-                if (!csrfToken) {
-                    await axios.get('/sanctum/csrf-cookie', {
-                        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-                        withCredentials: true
-                    });
-                }
-                const newCsrfToken = getXsrfToken();
-                if (newCsrfToken) {
-                    config.headers['X-XSRF-TOKEN'] = newCsrfToken;
-                }
-            } catch (error) {
-                console.error('CSRF token fetch failed:', error);
-            }
-        }
-
-        // Remove undefined headers
-        Object.keys(config.headers).forEach(key => {
-            if (config.headers[key] === undefined) {
-                delete config.headers[key];
-            }
-        });
-
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
-
-// Enhanced request interceptor for CSRF and logging
-instance.interceptors.request.use(
-    async (config) => {
-        // Skip non-API/auth requests to avoid unnecessary header additions
-        if (!config.url || (!config.url.startsWith('/api') && !config.url.startsWith('/auth'))) {
-            return config;
-        }
-
-        const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
-        const authToken = localStorage.getItem('token');
-
-        // Log request details
-        console.log('Request Config:', {
-            url: config.url,
-            method: config.method,
-            headers: config.headers,
-            data: config.data,
-            auth: {
-                token: authToken ? 'Present' : 'Missing',
-                user: user ? {
-                    id: user.id,
-                    email: user.email,
-                    role: user.role
-                } : null
-            }
-        });
-
-        // Set auth token if available
-        if (authToken) {
-            config.headers.Authorization = `Bearer ${authToken}`;
-        }
-
-        // Handle CSRF token only for API/auth requests
-        if (!config.url.includes('sanctum/csrf-cookie')) {
-            const csrfToken = getXsrfToken();
-            if (!csrfToken) {
-                console.log('No CSRF token found, fetching new one...');
+        // Handle CSRF token for state-changing operations
+        if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
+            let csrfToken = getXsrfToken();
+            
+            // If no CSRF token, fetch one
+            if (!csrfToken && !config.url?.includes('sanctum/csrf-cookie')) {
                 try {
                     await axios.get('/sanctum/csrf-cookie', {
                         baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-                        withCredentials: true
+                        withCredentials: true,
+                        headers: {
+                            'Accept': 'application/json'
+                        }
                     });
-                    const newCsrfToken = getXsrfToken();
-                    if (newCsrfToken) {
-                        config.headers['X-XSRF-TOKEN'] = newCsrfToken;
-                        console.log('New CSRF token obtained:', newCsrfToken);
-                    } else {
-                        console.error('Failed to obtain CSRF token');
-                        throw new Error('Failed to obtain CSRF token');
-                    }
+                    csrfToken = getXsrfToken();
                 } catch (error) {
-                    console.error('Error fetching CSRF token:', error);
-                    throw error;
+                    console.error('CSRF token fetch failed:', error);
                 }
-            } else {
+            }
+            
+            if (csrfToken) {
                 config.headers['X-XSRF-TOKEN'] = csrfToken;
-                console.log('Using existing CSRF token:', csrfToken);
             }
         }
 
-        // Ensure PUT requests are properly formatted
+        // Add method override for PUT requests
         if (config.method?.toLowerCase() === 'put') {
             config.headers['X-HTTP-Method-Override'] = 'PUT';
-            config.headers['Content-Type'] = 'application/json';
         }
+
+        // Log header size for debugging
+        const headerSize = JSON.stringify(config.headers).length;
+        const cookieSize = document.cookie.length;
+        console.log(`Request to ${config.url}: Headers=${headerSize}b, Cookies=${cookieSize}b, Total≈${headerSize + cookieSize}b`);
 
         return config;
     },
     (error) => {
-        console.error('Request error:', error);
+        console.error('Request interceptor error:', error);
         return Promise.reject(error);
     }
 );
 
-// Response interceptor
+// Single response interceptor
 instance.interceptors.response.use(
     (response) => {
-        // Enhanced response logging
-        console.log('Response Data:', {
-            url: response.config.url,
-            status: response.status,
-            statusText: response.statusText,
-            dataType: typeof response.data,
-            data: response.data instanceof Blob ? 'Blob data' : response.data,
-            headers: response.headers,
-            timestamp: new Date().toISOString()
-        });
         return response;
     },
     async (error) => {
-        const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
-        console.error('API Error:', {
-            status: error.response?.status,
-            data: error.response?.data,
-            url: error.config?.url,
-            message: error.message,
-            auth: {
-                token: localStorage.getItem('token') ? 'Present' : 'Missing',
-                user: user ? {
-                    id: user.id,
-                    role: user.role,
-                    email: user.email
-                } : null
-            }
-        });
+        const originalRequest = error.config;
 
-        if (error.response?.status === 419 && !error.config._retry) {
-            error.config._retry = true;
+        // Handle CSRF token expiry (419)
+        if (error.response?.status === 419 && !originalRequest._csrfRetry) {
+            originalRequest._csrfRetry = true;
+            
             try {
-                await axios.get('sanctum/csrf-cookie', {
+                // Fetch new CSRF token
+                await axios.get('/sanctum/csrf-cookie', {
                     baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-                    withCredentials: true
+                    withCredentials: true,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
                 });
-                const csrfToken = getXsrfToken();
-                if (csrfToken) {
-                    // Create exact copy of original request configuration
-                    const retryConfig = {
-                        ...error.config,
-                        method: error.config.method, // Explicitly preserve the HTTP method
-                        data: error.config.data, // Preserve request body/payload
-                        params: error.config.params, // Preserve query parameters
-                        headers: {
-                            ...error.config.headers,
-                            'X-XSRF-TOKEN': csrfToken
-                        }
-                    };
-                    return instance(retryConfig);
+                
+                const newCsrfToken = getXsrfToken();
+                if (newCsrfToken) {
+                    originalRequest.headers['X-XSRF-TOKEN'] = newCsrfToken;
+                    return instance(originalRequest);
                 }
             } catch (retryError) {
-                console.error('Failed to refresh CSRF token:', retryError);
-                return Promise.reject(retryError);
+                console.error('CSRF retry failed:', retryError);
             }
         }
 
-        if (error.response?.status === 401 || error.response?.status === 403) {
-            // Try to refresh user data first
-            try {
-                const authToken = localStorage.getItem('token');
-                if (authToken) {
-                    const userResponse = await instance.get('user', {
-                        headers: { Authorization: `Bearer ${authToken}` }
+        // Handle authentication errors (401, 403)
+        if ([401, 403].includes(error.response?.status) && !originalRequest._authRetry) {
+            originalRequest._authRetry = true;
+            
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Try to refresh user data
+                    const userResponse = await instance.get('/user', {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
+                    
                     if (userResponse.data) {
                         localStorage.setItem('user', JSON.stringify(userResponse.data));
-                        // Retry the original request with exact same configuration
-                        const retryConfig = {
-                            ...error.config,
-                            method: error.config.method, // Explicitly preserve the HTTP method
-                            data: error.config.data, // Preserve request body/payload
-                            params: error.config.params, // Preserve query parameters
-                            headers: {
-                                ...error.config.headers,
-                                Authorization: `Bearer ${authToken}`
-                            }
-                        };
-                        return instance(retryConfig);
+                        return instance(originalRequest);
                     }
+                } catch (refreshError) {
+                    console.error('Auth refresh failed:', refreshError);
+                    // Clear auth data and redirect to login
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
                 }
-            } catch (refreshError) {
-                console.error('Failed to refresh user data:', refreshError);
-                // If refresh fails, clear auth and redirect to login
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+            } else {
+                // No token, redirect to login
                 window.location.href = '/login';
             }
         }
 
+        // Handle 431 errors by cleaning cookies and retrying once
+        if (error.response?.status === 431 && !originalRequest._headerRetry) {
+            originalRequest._headerRetry = true;
+            console.warn('431 Request Header Fields Too Large - cleaning cookies and retrying');
+            
+            // More aggressive cookie cleanup
+            document.cookie.split(';').forEach(cookie => {
+                const [name] = cookie.split('=');
+                const cookieName = name.trim();
+                if (cookieName && !['XSRF-TOKEN', 'laravel_session'].includes(cookieName)) {
+                    document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+                    document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+                }
+            });
+            
+            // Retry with minimal headers
+            originalRequest.headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(localStorage.getItem('token') && { 'Authorization': `Bearer ${localStorage.getItem('token')}` })
+            };
+            
+            return instance(originalRequest);
+        }
+
+        console.error('API Error:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            url: error.config?.url,
+            method: error.config?.method,
+            message: error.message
+        });
+
         return Promise.reject(error);
     }
 );
 
-// Add specific methods for review operations before the export
+// Specialized method for review operations
 instance.reviewAnswer = async (submissionId, answerId, reviewData) => {
     const url = `/audit-submissions/${submissionId}/answers/${answerId}/review`;
-    console.log('Sending review request:', {
-        url,
-        method: 'PUT',
-        data: reviewData
-    });
     
     try {
         const response = await instance({
             url,
-            method: 'PUT', // Explicitly set method as PUT
+            method: 'PUT',
             data: reviewData,
             headers: {
                 'Content-Type': 'application/json',
-                'X-HTTP-Method-Override': 'PUT' // Add this for extra safety
+                'X-HTTP-Method-Override': 'PUT'
             }
         });
         return response.data;
     } catch (error) {
-        console.error('Review request failed:', {
-            error: error.response?.data || error.message,
-            status: error.response?.status,
-            config: error.config
-        });
+        console.error('Review request failed:', error);
         throw error;
     }
 };

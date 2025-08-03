@@ -18,10 +18,10 @@ const Home = () => {
 
                         {user ? (
                             <div className="d-flex flex-column flex-md-row justify-content-center gap-3">
-                                <Link to="/audit" className="btn btn-primary btn-lg px-4 py-2">
-                                    Start New Audit
+                                <Link to="/admin/questions" className="btn btn-primary btn-lg px-4 py-2">
+                                    View Audit Questions
                                 </Link>
-                                <Link to="/submissions" className="btn btn-outline-primary btn-lg px-4 py-2">
+                                <Link to="/admin/submissions" className="btn btn-outline-primary btn-lg px-4 py-2">
                                     View Submissions
                                 </Link>
                                 {isAdmin && (
