@@ -5,20 +5,20 @@ import api from '../../api/axios';
 
 const getRiskLevelBadge = (level) => {
     const badges = {
-        high: 'badge bg-danger',
-        medium: 'badge bg-warning text-dark',
-        low: 'badge bg-success'
+        high: 'bg-danger',
+        medium: 'bg-warning text-dark',
+        low: 'bg-success'
     };
-    return badges[level?.toLowerCase()] || 'badge bg-secondary';
+    return badges[level?.toLowerCase()] || 'bg-secondary';
 };
 
 const getRiskIcon = (level) => {
     const icons = {
-        high: '🔴',
-        medium: '🟡', 
-        low: '🟢'
+        high: 'bi-circle-fill text-danger',
+        medium: 'bi-circle-fill text-warning',
+        low: 'bi-circle-fill text-success'
     };
-    return icons[level?.toLowerCase()] || '⚪';
+    return icons[level?.toLowerCase()] || 'bi-circle-fill text-muted';
 };
 
 const getStatusBadge = (status) => {
@@ -50,20 +50,7 @@ const SubmissionsList = () => {
     const [sortBy, setSortBy] = useState('newest');
     const [filterBy, setFilterBy] = useState('all');
 
-    useEffect(() => {
-        if (!user) {
-            navigate('/login', { 
-                state: { 
-                    from: '/submissions',
-                    message: 'Please log in to view your submissions.' 
-                }
-            });
-            return;
-        }
-        fetchSubmissions();
-    }, [user, navigate]);
-
-    const fetchSubmissions = async () => {
+    const fetchSubmissions = React.useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
             console.log('Auth State:', {
@@ -102,12 +89,23 @@ const SubmissionsList = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [navigate]);
+
+    useEffect(() => {
+        if (!user) {
+            navigate('/login', { 
+                state: { 
+                    from: '/submissions',
+                    message: 'Please log in to view your submissions.' 
+                }
+            });
+            return;
+        }
+        fetchSubmissions();
+    }, [user, navigate, fetchSubmissions]);
 
     const getSortedAndFilteredSubmissions = () => {
         let filtered = submissions;
-        
-        // Apply filters
         if (filterBy !== 'all') {
             if (filterBy === 'high_risk') {
                 filtered = submissions.filter(s => s.overall_risk === 'high');
@@ -117,8 +115,6 @@ const SubmissionsList = () => {
                 filtered = submissions.filter(s => s.status !== 'completed');
             }
         }
-        
-        // Apply sorting
         return filtered.sort((a, b) => {
             switch (sortBy) {
                 case 'newest':
@@ -141,7 +137,6 @@ const SubmissionsList = () => {
         const now = new Date();
         const date = new Date(dateString);
         const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
-        
         if (diffInHours < 1) return 'Just now';
         if (diffInHours < 24) return `${diffInHours}h ago`;
         if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
@@ -150,15 +145,12 @@ const SubmissionsList = () => {
 
     if (loading) {
         return (
-            <div className="container-fluid py-5" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-                <div className="d-flex justify-content-center align-items-center" style={{minHeight: '60vh'}}>
-                    <div className="text-center">
-                        <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                            <span className="visually-hidden">Loading...</span>
-                        </div>
-                        <h5 className="text-muted">Loading your audit submissions...</h5>
-                        <p className="text-muted small">This may take a moment</p>
+            <div className="container-fluid min-vh-100 bg-light d-flex justify-content-center align-items-center">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                        <span className="visually-hidden">Loading...</span>
                     </div>
+                    <h5 className="fw-bold text-muted">Loading Your Audit Submissions...</h5>
                 </div>
             </div>
         );
@@ -166,22 +158,26 @@ const SubmissionsList = () => {
 
     if (error) {
         return (
-            <div className="container-fluid py-5" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <div className="container-fluid min-vh-100 bg-light py-4">
                 <div className="row justify-content-center">
                     <div className="col-lg-6">
-                        <div className="card shadow-sm border-0">
-                            <div className="card-body text-center py-5">
-                                <i className="bi bi-exclamation-triangle text-danger mb-3" style={{ fontSize: '3rem' }}></i>
-                                <h5 className="text-danger mb-3">Error Loading Submissions</h5>
+                        <div className="card border-0 shadow-sm">
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold text-danger mb-0">Error</h5>
+                            </div>
+                            <div className="card-body text-center py-4">
+                                <i className="bi bi-exclamation-triangle-fill text-danger mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
                                 <p className="text-muted mb-4">{error}</p>
-                                <button onClick={fetchSubmissions} className="btn btn-primary me-2">
-                                    <i className="bi bi-arrow-clockwise me-2"></i>
-                                    Try Again
-                                </button>
-                                <Link to="/audit" className="btn btn-outline-primary">
-                                    <i className="bi bi-plus-circle me-2"></i>
-                                    New Audit
-                                </Link>
+                                <div className="d-flex justify-content-center gap-3">
+                                    <button onClick={fetchSubmissions} className="btn btn-sm btn-primary" aria-label="Retry loading submissions">
+                                        <i className="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                                        Try Again
+                                    </button>
+                                    <Link to="/audit" className="btn btn-sm btn-outline-primary" aria-label="Start new audit">
+                                        <i className="bi bi-plus-circle me-2" aria-hidden="true"></i>
+                                        New Audit
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -201,106 +197,95 @@ const SubmissionsList = () => {
     };
 
     return (
-        <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-            {/* Header Section */}
-            <div className="row mb-4">
-                <div className="col-12">
-                    <div className="card shadow-sm border-0">
-                        <div className="card-body">
+        <div className="container-fluid min-vh-100 bg-light py-4">
+            <div className="row justify-content-center">
+                <div className="col-lg-10 col-xl-9">
+                    {/* Header Section */}
+                    <div className="card border-0 shadow-sm mb-4">
+                        <div className="card-header bg-white border-0 py-3">
                             <div className="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h1 className="h2 fw-bold text-primary mb-2">
-                                        <i className="bi bi-clipboard-data me-2"></i>
-                                        My Security Audits
-                                    </h1>
-                                    <p className="text-muted mb-0">
-                                        Track and manage your security assessment history
-                                    </p>
-                                </div>
-                                <div>
-                                    <Link to="/audit" className="btn btn-primary btn-lg shadow-sm">
-                                        <i className="bi bi-plus-circle me-2"></i>
-                                        New Assessment
-                                    </Link>
-                                </div>
+                                <h3 className="fw-bold text-primary mb-0">
+                                    <i className="bi bi-clipboard-data me-2" aria-hidden="true"></i>
+                                    My Security Audits
+                                </h3>
+                                <Link to="/audit" className="btn btn-sm btn-primary" aria-label="Start new assessment">
+                                    <i className="bi bi-plus-circle me-2" aria-hidden="true"></i>
+                                    New Assessment
+                                </Link>
                             </div>
                         </div>
+                        <div className="card-body py-3">
+                            <p className="text-muted small mb-0">Track and manage your security assessment history</p>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Stats Cards */}
-            {submissions.length > 0 && (
-                <div className="row mb-4">
-                    <div className="col-lg-3 col-md-6 mb-3">
-                        <div className="card border-0 shadow-sm h-100 bg-white">
-                            <div className="card-body text-center">
-                                <div className="d-flex justify-content-center align-items-center mb-2">
-                                    <div className="bg-primary bg-opacity-10 rounded-circle p-3">
-                                        <i className="bi bi-clipboard-data text-primary" style={{ fontSize: '1.5rem' }}></i>
+                    {/* Stats Cards */}
+                    {submissions.length > 0 && (
+                        <div className="row mb-4">
+                            <div className="col-md-3 mb-3">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="bg-primary bg-opacity-10 rounded-circle p-3 mb-2 d-inline-flex">
+                                            <i className="bi bi-clipboard-data text-primary" style={{ fontSize: '1.5rem' }} aria-hidden="true"></i>
+                                        </div>
+                                        <h4 className="fw-bold text-primary mb-1">{stats.total}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">Total Submissions</p>
                                     </div>
                                 </div>
-                                <h3 className="fw-bold text-primary mb-1">{stats.total}</h3>
-                                <p className="text-muted small mb-0">Total Submissions</p>
                             </div>
-                        </div>
-                    </div>
-                    <div className="col-lg-3 col-md-6 mb-3">
-                        <div className="card border-0 shadow-sm h-100 bg-white">
-                            <div className="card-body text-center">
-                                <div className="d-flex justify-content-center align-items-center mb-2">
-                                    <div className="bg-danger bg-opacity-10 rounded-circle p-3">
-                                        <i className="bi bi-exclamation-triangle text-danger" style={{ fontSize: '1.5rem' }}></i>
+                            <div className="col-md-3 mb-3">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="bg-danger bg-opacity-10 rounded-circle p-3 mb-2 d-inline-flex">
+                                            <i className="bi bi-exclamation-triangle-fill text-danger" style={{ fontSize: '1.5rem' }} aria-hidden="true"></i>
+                                        </div>
+                                        <h4 className="fw-bold text-danger mb-1">{stats.high}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">High Risk</p>
                                     </div>
                                 </div>
-                                <h3 className="fw-bold text-danger mb-1">{stats.high}</h3>
-                                <p className="text-muted small mb-0">High Risk</p>
                             </div>
-                        </div>
-                    </div>
-                    <div className="col-lg-3 col-md-6 mb-3">
-                        <div className="card border-0 shadow-sm h-100 bg-white">
-                            <div className="card-body text-center">
-                                <div className="d-flex justify-content-center align-items-center mb-2">
-                                    <div className="bg-success bg-opacity-10 rounded-circle p-3">
-                                        <i className="bi bi-check-circle text-success" style={{ fontSize: '1.5rem' }}></i>
+                            <div className="col-md-3 mb-3">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="bg-success bg-opacity-10 rounded-circle p-3 mb-2 d-inline-flex">
+                                            <i className="bi bi-check-circle-fill text-success" style={{ fontSize: '1.5rem' }} aria-hidden="true"></i>
+                                        </div>
+                                        <h4 className="fw-bold text-success mb-1">{stats.completed}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">Completed Reviews</p>
                                     </div>
                                 </div>
-                                <h3 className="fw-bold text-success mb-1">{stats.completed}</h3>
-                                <p className="text-muted small mb-0">Completed Reviews</p>
                             </div>
-                        </div>
-                    </div>
-                    <div className="col-lg-3 col-md-6 mb-3">
-                        <div className="card border-0 shadow-sm h-100 bg-white">
-                            <div className="card-body text-center">
-                                <div className="d-flex justify-content-center align-items-center mb-2">
-                                    <div className="bg-warning bg-opacity-10 rounded-circle p-3">
-                                        <i className="bi bi-clock-history text-warning" style={{ fontSize: '1.5rem' }}></i>
+                            <div className="col-md-3 mb-3">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-body text-center">
+                                        <div className="bg-warning bg-opacity-10 rounded-circle p-3 mb-2 d-inline-flex">
+                                            <i className="bi bi-hourglass-split text-warning" style={{ fontSize: '1.5rem' }} aria-hidden="true"></i>
+                                        </div>
+                                        <h4 className="fw-bold text-warning mb-1">{stats.pending}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">Pending Review</p>
                                     </div>
                                 </div>
-                                <h3 className="fw-bold text-warning mb-1">{stats.pending}</h3>
-                                <p className="text-muted small mb-0">Pending Review</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Filters and Sorting */}
-            {submissions.length > 0 && (
-                <div className="row mb-4">
-                    <div className="col-12">
-                        <div className="card shadow-sm border-0">
+                    {/* Filters and Sorting */}
+                    {submissions.length > 0 && (
+                        <div className="card border-0 shadow-sm mb-4">
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold mb-0">Filter & Sort</h5>
+                            </div>
                             <div className="card-body py-3">
                                 <div className="row align-items-center">
-                                    <div className="col-md-6">
+                                    <div className="col-md-6 mb-3 mb-md-0">
                                         <div className="d-flex align-items-center">
-                                            <label className="form-label me-3 mb-0 text-muted">Filter:</label>
+                                            <label className="form-label fw-semibold text-muted me-3 mb-0" htmlFor="filter-select">Filter:</label>
                                             <select 
+                                                id="filter-select"
                                                 className="form-select form-select-sm w-auto"
                                                 value={filterBy}
                                                 onChange={(e) => setFilterBy(e.target.value)}
+                                                aria-label="Filter submissions"
                                             >
                                                 <option value="all">All Submissions</option>
                                                 <option value="high_risk">High Risk Only</option>
@@ -311,11 +296,13 @@ const SubmissionsList = () => {
                                     </div>
                                     <div className="col-md-6">
                                         <div className="d-flex align-items-center justify-content-md-end">
-                                            <label className="form-label me-3 mb-0 text-muted">Sort by:</label>
+                                            <label className="form-label fw-semibold text-muted me-3 mb-0" htmlFor="sort-select">Sort by:</label>
                                             <select 
+                                                id="sort-select"
                                                 className="form-select form-select-sm w-auto"
                                                 value={sortBy}
                                                 onChange={(e) => setSortBy(e.target.value)}
+                                                aria-label="Sort submissions"
                                             >
                                                 <option value="newest">Newest First</option>
                                                 <option value="oldest">Oldest First</option>
@@ -327,185 +314,131 @@ const SubmissionsList = () => {
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Submissions List */}
-            {submissions.length === 0 ? (
-                <div className="row">
-                    <div className="col-12">
+                    {/* Submissions List */}
+                    {submissions.length === 0 ? (
                         <div className="card border-0 shadow-sm">
-                            <div className="card-body text-center py-5">
-                                <div className="mb-4">
-                                    <div className="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-4 mb-3">
-                                        <i className="bi bi-clipboard-data text-primary" style={{ fontSize: '3rem' }}></i>
-                                    </div>
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold mb-0">No Submissions</h5>
+                            </div>
+                            <div className="card-body text-center py-4">
+                                <div className="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-4 mb-3">
+                                    <i className="bi bi-clipboard-data text-primary" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
                                 </div>
-                                <h3 className="text-muted mb-3">No Security Audits Yet</h3>
+                                <h4 className="fw-bold text-muted mb-3">No Security Audits Yet</h4>
                                 <p className="text-muted mb-4 col-md-6 mx-auto">
-                                    Start your first security assessment to identify potential vulnerabilities 
-                                    and improve your organization's security posture.
+                                    Start your first security assessment to identify potential vulnerabilities and improve your organization's security posture.
                                 </p>
-                                <Link to="/audit" className="btn btn-primary btn-lg shadow-sm">
-                                    <i className="bi bi-plus-circle me-2"></i>
+                                <Link to="/audit" className="btn btn-sm btn-primary" aria-label="Start first assessment">
+                                    <i className="bi bi-plus-circle me-2" aria-hidden="true"></i>
                                     Start Your First Assessment
                                 </Link>
                             </div>
                         </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="row">
-                    <div className="col-12">
+                    ) : (
                         <div className="card border-0 shadow-sm">
-                            <div className="card-header bg-white border-bottom py-3">
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <h5 className="card-title mb-0">
-                                        <i className="bi bi-list-ul me-2 text-primary"></i>
-                                        Assessment History
-                                    </h5>
-                                    <span className="badge bg-primary">{filteredSubmissions.length} result{filteredSubmissions.length !== 1 ? 's' : ''}</span>
-                                </div>
+                            <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                                <h5 className="fw-bold mb-0">
+                                    <i className="bi bi-list-ul me-2 text-primary" aria-hidden="true"></i>
+                                    Assessment History
+                                </h5>
+                                <span className="badge bg-primary">{filteredSubmissions.length} Result{filteredSubmissions.length !== 1 ? 's' : ''}</span>
                             </div>
-                            <div className="list-group list-group-flush">
-                                {filteredSubmissions.map((submission, index) => (
-                                    <Link 
-                                        key={submission.id}
-                                        to={`/submissions/${submission.id}`}
-                                        className="list-group-item list-group-item-action border-0 py-4"
-                                        style={{textDecoration: 'none'}}
-                                    >
-                                        <div className="d-flex w-100 justify-content-between align-items-start">
-                                            <div className="flex-grow-1">
-                                                <div className="d-flex align-items-center mb-3">
-                                                    <div className="me-3">
-                                                        <div className="bg-light rounded-circle d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px' }}>
-                                                            <span style={{ fontSize: '1.5rem' }}>
-                                                                {getRiskIcon(submission.overall_risk || 'low')}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-grow-1">
-                                                        <h6 className="mb-1 fw-bold text-dark">
-                                                            {submission.title || `Security Assessment #${submission.id}`}
-                                                        </h6>
-                                                        <div className="d-flex align-items-center gap-2 mb-2">
-                                                            <span className={`badge ${getRiskLevelBadge(submission.overall_risk || 'low')}`}>
-                                                                {(submission.overall_risk || 'low').toUpperCase()} RISK
-                                                            </span>
-                                                            <span className={`badge ${getStatusBadge(submission.status)}`}>
-                                                                <i className={`bi ${getStatusIcon(submission.status)} me-1`}></i>
-                                                                {submission.status?.replace('_', ' ').toUpperCase()}
-                                                            </span>
-                                                            {submission.review_progress && submission.status !== 'completed' && (
-                                                                <span className="badge bg-info">
-                                                                    {submission.review_progress}% Reviewed
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="row text-muted small">
-                                                    <div className="col-md-6 mb-2">
-                                                        <i className="bi bi-calendar3 me-2"></i>
-                                                        <strong>Submitted:</strong> {new Date(submission.created_at).toLocaleDateString('en-US', {
-                                                            year: 'numeric',
-                                                            month: 'short',
-                                                            day: 'numeric'
-                                                        })}
-                                                        <span className="ms-2 text-primary">({getTimeAgo(submission.created_at)})</span>
-                                                    </div>
-                                                    <div className="col-md-6 mb-2">
-                                                        <i className="bi bi-person me-2"></i>
-                                                        <strong>By:</strong> {submission.user?.name || 'Unknown User'}
-                                                    </div>
-                                                    {submission.reviewed_at && (
-                                                        <div className="col-md-6">
-                                                            <i className="bi bi-check-circle me-2"></i>
-                                                            <strong>Reviewed:</strong> {new Date(submission.reviewed_at).toLocaleDateString('en-US', {
-                                                                year: 'numeric',
-                                                                month: 'short',
-                                                                day: 'numeric'
-                                                            })}
-                                                        </div>
+                            <div className="card-body p-0">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead className="bg-light">
+                                        <tr>
+                                            <th scope="col" className="py-3" style={{ width: '5%' }}></th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Title</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Status</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Risk Level</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Progress</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Submitted</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">By</th>
+                                            <th scope="col" className="py-3" style={{ width: '5%' }}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredSubmissions.map((submission) => (
+                                            <tr key={submission.id}>
+                                                <td className="py-3">
+                                                    <i className={getRiskIcon(submission.overall_risk || 'low')} aria-hidden="true"></i>
+                                                </td>
+                                                <td className="py-3">
+                                                    <Link 
+                                                        to={`/submissions/${submission.id}`}
+                                                        className="text-decoration-none text-dark fw-semibold"
+                                                        aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                    >
+                                                        {submission.title || `Security Assessment #${submission.id}`}
+                                                    </Link>
+                                                </td>
+                                                <td className="py-3">
+                                                    <span className={`badge ${getStatusBadge(submission.status)}`}>
+                                                        <i className={`bi ${getStatusIcon(submission.status)} me-1`} aria-hidden="true"></i>
+                                                        {submission.status?.replace('_', ' ').toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3">
+                                                    <span className={`badge ${getRiskLevelBadge(submission.overall_risk || 'low')}`}>
+                                                        {(submission.overall_risk || 'low').toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3">
+                                                    {submission.review_progress && submission.status !== 'completed' && (
+                                                        <span className="badge bg-info">{submission.review_progress}%</span>
                                                     )}
-                                                    {submission.answers_count && (
-                                                        <div className="col-md-6">
-                                                            <i className="bi bi-list-check me-2"></i>
-                                                            <strong>Questions:</strong> {submission.answers_count} answered
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                
-                                                {submission.admin_summary && (
-                                                    <div className="mt-3 p-3 bg-light rounded">
-                                                        <small className="text-muted">
-                                                            <i className="bi bi-chat-quote me-2"></i>
-                                                            <strong>Admin Summary:</strong>
-                                                        </small>
-                                                        <p className="mb-0 mt-1 small text-dark">
-                                                            {submission.admin_summary.length > 150 
-                                                                ? `${submission.admin_summary.substring(0, 150)}...` 
-                                                                : submission.admin_summary
-                                                            }
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="ms-3 d-flex align-items-center">
-                                                <div className="text-center">
-                                                    <i className="bi bi-chevron-right text-muted"></i>
-                                                    <div className="small text-muted mt-1">View</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                ))}
+                                                </td>
+                                                <td className="py-3 text-muted small">
+                                                    {new Date(submission.created_at).toLocaleDateString('en-US', {
+                                                        year: 'numeric',
+                                                        month: 'short',
+                                                        day: 'numeric'
+                                                    })}
+                                                    <span className="ms-1">({getTimeAgo(submission.created_at)})</span>
+                                                </td>
+                                                <td className="py-3 text-muted small">{submission.user?.name || 'Unknown'}</td>
+                                                <td className="py-3">
+                                                    <Link 
+                                                        to={`/submissions/${submission.id}`}
+                                                        className="text-muted"
+                                                        aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                    >
+                                                        <i className="bi bi-chevron-right" aria-hidden="true"></i>
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Footer Info */}
-            {submissions.length > 0 && (
-                <div className="row mt-4">
-                    <div className="col-12">
-                        <div className="card border-0 bg-light shadow-sm">
+                    {/* Footer Info */}
+                    {submissions.length > 0 && (
+                        <div className="card border-0 shadow-sm bg-light mt-4">
                             <div className="card-body py-3">
-                                <div className="row text-center">
-                                    <div className="col-md-4 mb-2 mb-md-0">
-                                        <div className="d-flex align-items-center justify-content-center">
-                                            <i className="bi bi-info-circle text-primary me-2"></i>
-                                            <small className="text-muted">
-                                                Click any submission for detailed analysis
-                                            </small>
-                                        </div>
+                                <div className="row text-center text-muted small">
+                                    <div className="col-md-4 mb-3 mb-md-0">
+                                        <i className="bi bi-info-circle me-2" aria-hidden="true"></i>
+                                        Click any submission for detailed analysis
                                     </div>
-                                    <div className="col-md-4 mb-2 mb-md-0">
-                                        <div className="d-flex align-items-center justify-content-center">
-                                            <i className="bi bi-shield-check text-success me-2"></i>
-                                            <small className="text-muted">
-                                                Regular assessments improve security
-                                            </small>
-                                        </div>
+                                    <div className="col-md-4 mb-3 mb-md-0">
+                                        <i className="bi bi-shield-fill-check me-2" aria-hidden="true"></i>
+                                        Regular assessments improve security
                                     </div>
                                     <div className="col-md-4">
-                                        <div className="d-flex align-items-center justify-content-center">
-                                            <i className="bi bi-graph-up text-info me-2"></i>
-                                            <small className="text-muted">
-                                                Track your security progress over time
-                                            </small>
-                                        </div>
+                                        <i className="bi bi-graph-up me-2" aria-hidden="true"></i>
+                                        Track your security progress over time
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
-            )}
+            </div>
         </div>
     );
 };

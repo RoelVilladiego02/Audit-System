@@ -77,67 +77,67 @@ const AuditForm = () => {
     }, [user, authLoading, navigate, fetchQuestions]);
 
     const handleAnswerChange = (questionId, value) => {
-            setAnswers(prev => ({
-                ...prev,
-                [questionId]: value
-            }));
-            
-            // Clear custom answer if not "Others"
-            if (value !== 'Others') {
-                setCustomAnswers(prev => ({
-                    ...prev,
-                    [questionId]: ''
-                }));
-            }
-        };
-
-        const handleCustomAnswerChange = (questionId, value) => {
+        setAnswers(prev => ({
+            ...prev,
+            [questionId]: value
+        }));
+        
+        // Clear custom answer if not "Others"
+        if (value !== 'Others') {
             setCustomAnswers(prev => ({
                 ...prev,
-                [questionId]: value
+                [questionId]: ''
             }));
-        };
+        }
+    };
 
-        const toggleQuestionExpansion = (questionId) => {
-            setExpandedQuestions(prev => ({
-                ...prev,
-                [questionId]: !prev[questionId]
-            }));
-        };
+    const handleCustomAnswerChange = (questionId, value) => {
+        setCustomAnswers(prev => ({
+            ...prev,
+            [questionId]: value
+        }));
+    };
 
-        const getFinalAnswer = (questionId) => {
-            const answer = answers[questionId];
-            if (answer === 'Others' && customAnswers[questionId]?.trim()) {
-                return customAnswers[questionId].trim();
-            }
-            return answer;
-        };
+    const toggleQuestionExpansion = (questionId) => {
+        setExpandedQuestions(prev => ({
+            ...prev,
+            [questionId]: !prev[questionId]
+        }));
+    };
 
-        const getRiskLevelForAnswer = (question, answer) => {
-            if (!question.risk_criteria) return 'low';
-            
-            if (question.risk_criteria.high?.includes(answer)) {
-                return 'high';
-            } else if (question.risk_criteria.medium?.includes(answer)) {
-                return 'medium';
-            }
-            return 'low';
-        };
+    const getFinalAnswer = (questionId) => {
+        const answer = answers[questionId];
+        if (answer === 'Others' && customAnswers[questionId]?.trim()) {
+            return customAnswers[questionId].trim();
+        }
+        return answer;
+    };
 
-        const getRiskBadgeClass = (riskLevel) => {
-            switch (riskLevel) {
-                case 'high': return 'bg-danger';
-                case 'medium': return 'bg-warning text-dark';
-                case 'low': return 'bg-success';
-                default: return 'bg-secondary';
-            }
-        };
+    const getRiskLevelForAnswer = (question, answer) => {
+        if (!question.risk_criteria) return 'low';
+        
+        if (question.risk_criteria.high?.includes(answer)) {
+            return 'high';
+        } else if (question.risk_criteria.medium?.includes(answer)) {
+            return 'medium';
+        }
+        return 'low';
+    };
 
-        const handleSubmit = async (e) => {
+    const getRiskBadgeClass = (riskLevel) => {
+        switch (riskLevel) {
+            case 'high': return 'bg-danger';
+            case 'medium': return 'bg-warning text-dark';
+            case 'low': return 'bg-success';
+            default: return 'bg-secondary';
+        }
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError(null);
-        setSuccess(false);
+        setSuccess(null);
 
         // Verify authentication status
         const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
@@ -298,38 +298,38 @@ const AuditForm = () => {
 
     if (authLoading || loading) {
         return (
-            <div className="container-fluid d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
+            <div className="container-fluid min-vh-100 bg-light d-flex justify-content-center align-items-center">
                 <div className="text-center">
                     <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
                         <span className="visually-hidden">Loading...</span>
                     </div>
-                    <h5 className="text-muted">Loading Security Assessment...</h5>
+                    <h5 className="fw-bold text-muted">Loading Security Assessment...</h5>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+        <div className="container-fluid min-vh-100 bg-light py-4">
             <div className="row justify-content-center">
-                <div className="col-lg-8 col-xl-7">
+                <div className="col-lg-10 col-xl-9">
                     {/* Header Card */}
-                    <div className="card shadow-sm border-0 mb-4">
-                        <div className="card-body text-center py-5">
-                            <div className="mb-3">
-                                <i className="bi bi-shield-check text-primary" style={{ fontSize: '3rem' }}></i>
+                    <div className="card border-0 shadow-sm mb-4">
+                        <div className="card-header bg-white border-0 py-3">
+                            <h3 className="fw-bold text-primary mb-0">Security Audit Assessment</h3>
+                        </div>
+                        <div className="card-body py-4">
+                            <div className="text-center mb-4">
+                                <i className="bi bi-shield-fill-check text-primary" style={{ fontSize: '2.5rem' }} aria-hidden="true"></i>
+                                <p className="text-muted mt-2">Complete this assessment to help us understand your security posture.</p>
                             </div>
-                            <h1 className="card-title h2 mb-3 text-primary">Security Audit Assessment</h1>
-                            <p className="lead text-muted mb-4">
-                                Help us understand your security posture by completing this comprehensive assessment.
-                            </p>
                             {questions.length > 0 && (
-                                <div className="mb-0">
+                                <div className="mb-3">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
-                                        <small className="text-muted">Progress</small>
-                                        <small className="text-muted">{getProgressPercentage()}% Complete</small>
+                                        <span className="fw-semibold text-muted">Progress</span>
+                                        <span className="fw-semibold text-muted">{getProgressPercentage()}% Complete</span>
                                     </div>
-                                    <div className="progress" style={{ height: '8px' }}>
+                                    <div className="progress" style={{ height: '10px' }}>
                                         <div 
                                             className="progress-bar bg-primary" 
                                             role="progressbar" 
@@ -347,11 +347,11 @@ const AuditForm = () => {
                     {/* Alerts */}
                     {error && (
                         <div className="alert alert-danger border-0 shadow-sm mb-4" role="alert">
-                            <div className="d-flex align-items-start">
-                                <i className="bi bi-exclamation-triangle-fill me-3 mt-1 text-danger"></i>
+                            <div className="d-flex align-items-center">
+                                <i className="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
                                 <div>
-                                    <h6 className="alert-heading mb-1">Error</h6>
-                                    <div>{error}</div>
+                                    <h6 className="fw-bold mb-1">Error</h6>
+                                    <p className="mb-0">{error}</p>
                                 </div>
                             </div>
                         </div>
@@ -359,25 +359,21 @@ const AuditForm = () => {
 
                     {success && (
                         <div className="alert alert-success border-0 shadow-sm mb-4" role="alert">
-                            <div className="d-flex align-items-start">
-                                <i className="bi bi-check-circle-fill me-3 mt-1 text-success"></i>
-                                <div className="flex-grow-1">
-                                    <h6 className="alert-heading mb-2">Assessment Submitted Successfully!</h6>
+                            <div className="d-flex align-items-center">
+                                <i className="bi bi-check-circle-fill me-2" aria-hidden="true"></i>
+                                <div>
+                                    <h6 className="fw-bold mb-2">Assessment Submitted Successfully!</h6>
                                     <p className="mb-2">{success.message}</p>
-                                    <div className="row g-2">
+                                    <div className="row g-3">
                                         <div className="col-sm-6">
-                                            <div className="small">
-                                                <strong>Status:</strong> 
-                                                <span className="badge bg-info ms-2">{success.status?.toUpperCase()}</span>
-                                            </div>
+                                            <span className="fw-semibold text-muted">Status:</span>
+                                            <span className="badge bg-primary ms-2">{success.status?.toUpperCase()}</span>
                                         </div>
                                         <div className="col-sm-6">
-                                            <div className="small">
-                                                <strong>Risk Level:</strong>
-                                                <span className={`badge ${getRiskBadgeClass(success.systemRiskLevel)} ms-2`}>
-                                                    {success.systemRiskLevel?.toUpperCase()}
-                                                </span>
-                                            </div>
+                                            <span className="fw-semibold text-muted">Risk Level:</span>
+                                            <span className={`badge ${getRiskBadgeClass(success.systemRiskLevel)} ms-2`}>
+                                                {success.systemRiskLevel?.toUpperCase()}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -388,10 +384,12 @@ const AuditForm = () => {
                     {/* Main Form */}
                     {questions.length === 0 && !error ? (
                         <div className="card border-0 shadow-sm">
-                            <div className="card-body text-center py-5">
-                                <i className="bi bi-info-circle text-info mb-3" style={{ fontSize: '2rem' }}></i>
-                                <h5 className="text-muted mb-0">No audit questions are currently available.</h5>
-                                <p className="text-muted small mt-2">Please check back later or contact support.</p>
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold mb-0">No Questions Available</h5>
+                            </div>
+                            <div className="card-body text-center py-4">
+                                <i className="bi bi-info-circle text-primary mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
+                                <p className="text-muted mb-0">No audit questions are currently available. Please check back later or contact support.</p>
                             </div>
                         </div>
                     ) : questions.length > 0 && (
@@ -401,56 +399,57 @@ const AuditForm = () => {
                                 const currentAnswer = getFinalAnswer(question.id);
                                 const riskLevel = currentAnswer ? getRiskLevelForAnswer(question, currentAnswer) : null;
                                 const isExpanded = expandedQuestions[question.id];
-                                
                                 return (
                                     <div key={question.id} className="card border-0 shadow-sm mb-4">
-                                        <div className="card-body">
-                                            {/* Question Header */}
-                                            <div className="d-flex align-items-start mb-3">
-                                                <div className="me-3">
-                                                    <div className={`badge ${isAnswered ? 'bg-success' : 'bg-secondary'} rounded-pill d-flex align-items-center justify-content-center`} style={{ width: '32px', height: '32px', fontSize: '14px' }}>
-                                                        {isAnswered ? <i className="bi bi-check"></i> : index + 1}
-                                                    </div>
-                                                </div>
-                                                <div className="flex-grow-1">
-                                                    <h6 className="card-title mb-2 text-dark">
-                                                        {question.question}
-                                                        <span className="text-danger ms-1">*</span>
-                                                        {isAnswered && riskLevel && (
-                                                            <span className={`badge ${getRiskBadgeClass(riskLevel)} ms-2`} style={{ fontSize: '0.7em' }}>
-                                                                {riskLevel.toUpperCase()} RISK
-                                                            </span>
-                                                        )}
-                                                    </h6>
-                                                    {question.description && (
-                                                        <p className="text-muted small mb-3">{question.description}</p>
+                                        <div className="card-header bg-white border-0 py-3 d-flex align-items-center">
+                                            <span className={`badge ${isAnswered ? 'bg-success' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
+                                                {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
+                                            </span>
+                                            <div className="flex-grow-1">
+                                                <h6 className="fw-bold mb-0 d-inline">
+                                                    {question.question}
+                                                    <span className="text-danger ms-1" aria-hidden="true">*</span>
+                                                    {isAnswered && riskLevel && (
+                                                        <span className={`badge ${getRiskBadgeClass(riskLevel)} ms-2`} style={{ fontSize: '0.75rem' }}>
+                                                            {riskLevel.toUpperCase()} RISK
+                                                        </span>
                                                     )}
-                                                </div>
-                                                {question.risk_criteria && (
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-outline-info btn-sm ms-2"
-                                                        onClick={() => toggleQuestionExpansion(question.id)}
-                                                        title="View risk criteria"
-                                                    >
-                                                        <i className={`bi bi-info-circle${isExpanded ? '-fill' : ''}`}></i>
-                                                    </button>
-                                                )}
+                                                </h6>
                                             </div>
-
+                                            {question.category && (
+                                                <span className="badge bg-info text-dark ms-2" style={{ fontSize: '0.75rem' }}>
+                                                    {question.category}
+                                                </span>
+                                            )}
+                                            {question.risk_criteria && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary btn-sm ms-2"
+                                                    onClick={() => toggleQuestionExpansion(question.id)}
+                                                    aria-label={isExpanded ? "Hide risk criteria" : "Show risk criteria"}
+                                                >
+                                                    <i className={`bi bi-info-circle${isExpanded ? '-fill' : ''}`} aria-hidden="true"></i>
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="card-body">
+                                            {question.description && (
+                                                <p className="text-muted small mb-3">{question.description}</p>
+                                            )}
+                                            {/* ...existing code... */}
                                             {/* Risk Criteria Expansion */}
                                             {isExpanded && question.risk_criteria && (
-                                                <div className="alert alert-light border-start border-info border-4 mb-3">
-                                                    <h6 className="text-info mb-2">
-                                                        <i className="bi bi-info-circle me-2"></i>
+                                                <div className="alert alert-light border-start border-primary border-4 mb-3">
+                                                    <h6 className="fw-bold text-primary mb-2">
+                                                        <i className="bi bi-info-circle me-2" aria-hidden="true"></i>
                                                         Risk Assessment Criteria
                                                     </h6>
-                                                    <div className="row g-2">
+                                                    <div className="row g-3">
                                                         {question.risk_criteria.high && (
                                                             <div className="col-12">
                                                                 <div className="d-flex align-items-start">
                                                                     <span className="badge bg-danger me-2 mt-1">HIGH</span>
-                                                                    <small className="text-dark">{Array.isArray(question.risk_criteria.high) ? question.risk_criteria.high.join(', ') : question.risk_criteria.high}</small>
+                                                                    <span className="text-muted small">{Array.isArray(question.risk_criteria.high) ? question.risk_criteria.high.join(', ') : question.risk_criteria.high}</span>
                                                                 </div>
                                                             </div>
                                                         )}
@@ -458,7 +457,7 @@ const AuditForm = () => {
                                                             <div className="col-12">
                                                                 <div className="d-flex align-items-start">
                                                                     <span className="badge bg-warning text-dark me-2 mt-1">MED</span>
-                                                                    <small className="text-dark">{Array.isArray(question.risk_criteria.medium) ? question.risk_criteria.medium.join(', ') : question.risk_criteria.medium}</small>
+                                                                    <span className="text-muted small">{Array.isArray(question.risk_criteria.medium) ? question.risk_criteria.medium.join(', ') : question.risk_criteria.medium}</span>
                                                                 </div>
                                                             </div>
                                                         )}
@@ -466,23 +465,23 @@ const AuditForm = () => {
                                                             <div className="col-12">
                                                                 <div className="d-flex align-items-start">
                                                                     <span className="badge bg-success me-2 mt-1">LOW</span>
-                                                                    <small className="text-dark">{Array.isArray(question.risk_criteria.low) ? question.risk_criteria.low.join(', ') : question.risk_criteria.low}</small>
+                                                                    <span className="text-muted small">{Array.isArray(question.risk_criteria.low) ? question.risk_criteria.low.join(', ') : question.risk_criteria.low}</span>
                                                                 </div>
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             )}
-
                                             {/* Answer Selection */}
                                             <div className="mb-3">
                                                 <select
                                                     value={answers[question.id] || ''}
                                                     onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                                    className={`form-select form-select-lg ${!answers[question.id] ? 'border-warning' : isAnswered ? 'border-success' : 'border-secondary'}`}
+                                                    className={`form-select form-select-sm ${!answers[question.id] ? 'border-warning' : isAnswered ? 'border-success' : 'border-secondary'}`}
                                                     required
+                                                    aria-label={`Answer for question ${index + 1}`}
                                                 >
-                                                    <option value="">Choose your answer...</option>
+                                                    <option value="">Select an answer...</option>
                                                     {question.possible_answers?.map((answer, answerIndex) => (
                                                         <option key={answerIndex} value={answer}>
                                                             {answer}
@@ -491,33 +490,32 @@ const AuditForm = () => {
                                                     <option value="Others">Others (specify below)</option>
                                                 </select>
                                             </div>
-
                                             {/* Custom Answer Input */}
                                             {answers[question.id] === 'Others' && (
                                                 <div className="mb-3">
-                                                    <label htmlFor={`custom-${question.id}`} className="form-label small text-muted">
-                                                        Please specify your answer:
+                                                    <label htmlFor={`custom-${question.id}`} className="form-label fw-semibold text-muted small">
+                                                        Specify your answer
                                                     </label>
                                                     <textarea
                                                         id={`custom-${question.id}`}
                                                         value={customAnswers[question.id] || ''}
                                                         onChange={(e) => handleCustomAnswerChange(question.id, e.target.value)}
-                                                        className="form-control"
+                                                        className="form-control form-control-sm"
                                                         rows="3"
-                                                        placeholder="Please provide your specific answer here..."
+                                                        placeholder="Provide your specific answer here..."
                                                         required
+                                                        aria-label={`Custom answer for question ${index + 1}`}
                                                     />
-                                                    <div className="form-text">
-                                                        <i className="bi bi-info-circle me-1"></i>
-                                                        Custom answers will be assessed with low risk by default and may require manual review.
-                                                    </div>
+                                                    <small className="text-muted form-text">
+                                                        <i className="bi bi-info-circle me-1" aria-hidden="true"></i>
+                                                        Custom answers are assessed with low risk by default and may require manual review.
+                                                    </small>
                                                 </div>
                                             )}
-
                                             {/* Validation Feedback */}
                                             {!isAnswered && (
                                                 <div className="text-warning small">
-                                                    <i className="bi bi-exclamation-triangle me-1"></i>
+                                                    <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
                                                     Please provide an answer for this question.
                                                 </div>
                                             )}
@@ -529,17 +527,17 @@ const AuditForm = () => {
                             {/* Submit Section */}
                             {questions.length > 0 && (
                                 <div className="card border-0 shadow-sm bg-light">
-                                    <div className="card-body">
+                                    <div className="card-body py-3">
                                         <div className="row align-items-center">
                                             <div className="col-md-8">
-                                                <h6 className="mb-2">Ready to Submit?</h6>
-                                                <div className="text-muted small">
-                                                    <i className="bi bi-info-circle me-1"></i>
-                                                    Please ensure all questions are answered before submitting your assessment.
-                                                </div>
-                                                <div className="mt-2">
+                                                <h6 className="fw-bold mb-2">Ready to Submit?</h6>
+                                                <p className="text-muted small mb-2">
+                                                    <i className="bi bi-info-circle me-1" aria-hidden="true"></i>
+                                                    Ensure all questions are answered before submitting.
+                                                </p>
+                                                <div>
                                                     <span className="badge bg-primary me-2">{getProgressPercentage()}% Complete</span>
-                                                    <span className="small text-muted">
+                                                    <span className="text-muted small">
                                                         ({Object.values(answers).filter(a => getFinalAnswer(Object.keys(answers).find(key => answers[key] === a))?.trim()).length} of {questions.length} questions answered)
                                                     </span>
                                                 </div>
@@ -548,7 +546,8 @@ const AuditForm = () => {
                                                 <button
                                                     type="submit"
                                                     disabled={submitting || !isFormValid()}
-                                                    className={`btn btn-lg ${isFormValid() ? 'btn-primary' : 'btn-outline-secondary'} px-4`}
+                                                    className={`btn btn-sm ${isFormValid() ? 'btn-primary' : 'btn-outline-secondary'} px-4`}
+                                                    aria-label="Submit assessment"
                                                 >
                                                     {submitting ? (
                                                         <>
@@ -557,7 +556,7 @@ const AuditForm = () => {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <i className="bi bi-send me-2"></i>
+                                                            <i className="bi bi-send-fill me-2" aria-hidden="true"></i>
                                                             Submit Assessment
                                                         </>
                                                     )}

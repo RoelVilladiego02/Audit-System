@@ -14,11 +14,11 @@ const getRiskLevelClass = (level) => {
 
 const getRiskIcon = (level) => {
     const icons = {
-        high: '🔴',
-        medium: '🟡',
-        low: '🟢'
+        high: 'bi-circle-fill text-danger',
+        medium: 'bi-circle-fill text-warning',
+        low: 'bi-circle-fill text-success'
     };
-    return icons[level?.toLowerCase()] || '⚪';
+    return icons[level?.toLowerCase()] || 'bi-circle-fill text-muted';
 };
 
 const getStatusBadge = (status) => {
@@ -51,15 +51,7 @@ const SubmissionDetails = () => {
     const [activeTab, setActiveTab] = useState('overview');
     const [expandedAnswers, setExpandedAnswers] = useState({});
 
-    useEffect(() => {
-        if (!user) {
-            navigate('/login');
-            return;
-        }
-        fetchSubmissionDetails();
-    }, [id, user, navigate]);
-
-    const fetchSubmissionDetails = async () => {
+    const fetchSubmissionDetails = React.useCallback(async () => {
         try {
             const url = `/audit-submissions/${id}`;
             console.log('Fetching submission details:', {
@@ -112,7 +104,20 @@ const SubmissionDetails = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, user, navigate]);
+
+    useEffect(() => {
+        if (!user) {
+            navigate('/login', {
+                state: { 
+                    from: `/submissions/${id}`,
+                    message: 'Please log in to view this submission.'
+                }
+            });
+            return;
+        }
+        fetchSubmissionDetails();
+    }, [id, user, navigate, fetchSubmissionDetails]);
 
     const toggleAnswerExpansion = (answerId) => {
         setExpandedAnswers(prev => ({
@@ -147,15 +152,12 @@ const SubmissionDetails = () => {
 
     if (loading) {
         return (
-            <div className="container-fluid py-5" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-                    <div className="text-center">
-                        <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                            <span className="visually-hidden">Loading...</span>
-                        </div>
-                        <h5 className="text-muted">Loading submission details...</h5>
-                        <p className="text-muted small">Please wait while we fetch your assessment data</p>
+            <div className="container-fluid min-vh-100 bg-light d-flex justify-content-center align-items-center">
+                <div className="text-center">
+                    <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                        <span className="visually-hidden">Loading...</span>
                     </div>
+                    <h5 className="fw-bold text-muted">Loading Submission Details...</h5>
                 </div>
             </div>
         );
@@ -163,21 +165,23 @@ const SubmissionDetails = () => {
 
     if (error) {
         return (
-            <div className="container-fluid py-5" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <div className="container-fluid min-vh-100 bg-light py-4">
                 <div className="row justify-content-center">
                     <div className="col-lg-6">
-                        <div className="card shadow-sm border-0">
-                            <div className="card-body text-center py-5">
-                                <i className="bi bi-exclamation-triangle text-danger mb-3" style={{ fontSize: '3rem' }}></i>
-                                <h5 className="text-danger mb-3">Unable to Load Submission</h5>
+                        <div className="card border-0 shadow-sm">
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold text-danger mb-0">Error</h5>
+                            </div>
+                            <div className="card-body text-center py-4">
+                                <i className="bi bi-exclamation-triangle-fill text-danger mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
                                 <p className="text-muted mb-4">{error}</p>
-                                <div className="d-flex justify-content-center gap-2">
-                                    <button onClick={fetchSubmissionDetails} className="btn btn-primary">
-                                        <i className="bi bi-arrow-clockwise me-2"></i>
+                                <div className="d-flex justify-content-center gap-3">
+                                    <button onClick={fetchSubmissionDetails} className="btn btn-sm btn-primary" aria-label="Retry loading submission">
+                                        <i className="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
                                         Try Again
                                     </button>
-                                    <Link to="/submissions" className="btn btn-outline-secondary">
-                                        <i className="bi bi-arrow-left me-2"></i>
+                                    <Link to="/submissions" className="btn btn-sm btn-outline-secondary" aria-label="Back to submissions">
+                                        <i className="bi bi-arrow-left me-2" aria-hidden="true"></i>
                                         Back to Submissions
                                     </Link>
                                 </div>
@@ -191,16 +195,18 @@ const SubmissionDetails = () => {
 
     if (!submission) {
         return (
-            <div className="container-fluid py-5" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <div className="container-fluid min-vh-100 bg-light py-4">
                 <div className="row justify-content-center">
                     <div className="col-lg-6">
-                        <div className="card shadow-sm border-0">
-                            <div className="card-body text-center py-5">
-                                <i className="bi bi-info-circle text-info mb-3" style={{ fontSize: '3rem' }}></i>
-                                <h5 className="text-muted mb-3">No Data Found</h5>
+                        <div className="card border-0 shadow-sm">
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold text-muted mb-0">No Data</h5>
+                            </div>
+                            <div className="card-body text-center py-4">
+                                <i className="bi bi-info-circle text-primary mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
                                 <p className="text-muted mb-4">No submission data found for this assessment.</p>
-                                <Link to="/submissions" className="btn btn-primary">
-                                    <i className="bi bi-arrow-left me-2"></i>
+                                <Link to="/submissions" className="btn btn-sm btn-primary" aria-label="Back to submissions">
+                                    <i className="bi bi-arrow-left me-2" aria-hidden="true"></i>
                                     Back to Submissions
                                 </Link>
                             </div>
@@ -216,46 +222,46 @@ const SubmissionDetails = () => {
     const effectiveOverallRisk = submission.effective_overall_risk || submission.admin_overall_risk || submission.system_overall_risk || 'low';
 
     return (
-        <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+        <div className="container-fluid min-vh-100 bg-light py-4">
             <div className="row justify-content-center">
-                <div className="col-lg-10">
+                <div className="col-lg-10 col-xl-9">
                     {/* Breadcrumb Navigation */}
                     <nav aria-label="breadcrumb" className="mb-4">
                         <ol className="breadcrumb bg-white rounded shadow-sm px-3 py-2">
                             <li className="breadcrumb-item">
-                                <Link to="/submissions" className="text-decoration-none">
-                                    <i className="bi bi-house me-1"></i>
+                                <Link to="/submissions" className="text-decoration-none text-primary">
+                                    <i className="bi bi-house me-1" aria-hidden="true"></i>
                                     My Submissions
                                 </Link>
                             </li>
-                            <li className="breadcrumb-item active" aria-current="page">
+                            <li className="breadcrumb-item active fw-semibold" aria-current="page">
                                 Assessment #{submission.id}
                             </li>
                         </ol>
                     </nav>
 
                     {/* Header Card */}
-                    <div className="card shadow-sm border-0 mb-4">
-                        <div className={`card-header text-center py-4 ${getRiskLevelClass(effectiveOverallRisk)}`}>
+                    <div className="card border-0 shadow-sm mb-4">
+                        <div className={`card-header ${getRiskLevelClass(effectiveOverallRisk)} py-3`}>
                             <div className="row align-items-center">
                                 <div className="col-md-8 text-md-start">
-                                    <h1 className="h3 mb-2">
-                                        <i className="bi bi-shield-check me-2"></i>
+                                    <h3 className="fw-bold mb-2">
+                                        <i className="bi bi-shield-fill-check me-2" aria-hidden="true"></i>
                                         {submission.title || `Security Assessment #${submission.id}`}
-                                    </h1>
+                                    </h3>
                                     <div className="d-flex flex-wrap align-items-center gap-3">
                                         <div className="d-flex align-items-center">
-                                            <i className="bi bi-calendar3 me-2"></i>
+                                            <i className="bi bi-calendar3 me-2" aria-hidden="true"></i>
                                             <span>{new Date(submission.created_at).toLocaleDateString('en-US', {
                                                 year: 'numeric',
                                                 month: 'long',
                                                 day: 'numeric'
                                             })}</span>
-                                            <small className="ms-2 opacity-75">({getTimeAgo(submission.created_at)})</small>
+                                            <small className="ms-2 text-muted">({getTimeAgo(submission.created_at)})</small>
                                         </div>
                                         {submission.user && (
                                             <div className="d-flex align-items-center">
-                                                <i className="bi bi-person me-2"></i>
+                                                <i className="bi bi-person me-2" aria-hidden="true"></i>
                                                 <span>{submission.user.name || submission.user.email}</span>
                                             </div>
                                         )}
@@ -264,55 +270,53 @@ const SubmissionDetails = () => {
                                 <div className="col-md-4 text-md-end mt-3 mt-md-0">
                                     <div className="mb-2">
                                         <span className={`badge ${getStatusBadge(submission.status)} px-3 py-2`} style={{ fontSize: '0.9rem' }}>
-                                            <i className={`bi ${getStatusIcon(submission.status)} me-2`}></i>
+                                            <i className={`bi ${getStatusIcon(submission.status)} me-2`} aria-hidden="true"></i>
                                             {submission.status?.replace('_', ' ').toUpperCase()}
                                         </span>
                                     </div>
                                     {submission.review_progress && submission.status !== 'completed' && (
-                                        <div className="small opacity-75">
-                                            <i className="bi bi-clock me-1"></i>
+                                        <div className="small text-muted">
+                                            <i className="bi bi-clock me-1" aria-hidden="true"></i>
                                             {submission.review_progress}% Reviewed
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
-                        <div className="card-body">
+                        <div className="card-body py-3">
                             <div className="row text-center">
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3 mb-md-0">
                                     <div className="border-end border-md-end-0 border-bottom border-md-bottom-0 pb-3 pb-md-0">
-                                        <div className="display-6 text-primary mb-1">{getRiskIcon(effectiveOverallRisk)}</div>
+                                        <i className={`${getRiskIcon(effectiveOverallRisk)} mb-2`} style={{ fontSize: '2rem' }} aria-hidden="true"></i>
                                         <h5 className="fw-bold text-uppercase">{effectiveOverallRisk} Risk</h5>
-                                        <p className="text-muted small mb-0">Overall Assessment</p>
+                                        <p className="text-muted small fw-semibold mb-0">Overall Assessment</p>
                                     </div>
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3 mb-md-0">
                                     <div className="border-end border-md-end-0 border-bottom border-md-bottom-0 pb-3 pb-md-0 pt-3 pt-md-0">
-                                        <h4 className="text-danger fw-bold">{riskStats.high}</h4>
-                                        <p className="text-muted small mb-0">High Risk Items</p>
+                                        <h4 className="fw-bold text-danger">{riskStats.high}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">High Risk Items</p>
                                     </div>
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3 mb-md-0">
                                     <div className="border-end border-md-end-0 border-bottom border-md-bottom-0 pb-3 pb-md-0 pt-3 pt-md-0">
-                                        <h4 className="text-warning fw-bold">{riskStats.medium}</h4>
-                                        <p className="text-muted small mb-0">Medium Risk Items</p>
+                                        <h4 className="fw-bold text-warning">{riskStats.medium}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">Medium Risk Items</p>
                                     </div>
                                 </div>
                                 <div className="col-md-3">
                                     <div className="pt-3 pt-md-0">
-                                        <h4 className="text-success fw-bold">{riskStats.low}</h4>
-                                        <p className="text-muted small mb-0">Low Risk Items</p>
+                                        <h4 className="fw-bold text-success">{riskStats.low}</h4>
+                                        <p className="text-muted small fw-semibold mb-0">Low Risk Items</p>
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Admin Override Notice */}
                             {submission.admin_overall_risk && submission.admin_overall_risk !== submission.system_overall_risk && (
-                                <div className="alert alert-info mt-3 mb-0">
+                                <div className="alert alert-info border-0 shadow-sm mt-3 mb-0">
                                     <div className="d-flex align-items-center">
-                                        <i className="bi bi-person-check me-2"></i>
+                                        <i className="bi bi-person-check-fill me-2" aria-hidden="true"></i>
                                         <div>
-                                            <strong>Admin Review Applied:</strong> 
+                                            <strong className="fw-semibold">Admin Review Applied:</strong> 
                                             Risk level adjusted from <span className="badge bg-secondary ms-1">{submission.system_overall_risk?.toUpperCase()}</span> 
                                             to <span className={`badge ${getRiskLevelClass(submission.admin_overall_risk).split(' ')[0]} ms-1`}>{submission.admin_overall_risk?.toUpperCase()}</span>
                                         </div>
@@ -324,19 +328,19 @@ const SubmissionDetails = () => {
 
                     {/* Admin Summary */}
                     {submission.admin_summary && (
-                        <div className="card shadow-sm border-0 mb-4">
-                            <div className="card-header bg-primary text-white">
-                                <h5 className="card-title mb-0">
-                                    <i className="bi bi-person-check me-2"></i>
+                        <div className="card border-0 shadow-sm mb-4">
+                            <div className="card-header bg-white border-0 py-3">
+                                <h5 className="fw-bold mb-0">
+                                    <i className="bi bi-person-check-fill me-2 text-primary" aria-hidden="true"></i>
                                     Admin Review Summary
                                 </h5>
                             </div>
-                            <div className="card-body">
-                                <p className="mb-0 text-dark">{submission.admin_summary}</p>
+                            <div className="card-body py-3">
+                                <p className="text-dark mb-3">{submission.admin_summary}</p>
                                 {submission.reviewed_at && submission.reviewer && (
-                                    <div className="mt-3 pt-3 border-top">
-                                        <small className="text-muted">
-                                            <i className="bi bi-person me-1"></i>
+                                    <div className="border-top pt-3">
+                                        <p className="text-muted small fw-semibold mb-0">
+                                            <i className="bi bi-person me-2" aria-hidden="true"></i>
                                             Reviewed by <strong>{submission.reviewer.name}</strong> on{' '}
                                             {new Date(submission.reviewed_at).toLocaleDateString('en-US', {
                                                 year: 'numeric',
@@ -345,7 +349,7 @@ const SubmissionDetails = () => {
                                                 hour: '2-digit',
                                                 minute: '2-digit'
                                             })}
-                                        </small>
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -353,16 +357,18 @@ const SubmissionDetails = () => {
                     )}
 
                     {/* Tab Navigation */}
-                    <div className="card shadow-sm border-0">
-                        <div className="card-header bg-white">
+                    <div className="card border-0 shadow-sm">
+                        <div className="card-header bg-white border-0 py-3">
                             <ul className="nav nav-tabs card-header-tabs" role="tablist">
                                 <li className="nav-item" role="presentation">
                                     <button 
                                         className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`}
                                         onClick={() => setActiveTab('overview')}
                                         type="button"
+                                        aria-selected={activeTab === 'overview'}
+                                        role="tab"
                                     >
-                                        <i className="bi bi-grid-3x3-gap me-2"></i>
+                                        <i className="bi bi-grid-3x3-gap me-2" aria-hidden="true"></i>
                                         Overview
                                     </button>
                                 </li>
@@ -371,8 +377,10 @@ const SubmissionDetails = () => {
                                         className={`nav-link ${activeTab === 'details' ? 'active' : ''}`}
                                         onClick={() => setActiveTab('details')}
                                         type="button"
+                                        aria-selected={activeTab === 'details'}
+                                        role="tab"
                                     >
-                                        <i className="bi bi-list-check me-2"></i>
+                                        <i className="bi bi-list-check me-2" aria-hidden="true"></i>
                                         Detailed Analysis ({totalAnswers})
                                     </button>
                                 </li>
@@ -381,70 +389,72 @@ const SubmissionDetails = () => {
                                         className={`nav-link ${activeTab === 'recommendations' ? 'active' : ''}`}
                                         onClick={() => setActiveTab('recommendations')}
                                         type="button"
+                                        aria-selected={activeTab === 'recommendations'}
+                                        role="tab"
                                     >
-                                        <i className="bi bi-lightbulb me-2"></i>
+                                        <i className="bi bi-lightbulb me-2" aria-hidden="true"></i>
                                         Recommendations
                                     </button>
                                 </li>
                             </ul>
                         </div>
-                        <div className="card-body">
+                        <div className="card-body py-3">
                             {/* Overview Tab */}
                             {activeTab === 'overview' && (
-                                <div className="tab-pane fade show active">
+                                <div className="tab-pane fade show active" role="tabpanel">
                                     <div className="row">
                                         <div className="col-md-6 mb-4">
-                                            <div className="card border-0 bg-light h-100">
+                                            <div className="card border-0 shadow-sm bg-light h-100">
                                                 <div className="card-body">
-                                                    <h6 className="card-title text-primary mb-3">
-                                                        <i className="bi bi-bar-chart me-2"></i>
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-bar-chart me-2" aria-hidden="true"></i>
                                                         Risk Distribution
                                                     </h6>
-                                                    <div className="row">
-                                                        <div className="col-4 text-center">
-                                                            <div className="text-danger h3">{riskStats.high}</div>
-                                                            <small className="text-muted">High</small>
+                                                    <div className="row text-center">
+                                                        <div className="col-4">
+                                                            <div className="text-danger h4 fw-bold">{riskStats.high}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">High</p>
                                                         </div>
-                                                        <div className="col-4 text-center">
-                                                            <div className="text-warning h3">{riskStats.medium}</div>
-                                                            <small className="text-muted">Medium</small>
+                                                        <div className="col-4">
+                                                            <div className="text-warning h4 fw-bold">{riskStats.medium}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Medium</p>
                                                         </div>
-                                                        <div className="col-4 text-center">
-                                                            <div className="text-success h3">{riskStats.low}</div>
-                                                            <small className="text-muted">Low</small>
+                                                        <div className="col-4">
+                                                            <div className="text-success h4 fw-bold">{riskStats.low}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Low</p>
                                                         </div>
                                                     </div>
-                                                    <div className="progress mt-3" style={{ height: '8px' }}>
-                                                        <div className="progress-bar bg-danger" style={{ width: `${(riskStats.high / totalAnswers) * 100}%` }}></div>
-                                                        <div className="progress-bar bg-warning" style={{ width: `${(riskStats.medium / totalAnswers) * 100}%` }}></div>
-                                                        <div className="progress-bar bg-success" style={{ width: `${(riskStats.low / totalAnswers) * 100}%` }}></div>
+                                                    <div className="progress mt-3" style={{ height: '10px' }}>
+                                                        <div className="progress-bar bg-danger" style={{ width: `${(riskStats.high / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.high / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
+                                                        <div className="progress-bar bg-warning" style={{ width: `${(riskStats.medium / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.medium / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
+                                                        <div className="progress-bar bg-success" style={{ width: `${(riskStats.low / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.low / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="col-md-6 mb-4">
-                                            <div className="card border-0 bg-light h-100">
+                                            <div className="card border-0 shadow-sm bg-light h-100">
                                                 <div className="card-body">
-                                                    <h6 className="card-title text-primary mb-3">
-                                                        <i className="bi bi-info-circle me-2"></i>
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-info-circle me-2" aria-hidden="true"></i>
                                                         Assessment Details
                                                     </h6>
                                                     <div className="row g-3">
                                                         <div className="col-12">
                                                             <div className="d-flex justify-content-between">
-                                                                <span className="text-muted">Total Questions:</span>
+                                                                <span className="text-muted fw-semibold">Total Questions:</span>
                                                                 <span className="fw-bold">{totalAnswers}</span>
                                                             </div>
                                                         </div>
                                                         <div className="col-12">
                                                             <div className="d-flex justify-content-between">
-                                                                <span className="text-muted">Completion:</span>
+                                                                <span className="text-muted fw-semibold">Completion:</span>
                                                                 <span className="fw-bold text-success">100%</span>
                                                             </div>
                                                         </div>
                                                         <div className="col-12">
                                                             <div className="d-flex justify-content-between">
-                                                                <span className="text-muted">Review Status:</span>
+                                                                <span className="text-muted fw-semibold">Review Status:</span>
                                                                 <span className={`badge ${getStatusBadge(submission.status)}`}>
                                                                     {submission.status?.replace('_', ' ').toUpperCase()}
                                                                 </span>
@@ -460,7 +470,7 @@ const SubmissionDetails = () => {
 
                             {/* Details Tab */}
                             {activeTab === 'details' && (
-                                <div className="tab-pane fade show active">
+                                <div className="tab-pane fade show active" role="tabpanel">
                                     {submission.answers && submission.answers.length > 0 ? (
                                         <div className="row">
                                             {submission.answers.map((answer, index) => {
@@ -469,92 +479,101 @@ const SubmissionDetails = () => {
                                                 const isExpanded = expandedAnswers[answer.id];
                                                 
                                                 return (
-                                                    <div key={answer.id || index} className="col-12 mb-3">
+                                                    <div key={answer.id || index} className="col-12 mb-4">
                                                         <div className="card border-0 shadow-sm">
-                                                            <div className="card-body">
-                                                                <div className="d-flex justify-content-between align-items-start mb-3">
+                                                            <div className="card-header bg-white border-0 py-3">
+                                                                <div className="d-flex justify-content-between align-items-center">
                                                                     <div className="flex-grow-1">
                                                                         <div className="d-flex align-items-center mb-2">
-                                                                            <span className="badge bg-primary me-2">{index + 1}</span>
-                                                                            <h6 className="card-title mb-0 flex-grow-1">
-                                                                                {answer.question?.question || 'Question not available'}
-                                                                            </h6>
-                                                                            {isReviewed && (
-                                                                                <i className="bi bi-check-circle-fill text-success ms-2" title="Admin Reviewed"></i>
-                                                                            )}
-                                                                            <button
-                                                                                className="btn btn-sm btn-outline-secondary ms-2"
-                                                                                onClick={() => toggleAnswerExpansion(answer.id)}
-                                                                                title={isExpanded ? "Collapse" : "Expand"}
-                                                                            >
-                                                                                <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`}></i>
-                                                                            </button>
+                                                                            <span className="badge bg-primary me-2" style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>{index + 1}</span>
+                                                                            <div>
+                                                                                <span className="badge bg-info text-dark me-2 text-truncate" style={{ fontSize: '0.75rem', maxWidth: '150px' }}>
+                                                                                    {answer.question?.category || 'Uncategorized'}
+                                                                                </span>
+                                                                                <h6 className="fw-bold mb-0 d-inline">
+                                                                                    {answer.question?.question || 'Question not available'}
+                                                                                    {isReviewed && (
+                                                                                        <i className="bi bi-check-circle-fill text-success ms-2" title="Admin Reviewed" aria-hidden="true"></i>
+                                                                                    )}
+                                                                                </h6>
+                                                                            </div>
                                                                         </div>
                                                                         {answer.question?.description && (
-                                                                            <p className="text-muted small mb-2">
-                                                                                {answer.question.description}
-                                                                            </p>
+                                                                            <p className="text-muted small mb-0">{answer.question.description}</p>
                                                                         )}
                                                                     </div>
-                                                                    <div className="ms-3">
-                                                                        <span className={`badge ${getRiskLevelClass(effectiveRiskLevel).split(' ')[0]} text-white px-2 py-1`}>
-                                                                            {getRiskIcon(effectiveRiskLevel)} {effectiveRiskLevel?.toUpperCase()}
+                                                                    <div className="d-flex align-items-center">
+                                                                        <span className={`badge ${getRiskLevelClass(effectiveRiskLevel).split(' ')[0]} px-2 py-1`} style={{ fontSize: '0.75rem' }}>
+                                                                            <i className={getRiskIcon(effectiveRiskLevel)} aria-hidden="true"></i> {effectiveRiskLevel?.toUpperCase()}
                                                                         </span>
-                                                                        {answer.admin_risk_level && answer.admin_risk_level !== answer.system_risk_level && (
-                                                                            <div className="mt-1">
-                                                                                <small className="text-muted">
-                                                                                    System: {answer.system_risk_level?.toUpperCase()}
-                                                                                </small>
-                                                                            </div>
-                                                                        )}
+                                                                        <button
+                                                                            className="btn btn-sm btn-outline-primary ms-2"
+                                                                            onClick={() => toggleAnswerExpansion(answer.id)}
+                                                                            aria-label={isExpanded ? "Collapse answer details" : "Expand answer details"}
+                                                                            title={isExpanded ? "Collapse" : "Expand"}
+                                                                        >
+                                                                            <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`} aria-hidden="true"></i>
+                                                                        </button>
                                                                     </div>
                                                                 </div>
-                                                                
+                                                            </div>
+                                                            <div className="card-body py-3">
                                                                 <div className="mb-3">
                                                                     <div className="d-flex align-items-center mb-2">
-                                                                        <i className="bi bi-chat-quote text-primary me-2"></i>
-                                                                        <strong className="text-primary">Your Answer:</strong>
+                                                                        <i className="bi bi-chat-quote-fill text-primary me-2" aria-hidden="true"></i>
+                                                                        <strong className="fw-semibold text-primary">Your Answer:</strong>
                                                                     </div>
                                                                     <div className="bg-light rounded p-3">
                                                                         <span className="text-dark">{answer.answer}</span>
                                                                     </div>
                                                                 </div>
-
+                                                                {answer.admin_risk_level && answer.admin_risk_level !== answer.system_risk_level && (
+                                                                    <div className="mb-3">
+                                                                        <small className="text-muted fw-semibold">
+                                                                            System Risk: <span className="badge bg-secondary">{answer.system_risk_level?.toUpperCase()}</span>
+                                                                        </small>
+                                                                    </div>
+                                                                )}
                                                                 {isExpanded && (
                                                                     <div className="border-top pt-3">
                                                                         {answer.recommendation && (
-                                                                            <div className="alert alert-info mb-3">
+                                                                            <div className="alert alert-info border-0 shadow-sm mb-3">
                                                                                 <div className="d-flex align-items-start">
-                                                                                    <i className="bi bi-lightbulb text-info me-2 mt-1"></i>
+                                                                                    <i className="bi bi-lightbulb-fill text-info me-2 mt-1" aria-hidden="true"></i>
                                                                                     <div>
-                                                                                        <strong>Recommendation:</strong>
+                                                                                        <strong className="fw-semibold">Recommendation:</strong>
                                                                                         <div className="mt-1">{answer.recommendation}</div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         )}
-
                                                                         {answer.admin_notes && (
-                                                                            <div className="alert alert-warning mb-3">
+                                                                            <div className="alert alert-warning border-0 shadow-sm mb-3">
                                                                                 <div className="d-flex align-items-start">
-                                                                                    <i className="bi bi-person-check text-warning me-2 mt-1"></i>
+                                                                                    <i className="bi bi-person-check-fill text-warning me-2 mt-1" aria-hidden="true"></i>
                                                                                     <div>
-                                                                                        <strong>Admin Notes:</strong>
+                                                                                        <strong className="fw-semibold">Admin Notes:</strong>
                                                                                         <div className="mt-1">{answer.admin_notes}</div>
                                                                                         {answer.reviewer && (
                                                                                             <small className="text-muted d-block mt-2">
-                                                                                                Reviewed by {answer.reviewer.name} on {new Date(answer.reviewed_at).toLocaleDateString()}
+                                                                                                Reviewed by {answer.reviewer.name} on {new Date(answer.reviewed_at).toLocaleDateString('en-US', {
+                                                                                                    year: 'numeric',
+                                                                                                    month: 'short',
+                                                                                                    day: 'numeric'
+                                                                                                })}
                                                                                             </small>
                                                                                         )}
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         )}
-
                                                                         {answer.question?.risk_criteria && (
-                                                                            <div className="card bg-light">
-                                                                                <div className="card-body py-2">
-                                                                                    <h6 className="card-title small text-muted mb-2">Risk Assessment Criteria:</h6>
+                                                                            <div className="card border-0 shadow-sm bg-light">
+                                                                                <div className="card-body py-3">
+                                                                                    <h6 className="fw-semibold text-muted mb-2">
+                                                                                        <i className="bi bi-info-circle me-2" aria-hidden="true"></i>
+                                                                                        Risk Assessment Criteria
+                                                                                    </h6>
                                                                                     <div className="row g-2">
                                                                                         {answer.question.risk_criteria.high && (
                                                                                             <div className="col-12">
@@ -605,10 +624,10 @@ const SubmissionDetails = () => {
                                             })}
                                         </div>
                                     ) : (
-                                        <div className="text-center py-5">
-                                            <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem' }}></i>
-                                            <h5 className="text-muted mt-3">No Answers Found</h5>
-                                            <p className="text-muted">No answers were found for this submission.</p>
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-inbox text-muted mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
+                                            <h5 className="fw-bold text-muted mb-2">No Answers Found</h5>
+                                            <p className="text-muted mb-0">No answers were found for this submission.</p>
                                         </div>
                                     )}
                                 </div>
@@ -616,34 +635,38 @@ const SubmissionDetails = () => {
 
                             {/* Recommendations Tab */}
                             {activeTab === 'recommendations' && (
-                                <div className="tab-pane fade show active">
+                                <div className="tab-pane fade show active" role="tabpanel">
                                     <div className="row">
-                                        {/* High Priority Recommendations */}
                                         {submission.answers?.filter(a => (a.admin_risk_level || a.system_risk_level) === 'high').length > 0 && (
                                             <div className="col-12 mb-4">
-                                                <div className="card border-danger">
-                                                    <div className="card-header bg-danger text-white">
-                                                        <h5 className="card-title mb-0">
-                                                            <i className="bi bi-exclamation-triangle me-2"></i>
+                                                <div className="card border-0 shadow-sm">
+                                                    <div className="card-header bg-danger text-white py-3">
+                                                        <h5 className="fw-bold mb-0">
+                                                            <i className="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
                                                             High Priority Actions Required
                                                         </h5>
                                                     </div>
-                                                    <div className="card-body">
+                                                    <div className="card-body py-3">
                                                         {submission.answers
                                                             .filter(a => (a.admin_risk_level || a.system_risk_level) === 'high')
                                                             .map((answer, index) => (
                                                                 <div key={answer.id} className={`${index > 0 ? 'border-top pt-3 mt-3' : ''}`}>
-                                                                    <h6 className="text-danger mb-2">
-                                                                        {answer.question?.question || 'Question not available'}
-                                                                    </h6>
+                                                                    <div className="d-flex align-items-center mb-2">
+                                                                        <span className="badge bg-info text-dark me-2 text-truncate" style={{ fontSize: '0.75rem', maxWidth: '150px' }}>
+                                                                            {answer.question?.category || 'Uncategorized'}
+                                                                        </span>
+                                                                        <h6 className="fw-bold text-danger mb-0">
+                                                                            {answer.question?.question || 'Question not available'}
+                                                                        </h6>
+                                                                    </div>
                                                                     {answer.recommendation && (
-                                                                        <p className="mb-0">{answer.recommendation}</p>
+                                                                        <p className="mb-2">{answer.recommendation}</p>
                                                                     )}
                                                                     {answer.admin_notes && (
-                                                                        <div className="mt-2 p-2 bg-light rounded">
-                                                                            <small className="text-muted">
+                                                                        <div className="mt-2 p-3 bg-light rounded">
+                                                                            <p className="text-muted small fw-semibold mb-0">
                                                                                 <strong>Admin Note:</strong> {answer.admin_notes}
-                                                                            </small>
+                                                                            </p>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -653,33 +676,36 @@ const SubmissionDetails = () => {
                                                 </div>
                                             </div>
                                         )}
-
-                                        {/* Medium Priority Recommendations */}
                                         {submission.answers?.filter(a => (a.admin_risk_level || a.system_risk_level) === 'medium').length > 0 && (
                                             <div className="col-12 mb-4">
-                                                <div className="card border-warning">
-                                                    <div className="card-header bg-warning text-dark">
-                                                        <h5 className="card-title mb-0">
-                                                            <i className="bi bi-exclamation-circle me-2"></i>
+                                                <div className="card border-0 shadow-sm">
+                                                    <div className="card-header bg-warning text-dark py-3">
+                                                        <h5 className="fw-bold mb-0">
+                                                            <i className="bi bi-exclamation-circle-fill me-2" aria-hidden="true"></i>
                                                             Medium Priority Improvements
                                                         </h5>
                                                     </div>
-                                                    <div className="card-body">
+                                                    <div className="card-body py-3">
                                                         {submission.answers
                                                             .filter(a => (a.admin_risk_level || a.system_risk_level) === 'medium')
                                                             .map((answer, index) => (
                                                                 <div key={answer.id} className={`${index > 0 ? 'border-top pt-3 mt-3' : ''}`}>
-                                                                    <h6 className="text-warning mb-2">
-                                                                        {answer.question?.question || 'Question not available'}
-                                                                    </h6>
+                                                                    <div className="d-flex align-items-center mb-2">
+                                                                        <span className="badge bg-info text-dark me-2 text-truncate" style={{ fontSize: '0.75rem', maxWidth: '150px' }}>
+                                                                            {answer.question?.category || 'Uncategorized'}
+                                                                        </span>
+                                                                        <h6 className="fw-bold text-warning mb-0">
+                                                                            {answer.question?.question || 'Question not available'}
+                                                                        </h6>
+                                                                    </div>
                                                                     {answer.recommendation && (
-                                                                        <p className="mb-0">{answer.recommendation}</p>
+                                                                        <p className="mb-2">{answer.recommendation}</p>
                                                                     )}
                                                                     {answer.admin_notes && (
-                                                                        <div className="mt-2 p-2 bg-light rounded">
-                                                                            <small className="text-muted">
+                                                                        <div className="mt-2 p-3 bg-light rounded">
+                                                                            <p className="text-muted small fw-semibold mb-0">
                                                                                 <strong>Admin Note:</strong> {answer.admin_notes}
-                                                                            </small>
+                                                                            </p>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -689,57 +715,55 @@ const SubmissionDetails = () => {
                                                 </div>
                                             </div>
                                         )}
-
-                                        {/* General Recommendations */}
                                         <div className="col-12">
-                                            <div className="card border-success">
-                                                <div className="card-header bg-success text-white">
-                                                    <h5 className="card-title mb-0">
-                                                        <i className="bi bi-lightbulb me-2"></i>
+                                            <div className="card border-0 shadow-sm">
+                                                <div className="card-header bg-success text-white py-3">
+                                                    <h5 className="fw-bold mb-0">
+                                                        <i className="bi bi-lightbulb-fill me-2" aria-hidden="true"></i>
                                                         General Security Best Practices
                                                     </h5>
                                                 </div>
-                                                <div className="card-body">
-                                                    <div className="row">
-                                                        <div className="col-md-6 mb-3">
+                                                <div className="card-body py-3">
+                                                    <div className="row g-3">
+                                                        <div className="col-md-6">
                                                             <div className="d-flex align-items-start">
-                                                                <i className="bi bi-shield-check text-success me-2 mt-1"></i>
+                                                                <i className="bi bi-shield-fill-check text-success me-2 mt-1" aria-hidden="true"></i>
                                                                 <div>
-                                                                    <h6>Regular Security Reviews</h6>
-                                                                    <p className="small text-muted mb-0">
+                                                                    <h6 className="fw-bold">Regular Security Reviews</h6>
+                                                                    <p className="text-muted small mb-0">
                                                                         Conduct security assessments quarterly to stay ahead of emerging threats.
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="col-md-6 mb-3">
+                                                        <div className="col-md-6">
                                                             <div className="d-flex align-items-start">
-                                                                <i className="bi bi-people text-success me-2 mt-1"></i>
+                                                                <i className="bi bi-people-fill text-success me-2 mt-1" aria-hidden="true"></i>
                                                                 <div>
-                                                                    <h6>Security Training</h6>
-                                                                    <p className="small text-muted mb-0">
+                                                                    <h6 className="fw-bold">Security Training</h6>
+                                                                    <p className="text-muted small mb-0">
                                                                         Ensure all team members receive regular security awareness training.
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="col-md-6 mb-3">
+                                                        <div className="col-md-6">
                                                             <div className="d-flex align-items-start">
-                                                                <i className="bi bi-lock text-success me-2 mt-1"></i>
+                                                                <i className="bi bi-lock-fill text-success me-2 mt-1" aria-hidden="true"></i>
                                                                 <div>
-                                                                    <h6>Access Control</h6>
-                                                                    <p className="small text-muted mb-0">
+                                                                    <h6 className="fw-bold">Access Control</h6>
+                                                                    <p className="text-muted small mb-0">
                                                                         Implement role-based access control and regularly review permissions.
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="col-md-6 mb-3">
+                                                        <div className="col-md-6">
                                                             <div className="d-flex align-items-start">
-                                                                <i className="bi bi-cloud-check text-success me-2 mt-1"></i>
+                                                                <i className="bi bi-cloud-check-fill text-success me-2 mt-1" aria-hidden="true"></i>
                                                                 <div>
-                                                                    <h6>Data Backup</h6>
-                                                                    <p className="small text-muted mb-0">
+                                                                    <h6 className="fw-bold">Data Backup</h6>
+                                                                    <p className="text-muted small mb-0">
                                                                         Maintain regular, encrypted backups and test restoration procedures.
                                                                     </p>
                                                                 </div>
@@ -756,21 +780,25 @@ const SubmissionDetails = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="mt-4 text-center">
-                        <Link
-                            to="/audit"
-                            className="btn btn-primary me-3"
-                        >
-                            <i className="bi bi-plus-circle me-2"></i>
-                            Take Another Audit
-                        </Link>
-                        <Link
-                            to="/submissions"
-                            className="btn btn-outline-secondary"
-                        >
-                            <i className="bi bi-list me-2"></i>
-                            View All Submissions
-                        </Link>
+                    <div className="card border-0 shadow-sm bg-light mt-4">
+                        <div className="card-body py-3 text-center">
+                            <Link
+                                to="/audit"
+                                className="btn btn-sm btn-primary me-3"
+                                aria-label="Start new audit"
+                            >
+                                <i className="bi bi-plus-circle me-2" aria-hidden="true"></i>
+                                Take Another Audit
+                            </Link>
+                            <Link
+                                to="/submissions"
+                                className="btn btn-sm btn-outline-secondary"
+                                aria-label="View all submissions"
+                            >
+                                <i className="bi bi-list-ul me-2" aria-hidden="true"></i>
+                                View All Submissions
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
