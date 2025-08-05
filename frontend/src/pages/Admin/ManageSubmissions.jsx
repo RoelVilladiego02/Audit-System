@@ -17,6 +17,7 @@ const ManageSubmissions = () => {
     const [submissions, setSubmissions] = useState([]);
     const [filteredSubmissions, setFilteredSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isLoadingSubmissionDetails, setIsLoadingSubmissionDetails] = useState(false); // For right panel loading
     const [error, setError] = useState(null);
     const [selectedSubmission, setSelectedSubmission] = useState(null);
     const [editingAnswer, setEditingAnswer] = useState(null);
@@ -26,6 +27,7 @@ const ManageSubmissions = () => {
     const [sortBy, setSortBy] = useState('date_desc');
     const [selectedRiskLevel, setSelectedRiskLevel] = useState('');
     const [summaryText, setSummaryText] = useState('');
+    const [isLoadingAnswer, setIsLoadingAnswer] = useState(false); // New state for answer-level loading
 
     const fetchSubmissions = useCallback(async () => {
         try {
@@ -122,21 +124,17 @@ const ManageSubmissions = () => {
 
     const fetchSubmissionDetails = async (submissionId) => {
         try {
-            console.log('Fetching submission details for ID:', submissionId);
-            
+            setIsLoadingSubmissionDetails(true); // Only right panel loading
             const response = await api.get(`/audit-submissions/${submissionId}`);
             const submission = response.data;
-
             if (typeof submission !== 'object' || submission === null || !('id' in submission)) {
-                console.error('Invalid submission data structure:', submission);
                 throw new Error('Invalid submission data received');
             }
-
             const transformedSubmission = {
                 ...submission,
                 answers: submission.answers.map(answer => {
                     const recommendation = answer.recommendation?.trim() || 'Default: Review required to address potential security concerns.';
-                    const transformed = {
+                    return {
                         ...answer,
                         recommendation,
                         effective_risk_level: answer.admin_risk_level || answer.system_risk_level || 'pending',
@@ -146,35 +144,29 @@ const ManageSubmissions = () => {
                             recommendation
                         )
                     };
-                    
-                    console.log(`Answer ${answer.id} review status:`, {
-                        reviewed_by: answer.reviewed_by,
-                        admin_risk_level: answer.admin_risk_level,
-                        recommendation,
-                        recommendation_length: recommendation.length,
-                        isReviewed: transformed.isReviewed
-                    });
-                    
-                    return transformed;
                 }),
                 effective_overall_risk: submission.admin_overall_risk || submission.system_overall_risk || 'pending',
                 review_progress: calculateReviewProgress(submission.answers)
             };
-
             setSelectedSubmission(transformedSubmission);
             setError(null);
 
-            console.log('Transformed submission:', {
-                id: transformedSubmission.id,
-                status: transformedSubmission.status,
-                answersCount: transformedSubmission.answers.length,
-                reviewedAnswersCount: transformedSubmission.answers.filter(a => a.isReviewed).length
-            });
-
+            // Update progress in submissions/filteredSubmissions for left panel
+            setSubmissions(prevSubs => prevSubs.map(s =>
+                s.id === transformedSubmission.id
+                    ? { ...s, review_progress: transformedSubmission.review_progress, effective_overall_risk: transformedSubmission.effective_overall_risk }
+                    : s
+            ));
+            setFilteredSubmissions(prevFiltered => prevFiltered.map(s =>
+                s.id === transformedSubmission.id
+                    ? { ...s, review_progress: transformedSubmission.review_progress, effective_overall_risk: transformedSubmission.effective_overall_risk }
+                    : s
+            ));
         } catch (err) {
-            console.error('Error fetching submission details:', err);
             setError(err.response?.data?.message || 'Failed to load submission details.');
             setSelectedSubmission(null);
+        } finally {
+            setIsLoadingSubmissionDetails(false);
         }
     };
 
@@ -188,6 +180,7 @@ const ManageSubmissions = () => {
 
     const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
         try {
+            setIsLoadingAnswer(true); // Start loading for this answer
             if (!adminRiskLevel || !recommendation) {
                 setError('Risk level and recommendation are required');
                 return;
@@ -203,8 +196,7 @@ const ManageSubmissions = () => {
             );
 
             if (response.data && typeof response.data === 'object') {
-                await fetchSubmissionDetails(selectedSubmission.id);
-                await fetchSubmissions();
+                await fetchSubmissionDetails(selectedSubmission.id); // Update only the submission details
                 setEditingAnswer(null);
                 setError(null);
             } else {
@@ -228,6 +220,8 @@ const ManageSubmissions = () => {
                     submissionId: selectedSubmission.id
                 });
             }
+        } finally {
+            setIsLoadingAnswer(false); // Stop loading
         }
     };
 
@@ -305,9 +299,8 @@ const ManageSubmissions = () => {
             setError(null);
             setSelectedRiskLevel('');
             setSummaryText('');
-            await fetchSubmissionDetails(selectedSubmission.id);
-            await fetchSubmissions();
-
+            // Reload the whole page after completing review
+            window.location.reload();
         } catch (err) {
             console.error('Error completing review:', err);
             setError(
@@ -586,7 +579,16 @@ const ManageSubmissions = () => {
                 </div>
 
                 <div className="col-lg-8">
-                    {selectedSubmission ? (
+                    {isLoadingSubmissionDetails ? (
+                        <div className="card border-0 shadow-sm">
+                            <div className="card-body text-center py-5">
+                                <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <h5 className="text-muted fw-bold">Loading Submission Details...</h5>
+                            </div>
+                        </div>
+                    ) : selectedSubmission ? (
                         <SubmissionDetails
                             submission={selectedSubmission}
                             onAnswerReview={handleAnswerReview}
@@ -598,6 +600,7 @@ const ManageSubmissions = () => {
                             formatDate={formatDate}
                             calculateOverallRisk={calculateOverallRisk}
                             fetchSubmissionDetails={fetchSubmissionDetails}
+                            isLoadingAnswer={isLoadingAnswer}
                         />
                     ) : (
                         <div className="card border-0 shadow-sm">
@@ -900,6 +903,8 @@ const FinalReviewForm = ({
             }
 
             await onSubmit();
+            // Reload the page after successful completion
+            window.location.reload();
         } catch (error) {
             console.error('Submit error:', error);
             setValidationError(error.message || 'Failed to complete review');
@@ -913,6 +918,8 @@ const FinalReviewForm = ({
             setIsSubmitting(true);
             await onSubmit();
             setShowConfirmationModal(false);
+            // Reload the page after successful confirmation
+            window.location.reload();
         } catch (error) {
             console.error('Confirm error:', error);
             setValidationError(error.message || 'Failed to complete review');
@@ -1036,7 +1043,8 @@ const SubmissionDetails = ({
     getRiskIcon,
     formatDate,
     calculateOverallRisk,
-    fetchSubmissionDetails
+    fetchSubmissionDetails,
+    isLoadingAnswer
 }) => {
     const [finalReviewMode, setFinalReviewMode] = useState(false);
     const [adminOverallRisk, setAdminOverallRisk] = useState('');
@@ -1354,6 +1362,7 @@ const SubmissionDetails = ({
                             getRiskIcon={getRiskIcon}
                             formatDate={formatDate}
                             canEdit={submission.status !== 'completed'}
+                            isLoading={isLoadingAnswer} // Pass loading state to AnswerCard
                         />
                     ))}
                 </div>

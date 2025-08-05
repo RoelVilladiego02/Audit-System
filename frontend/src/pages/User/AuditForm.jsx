@@ -382,30 +382,21 @@ const AuditForm = () => {
                     )}
 
                     {/* Main Form */}
-                    {questions.length === 0 && !error ? (
-                        <div className="card border-0 shadow-sm">
-                            <div className="card-header bg-white border-0 py-3">
-                                <h5 className="fw-bold mb-0">No Questions Available</h5>
-                            </div>
-                            <div className="card-body text-center py-4">
-                                <i className="bi bi-info-circle text-primary mb-3" style={{ fontSize: '2rem' }} aria-hidden="true"></i>
-                                <p className="text-muted mb-0">No audit questions are currently available. Please check back later or contact support.</p>
-                            </div>
-                        </div>
-                    ) : questions.length > 0 && (
+                    {questions.length > 0 && (
                         <form onSubmit={handleSubmit}>
                             {questions.map((question, index) => {
                                 const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
                                 const currentAnswer = getFinalAnswer(question.id);
                                 const riskLevel = currentAnswer ? getRiskLevelForAnswer(question, currentAnswer) : null;
                                 const isExpanded = expandedQuestions[question.id];
+                                
                                 return (
                                     <div key={question.id} className="card border-0 shadow-sm mb-4">
-                                        <div className="card-header bg-white border-0 py-3 d-flex align-items-center">
-                                            <span className={`badge ${isAnswered ? 'bg-success' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
-                                                {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
-                                            </span>
-                                            <div className="flex-grow-1">
+                                        <div className="card-header bg-white border-0 py-3 d-flex align-items-center justify-content-between">
+                                            <div className="d-flex align-items-center flex-grow-1">
+                                                <span className={`badge ${isAnswered ? 'bg-success' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
+                                                    {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
+                                                </span>
                                                 <h6 className="fw-bold mb-0 d-inline">
                                                     {question.question}
                                                     <span className="text-danger ms-1" aria-hidden="true">*</span>
@@ -416,11 +407,23 @@ const AuditForm = () => {
                                                     )}
                                                 </h6>
                                             </div>
-                                            {question.category && (
-                                                <span className="badge bg-info text-dark ms-2" style={{ fontSize: '0.75rem' }}>
-                                                    {question.category}
-                                                </span>
-                                            )}
+                                            <span
+                                                className="badge bg-info text-dark ms-3 text-truncate"
+                                                style={{
+                                                    fontSize: '0.85rem',
+                                                    maxWidth: '180px',
+                                                    cursor: 'pointer',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis'
+                                                }}
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="left"
+                                                title={question.category || 'Uncategorized'}
+                                                tabIndex={0}
+                                            >
+                                                {question.category || 'Uncategorized'}
+                                            </span>
                                             {question.risk_criteria && (
                                                 <button
                                                     type="button"
@@ -436,8 +439,6 @@ const AuditForm = () => {
                                             {question.description && (
                                                 <p className="text-muted small mb-3">{question.description}</p>
                                             )}
-                                            {/* ...existing code... */}
-                                            {/* Risk Criteria Expansion */}
                                             {isExpanded && question.risk_criteria && (
                                                 <div className="alert alert-light border-start border-primary border-4 mb-3">
                                                     <h6 className="fw-bold text-primary mb-2">
@@ -472,7 +473,6 @@ const AuditForm = () => {
                                                     </div>
                                                 </div>
                                             )}
-                                            {/* Answer Selection */}
                                             <div className="mb-3">
                                                 <select
                                                     value={answers[question.id] || ''}
@@ -487,10 +487,11 @@ const AuditForm = () => {
                                                             {answer}
                                                         </option>
                                                     ))}
-                                                    <option value="Others">Others (specify below)</option>
+                                                    {!question.possible_answers?.includes('Others') && (
+                                                        <option value="Others">Others (specify below)</option>
+                                                    )}
                                                 </select>
                                             </div>
-                                            {/* Custom Answer Input */}
                                             {answers[question.id] === 'Others' && (
                                                 <div className="mb-3">
                                                     <label htmlFor={`custom-${question.id}`} className="form-label fw-semibold text-muted small">
@@ -512,7 +513,6 @@ const AuditForm = () => {
                                                     </small>
                                                 </div>
                                             )}
-                                            {/* Validation Feedback */}
                                             {!isAnswered && (
                                                 <div className="text-warning small">
                                                     <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
@@ -523,8 +523,6 @@ const AuditForm = () => {
                                     </div>
                                 );
                             })}
-
-                            {/* Submit Section */}
                             {questions.length > 0 && (
                                 <div className="card border-0 shadow-sm bg-light">
                                     <div className="card-body py-3">

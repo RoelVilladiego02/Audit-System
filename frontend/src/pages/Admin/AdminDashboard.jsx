@@ -231,14 +231,13 @@ const AdminDashboard = () => {
                     {stats.recent_submissions.map((submission) => (
                       <tr key={submission.id}>
                         <td className="ps-4">
-                          <Link
-                            to={`/admin/submissions/${submission.id}`}
-                            className="text-primary text-decoration-none text-truncate d-block"
+                          <span
+                            className="text-truncate d-block"
                             style={{ maxWidth: '200px' }}
-                            aria-label={`View submission ${submission.title}`}
+                            title={submission.title}
                           >
                             {submission.title}
-                          </Link>
+                          </span>
                         </td>
                         <td className="text-muted">{submission.user}</td>
                         <td>
@@ -304,14 +303,13 @@ const AdminDashboard = () => {
                     {questionStats.map((question) => (
                       <tr key={question.id}>
                         <td className="ps-4">
-                          <Link
-                            to={`/admin/questions/${question.id}`}
-                            className="text-primary text-decoration-none text-truncate d-block"
+                          <span
+                            className="text-truncate d-block"
                             style={{ maxWidth: '200px' }}
-                            aria-label={`View question ${question.question}`}
+                            title={question.question}
                           >
                             {question.question}
-                          </Link>
+                          </span>
                         </td>
                         <td className="text-muted">{question.category}</td>
                         <td>{question.answers_count}</td>

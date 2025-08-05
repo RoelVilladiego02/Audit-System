@@ -8,6 +8,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
     category: '',
     possible_answers: ['Yes', 'No', 'N/A'],
     risk_criteria: { high: [], medium: [], low: [] },
+    allowCustomAnswers: false, // New field to track if "Others" should be included
   });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -15,6 +16,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
 
   useEffect(() => {
     if (isEdit && questionData) {
+      const hasOthers = questionData.possible_answers?.includes('Others') || false;
       setFormData({
         question: questionData.question || '',
         description: questionData.description || '',
@@ -25,12 +27,13 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
           medium: Array.isArray(questionData.risk_criteria?.medium) ? questionData.risk_criteria.medium : [],
           low: Array.isArray(questionData.risk_criteria?.low) ? questionData.risk_criteria.low : [],
         },
+        allowCustomAnswers: hasOthers,
       });
     }
   }, [isEdit, questionData]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     if (name === 'question' && value.length > 1000) {
       setError('Question cannot exceed 1000 characters.');
       return;
@@ -39,8 +42,21 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
       setError('Description cannot exceed 2000 characters.');
       return;
     }
+    if (name === 'allowCustomAnswers') {
+      setFormData((prev) => {
+        const updatedPossibleAnswers = checked
+          ? [...prev.possible_answers, 'Others'].filter((v, i, a) => a.indexOf(v) === i)
+          : prev.possible_answers.filter((answer) => answer !== 'Others');
+        return {
+          ...prev,
+          possible_answers: updatedPossibleAnswers,
+          allowCustomAnswers: checked,
+        };
+      });
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
     setError(null);
-    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const addPossibleAnswer = () => {
@@ -62,6 +78,10 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
 
   const removePossibleAnswer = (index) => {
     const answerToRemove = formData.possible_answers[index];
+    if (answerToRemove === 'Others' && formData.allowCustomAnswers) {
+      setError('Cannot remove "Others" while custom answers are enabled. Disable custom answers first.');
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       possible_answers: prev.possible_answers.filter((_, i) => i !== index),
@@ -74,6 +94,10 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
   };
 
   const handleRiskCriteriaChange = (level, answer) => {
+    if (answer === 'Others') {
+      setError('Cannot assign "Others" to risk criteria. Custom answers are automatically assessed as low risk.');
+      return;
+    }
     setFormData((prev) => {
       const currentAnswers = prev.risk_criteria[level];
       let updatedAnswers;
@@ -266,6 +290,24 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                 <label className="form-label fw-semibold text-muted">
                   Possible Answers <span className="text-danger">*</span>
                 </label>
+                <div className="form-check mb-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id="allowCustomAnswers"
+                    name="allowCustomAnswers"
+                    checked={formData.allowCustomAnswers}
+                    onChange={handleChange}
+                    aria-label="Allow custom answers"
+                  />
+                  <label className="form-check-label" htmlFor="allowCustomAnswers">
+                    Allow custom answers (adds "Others" option)
+                  </label>
+                  <small className="form-text text-muted">
+                    <i className="bi bi-info-circle me-1"></i>
+                    Enabling this adds an "Others" option, allowing users to provide custom text answers, which are assessed as low risk by default.
+                  </small>
+                </div>
                 <div className="input-group mb-2">
                   <input
                     type="text"
@@ -281,7 +323,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                     type="button"
                     className="btn btn-outline-primary"
                     onClick={addPossibleAnswer}
-                    disabled={!newAnswer.trim() || formData.possible_answers.includes(newAnswer.trim())}
+                    disabled={!newAnswer.trim() || formData.possible_answers.includes(newAnswer.trim()) || newAnswer.trim() === 'Others'}
                     id="addAnswerButton"
                     aria-label="Add answer"
                   >
@@ -306,6 +348,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                               className="btn-close btn-close-white"
                               style={{ fontSize: '0.65rem' }}
                               onClick={() => removePossibleAnswer(index)}
+                              disabled={answer === 'Others' && formData.allowCustomAnswers}
                               aria-label={`Remove answer ${answer}`}
                             ></button>
                           </span>
@@ -315,7 +358,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                   </div>
                 </div>
                 <small className="form-text text-muted">
-                  Type an answer (max 255 characters) and click "Add" or press Enter. Click the ✕ to remove an answer.
+                  Type an answer (max 255 characters) and click "Add" or press Enter. Click the ✕ to remove an answer. The "Others" option cannot be added manually; use the checkbox above.
                 </small>
               </div>
 
@@ -357,25 +400,27 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                             <span className="text-muted">Add possible answers first</span>
                           ) : (
                             <div className="d-flex flex-wrap gap-2">
-                              {formData.possible_answers.map((answer, ansIndex) => (
-                                <div key={ansIndex} className="form-check">
-                                  <input
-                                    type="checkbox"
-                                    className="form-check-input"
-                                    id={`${level}-${answer}`}
-                                    checked={formData.risk_criteria[level].includes(answer)}
-                                    onChange={() => handleRiskCriteriaChange(level, answer)}
-                                    aria-label={`Assign ${answer} to ${level} risk`}
-                                  />
-                                  <label className="form-check-label" htmlFor={`${level}-${answer}`}>
-                                    {answer}
-                                  </label>
-                                </div>
-                              ))}
+                              {formData.possible_answers
+                                .filter((answer) => answer !== 'Others')
+                                .map((answer, ansIndex) => (
+                                  <div key={ansIndex} className="form-check">
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input"
+                                      id={`${level}-${answer}`}
+                                      checked={formData.risk_criteria[level].includes(answer)}
+                                      onChange={() => handleRiskCriteriaChange(level, answer)}
+                                      aria-label={`Assign ${answer} to ${level} risk`}
+                                    />
+                                    <label className="form-check-label" htmlFor={`${level}-${answer}`}>
+                                      {answer}
+                                    </label>
+                                  </div>
+                                ))}
                             </div>
                           )}
                           <small className="form-text text-muted">
-                            Select answers that indicate {level} risk. Leave empty if not applicable.
+                            Select answers that indicate {level} risk. Leave empty if not applicable. "Others" cannot be assigned to risk criteria as custom answers are assessed as low risk.
                           </small>
                         </div>
                       </div>

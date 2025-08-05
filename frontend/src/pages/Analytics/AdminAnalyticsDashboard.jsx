@@ -211,7 +211,7 @@ const AdminAnalyticsDashboard = () => {
     }
   };
 
-  // Chart.js configuration for bar charts
+  // Updated Chart.js configuration for bar charts with better text handling
   const createBarChart = (canvasRef, data, labelKey, valueKey, color, title, chartId) => {
     if (canvasRef.current) {
       // Destroy existing chart instance if it exists
@@ -219,10 +219,18 @@ const AdminAnalyticsDashboard = () => {
         chartInstances.current[chartId].destroy();
       }
 
+      // Function to truncate long labels
+      const truncateLabel = (label, maxLength = 30) => {
+        return label.length > maxLength ? label.substring(0, maxLength) + '...' : label;
+      };
+
+      // Special handling for high-risk questions chart
+      const isHighRiskChart = chartId === 'auditHighRiskChart';
+      
       chartInstances.current[chartId] = new Chart(canvasRef.current, {
         type: 'bar',
         data: {
-          labels: data.map(item => item[labelKey]),
+          labels: data.map(item => isHighRiskChart ? truncateLabel(item[labelKey], 40) : item[labelKey]),
           datasets: valueKey instanceof Array ? valueKey.map((key, index) => ({
             label: ['High', 'Medium', 'Low'][index],
             data: data.map(item => item[key]),
@@ -238,14 +246,65 @@ const AdminAnalyticsDashboard = () => {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          indexAxis: isHighRiskChart ? 'y' : 'x', // Horizontal bars for high-risk questions
           plugins: {
-            legend: { display: valueKey instanceof Array, position: 'bottom', labels: { font: { size: 12 }, color: '#333' } },
-            tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 12 }, bodyFont: { size: 12 } },
-            title: { display: true, text: title, font: { size: 16, weight: 'bold' }, color: '#333' }
+            legend: { 
+              display: valueKey instanceof Array, 
+              position: 'bottom', 
+              labels: { font: { size: 12 }, color: '#333' } 
+            },
+            tooltip: { 
+              backgroundColor: 'rgba(0,0,0,0.8)', 
+              titleFont: { size: 12 }, 
+              bodyFont: { size: 12 },
+              // Show full text in tooltip for truncated labels
+              callbacks: isHighRiskChart ? {
+                title: function(context) {
+                  const fullLabel = data[context[0].dataIndex][labelKey];
+                  return fullLabel;
+                }
+              } : undefined
+            },
+            title: { 
+              display: true, 
+              text: title, 
+              font: { size: 16, weight: 'bold' }, 
+              color: '#333' 
+            }
           },
           scales: {
-            x: { ticks: { font: { size: 12 }, color: '#333' } },
-            y: { beginAtZero: true, ticks: { font: { size: 12 }, color: '#333' } }
+            x: { 
+              beginAtZero: true,
+              ticks: { 
+                font: { size: isHighRiskChart ? 11 : 12 }, 
+                color: '#333',
+                maxRotation: isHighRiskChart ? 0 : 45,
+                minRotation: isHighRiskChart ? 0 : 0
+              } 
+            },
+            y: { 
+              beginAtZero: isHighRiskChart ? false : true, 
+              ticks: { 
+                font: { size: 11 }, 
+                color: '#333',
+                maxRotation: 0,
+                callback: function(value, index) {
+                  if (isHighRiskChart && typeof this.getLabelForValue(value) === 'string') {
+                    const label = this.getLabelForValue(value);
+                    return label.length > 25 ? label.substring(0, 25) + '...' : label;
+                  }
+                  return this.getLabelForValue(value);
+                }
+              } 
+            }
+          },
+          layout: {
+            padding: {
+              left: isHighRiskChart ? 10 : 0,
+              right: 10,
+              top: 10,
+              bottom: isHighRiskChart ? 10 : 20
+            }
           }
         }
       });
@@ -442,6 +501,7 @@ const AdminAnalyticsDashboard = () => {
     </div>
   );
 
+  // Updated renderVulnerabilityAnalytics function (removed Assignment Rate)
   const renderVulnerabilityAnalytics = (data) => (
     <div className="accordion" id="vulnerabilityAccordion">
       <div className="accordion-item border-0 shadow-sm">
@@ -462,7 +522,6 @@ const AdminAnalyticsDashboard = () => {
             <div className="row mb-4">
               {renderStatCard('Total Submissions', data.totalSubmissions, 'bi-bug-fill', 'primary', '')}
               {renderStatCard('Average Risk Score', data.averageRiskScore, 'bi-speedometer2', 'info', '')}
-              {renderStatCard('Assignment Rate', `${data.assignmentStats?.assignmentRate || 0}%`, 'bi-check-circle-fill', 'success', '')}
               {renderStatCard('Unassigned', data.assignmentStats?.unassigned || 0, 'bi-clock-fill', 'warning', '')}
             </div>
             <div className="row">
@@ -512,8 +571,7 @@ const AdminAnalyticsDashboard = () => {
                       <canvas ref={vulnCommonChartRef} aria-label="Common Vulnerabilities"></canvas>
                     </div>
                     <small className="text-muted">
-                      Showing top 5 categories. Resolved: {data.commonVulnerabilities?.reduce((sum, v) => sum + v.resolvedCount, 0) || 0} (
-                      {data.commonVulnerabilities?.length > 0 ? (data.commonVulnerabilities.reduce((sum, v) => sum + v.resolutionRate, 0) / data.commonVulnerabilities.length).toFixed(1) : 0}%)
+                      Top 5 Categories: {data.commonVulnerabilities?.slice(0, 5).map(v => v.category).join(', ') || 'None'}
                     </small>
                   </div>
                 </div>
@@ -525,6 +583,7 @@ const AdminAnalyticsDashboard = () => {
     </div>
   );
 
+  // Updated renderAuditAnalytics function with better chart container
   const renderAuditAnalytics = (data) => (
     <div className="accordion" id="auditAccordion">
       <div className="accordion-item border-0 shadow-sm">
@@ -605,8 +664,14 @@ const AdminAnalyticsDashboard = () => {
                     <h6 className="fw-bold mb-0"><i className="bi bi-question-circle-fill text-danger me-2"></i>Common High-Risk Questions</h6>
                   </div>
                   <div className="card-body">
-                    <div style={{ height: '300px' }}>
+                    {/* Increased height and better container for horizontal chart */}
+                    <div style={{ height: '500px', width: '100%' }}>
                       <canvas ref={auditHighRiskChartRef} aria-label="Common High-Risk Questions"></canvas>
+                    </div>
+                    <div className="mt-2">
+                      <small className="text-muted">
+                        Hover over bars for full question text
+                      </small>
                     </div>
                   </div>
                 </div>
