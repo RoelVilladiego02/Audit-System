@@ -19,24 +19,35 @@ class AuditAnswerSeeder extends Seeder
 
         foreach ($submissions as $submission) {
             foreach ($questions as $question) {
-                $possibleAnswers = $question->possible_answers;
+                $possibleAnswers = json_decode($question->possible_answers, true);
+                $isCustomAnswer = false;
                 $answer = $possibleAnswers[array_rand($possibleAnswers)];
-                
+                $customAnswerText = null;
+
+                // Randomly select "Others" for questions that allow it (30% chance)
+                if (in_array('Others', $possibleAnswers, true) && rand(1, 100) <= 30) {
+                    $answer = 'Others';
+                    $isCustomAnswer = true;
+                    $customAnswerText = fake()->sentence(rand(5, 10)); // Generate random custom answer text
+                }
+
                 // Create base answer
                 $auditAnswer = AuditAnswer::create([
                     'audit_submission_id' => (int)$submission->id,
                     'audit_question_id' => (int)$question->id,
-                    'answer' => $answer,
-                    'system_risk_level' => $riskLevels[array_rand($riskLevels)],
+                    'answer' => $isCustomAnswer ? $customAnswerText : $answer,
+                    'is_custom_answer' => $isCustomAnswer,
+                    'system_risk_level' => $isCustomAnswer ? 'low' : $riskLevels[array_rand($riskLevels)],
                     'status' => $submission->status === 'completed' ? 'reviewed' : 'pending',
-                    'recommendation' => 'Review required to address potential security concerns.',
+                    'recommendation' => fake()->paragraph(),
                     'created_at' => $submission->created_at,
+                    'updated_at' => $submission->created_at,
                 ]);
 
                 // If submission is completed, add review details
                 if ($submission->status === 'completed') {
                     $auditAnswer->update([
-                        'admin_risk_level' => $riskLevels[array_rand($riskLevels)],
+                        'admin_risk_level' => $isCustomAnswer ? 'low' : $riskLevels[array_rand($riskLevels)],
                         'reviewed_by' => (int)$admin->id,
                         'reviewed_at' => $submission->reviewed_at,
                         'admin_notes' => fake()->paragraph(),

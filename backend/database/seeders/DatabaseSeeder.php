@@ -21,11 +21,12 @@ class DatabaseSeeder extends Seeder
             
             // Then create core data
             AuditQuestionSeeder::class,
+            AuditAnswerSeeder::class,
             
             // Finally create submissions and their relationships
             AuditSubmissionSeeder::class,
             VulnerabilitySubmissionSeeder::class,
-            // VulnerabilitySeeder::class,
+            VulnerabilitySeeder::class,
         ]);
     }
 }

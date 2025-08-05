@@ -35,9 +35,9 @@ class AuditSubmissionSeeder extends Seeder
             'Business Continuity Plan Review'
         ];
 
-        // Create 15 sample audit submissions
-        for ($i = 0; $i < 15; $i++) {
-            $createdAt = fake()->dateTimeBetween('-6 months', 'now');
+        // Create 100 sample audit submissions
+        for ($i = 0; $i < 100; $i++) {
+            $createdAt = fake()->dateTimeBetween('-1 year', 'now');
             // Weight the statuses to have more completed ones
             $status = fake()->randomElement([
                 'completed', 'completed', 'completed', // Higher chance for completed
@@ -63,9 +63,11 @@ class AuditSubmissionSeeder extends Seeder
                 'updated_at' => $reviewedAt ?? $createdAt,
             ]);
 
-            // Create answers for each question, aligned with submission status
+            // Create answers for each of the 24 questions
             foreach ($questions as $question) {
-                $possibleAnswers = $question->possible_answers;
+                $possibleAnswers = is_string($question->possible_answers) 
+                    ? json_decode($question->possible_answers, true) 
+                    : $question->possible_answers;
                 $answer = $possibleAnswers[array_rand($possibleAnswers)];
                 $systemRiskLevel = $riskLevels[array_rand($riskLevels)];
                 $answerStatus = $status === 'completed' ? 'reviewed' : 'pending';
