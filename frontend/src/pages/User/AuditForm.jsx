@@ -484,12 +484,9 @@ const AuditForm = () => {
                                                     <option value="">Select an answer...</option>
                                                     {question.possible_answers?.map((answer, answerIndex) => (
                                                         <option key={answerIndex} value={answer}>
-                                                            {answer}
+                                                            {answer === 'Others' ? 'Others (specify below)' : answer}
                                                         </option>
                                                     ))}
-                                                    {!question.possible_answers?.includes('Others') && (
-                                                        <option value="Others">Others (specify below)</option>
-                                                    )}
                                                 </select>
                                             </div>
                                             {answers[question.id] === 'Others' && (

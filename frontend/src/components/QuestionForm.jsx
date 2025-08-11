@@ -9,6 +9,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
     possible_answers: ['Yes', 'No', 'N/A'],
     risk_criteria: { high: [], medium: [], low: [] },
     allowCustomAnswers: false, // New field to track if "Others" should be included
+    possible_recommendation: '',
   });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +29,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
           low: Array.isArray(questionData.risk_criteria?.low) ? questionData.risk_criteria.low : [],
         },
         allowCustomAnswers: hasOthers,
+        possible_recommendation: questionData.possible_recommendation || '',
       });
     }
   }, [isEdit, questionData]);
@@ -427,6 +429,26 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="mb-3">
+                <label htmlFor="possible_recommendation" className="form-label fw-semibold text-muted">
+                  Default Recommendation (for High Risk)
+                </label>
+                <textarea
+                  id="possible_recommendation"
+                  name="possible_recommendation"
+                  rows={2}
+                  value={formData.possible_recommendation}
+                  onChange={handleChange}
+                  className="form-control"
+                  placeholder="Enter a default recommendation for high risk answers (optional)"
+                  maxLength={2000}
+                  aria-describedby="possibleRecommendationHelp"
+                />
+                <small id="possibleRecommendationHelp" className="form-text text-muted">
+                  This recommendation will be used automatically for high risk answers. Max 2000 characters.
+                </small>
               </div>
 
               <div className="d-flex justify-content-end gap-2">

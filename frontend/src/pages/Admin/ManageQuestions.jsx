@@ -195,6 +195,7 @@ const ManageQuestions = () => {
                       <th scope="col">Category</th>
                       <th scope="col">Possible Answers</th>
                       <th scope="col">Risk Criteria</th>
+                      <th scope="col">Default Recommendation</th>
                       <th scope="col" className="text-end">Actions</th>
                     </tr>
                   </thead>
@@ -240,6 +241,15 @@ const ManageQuestions = () => {
                               <div className="text-success mb-1">
                                 <small className="fw-bold">Low:</small> {question.risk_criteria.low}
                               </div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="small text-muted">
+                            {question.possible_recommendation ? (
+                              <span>{question.possible_recommendation}</span>
+                            ) : (
+                              <span className="fst-italic text-secondary">No default recommendation</span>
                             )}
                           </div>
                         </td>
