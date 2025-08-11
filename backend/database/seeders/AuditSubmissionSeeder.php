@@ -73,6 +73,11 @@ class AuditSubmissionSeeder extends Seeder
                 $answerStatus = $status === 'completed' ? 'reviewed' : 'pending';
                 $adminRiskLevel = $status === 'completed' ? $riskLevels[array_rand($riskLevels)] : null;
 
+                // Determine recommendation based on risk level and question
+                $recommendation = ($systemRiskLevel === 'high' && !empty($question->possible_recommendation))
+                    ? $question->possible_recommendation
+                    : fake()->paragraph();
+
                 AuditAnswer::create([
                     'audit_submission_id' => $submission->id,
                     'audit_question_id' => $question->id,
@@ -82,7 +87,7 @@ class AuditSubmissionSeeder extends Seeder
                     'reviewed_by' => $status === 'completed' ? (int)$admin->id : null,
                     'reviewed_at' => $reviewedAt,
                     'admin_notes' => $status === 'completed' ? fake()->paragraph() : null,
-                    'recommendation' => fake()->paragraph(),
+                    'recommendation' => $recommendation,
                     'status' => $answerStatus,
                     'created_at' => $createdAt,
                     'updated_at' => $reviewedAt ?? $createdAt,

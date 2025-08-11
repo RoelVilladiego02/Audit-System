@@ -131,7 +131,12 @@ class AuditAnswer extends Model
             throw new \Exception('Invalid risk level');
         }
 
-        $recommendation = $recommendation ? trim($recommendation) : 'Review required to address potential security concerns.';
+        // If high risk and no custom recommendation, use possible_recommendation from question
+        if ($riskLevel === 'high' && !$recommendation) {
+            $recommendation = $this->question->possible_recommendation ?? 'Review required to address potential security concerns.';
+        } else {
+            $recommendation = $recommendation ? trim($recommendation) : 'Review required to address potential security concerns.';
+        }
         
         $updateData = [
             'admin_risk_level' => $riskLevel,

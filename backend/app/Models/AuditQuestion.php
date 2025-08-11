@@ -17,6 +17,7 @@ class AuditQuestion extends Model
         'category',
         'possible_answers',
         'risk_criteria',
+        'possible_recommendation',
     ];
 
     protected $casts = [
@@ -24,6 +25,7 @@ class AuditQuestion extends Model
         'category' => 'string',
         'possible_answers' => 'array',
         'risk_criteria' => 'array',
+        'possible_recommendation' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

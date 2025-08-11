@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('category')->default('General');
             $table->json('possible_answers');
             $table->json('risk_criteria');
+            $table->text('possible_recommendation')->nullable();
             $table->timestamps();
             $table->softDeletes();
             

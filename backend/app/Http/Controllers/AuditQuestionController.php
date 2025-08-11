@@ -46,6 +46,7 @@ class AuditQuestionController extends Controller
                 'risk_criteria.medium.*' => 'string|max:255',
                 'risk_criteria.low' => 'nullable|array',
                 'risk_criteria.low.*' => 'string|max:255',
+                'possible_recommendation' => 'nullable|string|max:2000',
             ]);
 
             // Ensure unique possible answers
@@ -115,6 +116,7 @@ class AuditQuestionController extends Controller
                 'risk_criteria.medium.*' => 'string|max:255', 
                 'risk_criteria.low' => 'nullable|array',
                 'risk_criteria.low.*' => 'string|max:255',
+                'possible_recommendation' => 'nullable|string|max:2000',
             ]);
 
             // Check if question is being used in answers

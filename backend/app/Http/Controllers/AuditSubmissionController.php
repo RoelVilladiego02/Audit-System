@@ -648,6 +648,10 @@ class AuditSubmissionController extends Controller
      */
     private function generateRecommendation(string $riskLevel, AuditQuestion $question): string
     {
+        // Use possible_recommendation for high risk if available
+        if ($riskLevel === 'high' && !empty($question->possible_recommendation)) {
+            return $question->possible_recommendation;
+        }
         $recommendations = [
             'high' => 'Immediate action required. This poses significant security risks and should be addressed within 24-48 hours.',
             'medium' => 'Action recommended within 1-2 weeks. Monitor closely and plan remediation.',
