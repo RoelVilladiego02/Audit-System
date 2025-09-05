@@ -1,7 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
 import api from '../../api/axios';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+} from 'chart.js';
+
+// Register Chart.js components
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement
+);
 
 const getRiskLevelBadge = (level) => {
     const badges = {
@@ -49,27 +70,63 @@ const SubmissionsList = () => {
     const [error, setError] = useState(null);
     const [sortBy, setSortBy] = useState('newest');
     const [filterBy, setFilterBy] = useState('all');
+    
+    // Chart refs
+    const riskDistributionChartRef = useRef(null);
 
     const fetchSubmissions = React.useCallback(async () => {
         try {
+            // Add user validation at the beginning
+            if (!user?.id) {
+                console.log('No valid user found, redirecting to login');
+                navigate('/login');
+                return;
+            }
+            
             const token = localStorage.getItem('token');
-            console.log('Auth State:', {
+            const currentUser = localStorage.getItem('user');
+            console.log('Fetching submissions for user:', {
                 token: token ? 'Present' : 'Missing',
-                user: localStorage.getItem('user'),
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                user: currentUser ? JSON.parse(currentUser) : 'No user data',
+                userId: currentUser ? JSON.parse(currentUser).id : 'No user ID'
             });
             
             if (!token) {
                 throw new Error('No authentication token found');
             }
 
+            // Force refresh user data to ensure we have the latest authentication
+            console.log('Refreshing user authentication before fetching submissions...');
+            const userResponse = await api.get('/user');
+            const freshUserData = userResponse.data;
+            
+            console.log('Fresh user data for submissions:', {
+                id: freshUserData.id,
+                name: freshUserData.name,
+                email: freshUserData.email
+            });
+            
+            // Update localStorage with fresh user data
+            localStorage.setItem('user', JSON.stringify(freshUserData));
+            console.log('Updated localStorage with fresh user data in SubmissionsList');
+
             const response = await api.get('/audit-submissions');
             const transformedSubmissions = response.data.map(submission => ({
                 ...submission,
                 overall_risk: submission.effective_overall_risk || submission.admin_overall_risk || submission.system_overall_risk || 'low'
             }));
+            
+            // Validate that we're getting the correct user's submissions
+            const currentUserId = user?.id;
+            const freshUserId = freshUserData.id;
+            const submissionUserIds = [...new Set(transformedSubmissions.map(s => s.user_id))];
+            console.log('Submission validation:', {
+                contextUserId: currentUserId,
+                freshUserId: freshUserId,
+                submissionUserIds,
+                allMatch: submissionUserIds.every(id => id === freshUserId)
+            });
+            
             setSubmissions(transformedSubmissions);
             setError(null);
         } catch (err) {
@@ -89,7 +146,7 @@ const SubmissionsList = () => {
         } finally {
             setLoading(false);
         }
-    }, [navigate]);
+    }, [user, navigate]);
 
     useEffect(() => {
         if (!user) {
@@ -103,6 +160,34 @@ const SubmissionsList = () => {
         }
         fetchSubmissions();
     }, [user, navigate, fetchSubmissions]);
+
+    // Initialize charts when submissions data is loaded
+    useEffect(() => {
+        if (submissions.length > 0) {
+            const stats = {
+                total: submissions.length,
+                high: submissions.filter(s => s.overall_risk === 'high').length,
+                medium: submissions.filter(s => s.overall_risk === 'medium').length,
+                low: submissions.filter(s => s.overall_risk === 'low').length,
+                completed: submissions.filter(s => s.status === 'completed').length,
+                pending: submissions.filter(s => s.status !== 'completed').length
+            };
+            
+            // Create charts with a small delay to ensure DOM is ready
+            setTimeout(() => {
+                createRiskDistributionChart(stats);
+            }, 100);
+        }
+    }, [submissions]);
+
+    // Cleanup charts on unmount
+    useEffect(() => {
+        return () => {
+            if (window.riskDistributionChart) {
+                window.riskDistributionChart.destroy();
+            }
+        };
+    }, []);
 
     const getSortedAndFilteredSubmissions = () => {
         let filtered = submissions;
@@ -142,6 +227,64 @@ const SubmissionsList = () => {
         if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
         return date.toLocaleDateString();
     };
+
+    const createRiskDistributionChart = (stats) => {
+        if (!riskDistributionChartRef.current || !stats) return;
+
+        const ctx = riskDistributionChartRef.current.getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (window.riskDistributionChart) {
+            window.riskDistributionChart.destroy();
+        }
+
+        window.riskDistributionChart = new ChartJS(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+                datasets: [{
+                    data: [stats.high, stats.medium, stats.low],
+                    backgroundColor: [
+                        '#dc3545',
+                        '#ffc107',
+                        '#198754'
+                    ],
+                    borderColor: [
+                        '#dc3545',
+                        '#ffc107',
+                        '#198754'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    };
+
 
     if (loading) {
         return (
@@ -230,6 +373,11 @@ const SubmissionsList = () => {
                                         </div>
                                         <h4 className="fw-bold text-primary mb-1">{stats.total}</h4>
                                         <p className="text-muted small fw-semibold mb-0">Total Submissions</p>
+                                        <div className="mt-2">
+                                            <span className="badge bg-primary bg-opacity-20 text-primary">
+                                                {((stats.total / Math.max(stats.total, 1)) * 100).toFixed(0)}% of total
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -241,6 +389,11 @@ const SubmissionsList = () => {
                                         </div>
                                         <h4 className="fw-bold text-danger mb-1">{stats.high}</h4>
                                         <p className="text-muted small fw-semibold mb-0">High Risk</p>
+                                        <div className="mt-2">
+                                            <span className="badge bg-danger bg-opacity-20 text-danger">
+                                                {((stats.high / Math.max(stats.total, 1)) * 100).toFixed(0)}% of total
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -252,6 +405,11 @@ const SubmissionsList = () => {
                                         </div>
                                         <h4 className="fw-bold text-success mb-1">{stats.completed}</h4>
                                         <p className="text-muted small fw-semibold mb-0">Completed Reviews</p>
+                                        <div className="mt-2">
+                                            <span className="badge bg-success bg-opacity-20 text-success">
+                                                {((stats.completed / Math.max(stats.total, 1)) * 100).toFixed(0)}% completion rate
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -263,6 +421,33 @@ const SubmissionsList = () => {
                                         </div>
                                         <h4 className="fw-bold text-warning mb-1">{stats.pending}</h4>
                                         <p className="text-muted small fw-semibold mb-0">Pending Review</p>
+                                        <div className="mt-2">
+                                            <span className="badge bg-warning bg-opacity-20 text-warning">
+                                                {((stats.pending / Math.max(stats.total, 1)) * 100).toFixed(0)}% pending
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Analytics Chart */}
+                    {submissions.length > 0 && (
+                        <div className="row mb-4">
+                            <div className="col-lg-8 mx-auto mb-4">
+                                <div className="card border-0 shadow-sm h-100">
+                                    <div className="card-header bg-white border-0 py-3">
+                                        <h6 className="fw-bold text-primary mb-0">
+                                            <i className="bi bi-pie-chart me-2" aria-hidden="true"></i>
+                                            Risk Distribution
+                                        </h6>
+                                        <p className="text-muted small mb-0 mt-1">Breakdown of your assessment risk levels</p>
+                                    </div>
+                                    <div className="card-body">
+                                        <div style={{ height: '300px', position: 'relative' }}>
+                                            <canvas ref={riskDistributionChartRef}></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -381,13 +566,35 @@ const SubmissionsList = () => {
                                                     </span>
                                                 </td>
                                                 <td className="py-3">
-                                                    <span className={`badge ${getRiskLevelBadge(submission.overall_risk || 'low')}`}>
-                                                        {(submission.overall_risk || 'low').toUpperCase()}
-                                                    </span>
+                                                    <div className="d-flex align-items-center">
+                                                        <i className={`bi ${getRiskIcon(submission.overall_risk || 'low')} me-2`} aria-hidden="true"></i>
+                                                        <span className={`badge ${getRiskLevelBadge(submission.overall_risk || 'low')}`}>
+                                                            {(submission.overall_risk || 'low').toUpperCase()}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="py-3">
-                                                    {submission.review_progress && submission.status !== 'completed' && (
-                                                        <span className="badge bg-info">{submission.review_progress}%</span>
+                                                    {submission.status !== 'completed' ? (
+                                                        <div className="d-flex align-items-center">
+                                                            <div className="progress me-2" style={{ width: '60px', height: '6px' }}>
+                                                                <div 
+                                                                    className="progress-bar bg-info" 
+                                                                    role="progressbar" 
+                                                                    style={{ width: `${submission.review_progress || 0}%` }}
+                                                                    aria-valuenow={submission.review_progress || 0}
+                                                                    aria-valuemin="0" 
+                                                                    aria-valuemax="100"
+                                                                ></div>
+                                                            </div>
+                                                            <small className="text-muted">
+                                                                {submission.review_progress || 0}%
+                                                            </small>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="badge bg-success">
+                                                            <i className="bi bi-check-circle me-1" aria-hidden="true"></i>
+                                                            100%
+                                                        </span>
                                                     )}
                                                 </td>
                                                 <td className="py-3 text-muted small">

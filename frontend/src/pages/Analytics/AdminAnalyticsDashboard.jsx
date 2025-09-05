@@ -10,23 +10,21 @@ const AdminAnalyticsDashboard = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState('week');
+  const [timeRange, setTimeRange] = useState('all');
   const [dataType, setDataType] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
   // Refs for Chart.js canvases
-  const vulnRiskChartRef = useRef(null);
-  const vulnSeverityChartRef = useRef(null);
-  const vulnTrendsChartRef = useRef(null);
-  const vulnCommonChartRef = useRef(null);
+  const overallRiskChartRef = useRef(null);
+  const vulnerabilityRiskChartRef = useRef(null);
   const auditRiskChartRef = useRef(null);
-  const auditProportionChartRef = useRef(null);
-  const auditAnswerRiskChartRef = useRef(null);
-  const auditTrendsChartRef = useRef(null);
-  const auditHighRiskChartRef = useRef(null);
-  const combinedRiskChartRef = useRef(null);
-  const combinedTrendsChartRef = useRef(null);
+  const topVulnerabilitiesChartRef = useRef(null);
+  const topRiskQuestionsChartRef = useRef(null);
+  const reviewStatsChartRef = useRef(null);
+  const conversionStatsChartRef = useRef(null);
+  const adminVsSystemChartRef = useRef(null);
+  const categoryStatsChartRef = useRef(null);
 
   // Refs to store Chart.js instances for cleanup
   const chartInstances = useRef({});
@@ -95,7 +93,7 @@ const AdminAnalyticsDashboard = () => {
           datasets: [{
             data: data,
             backgroundColor: colors,
-            borderWidth: 1,
+            borderWidth: 2,
             borderColor: '#fff'
           }]
         },
@@ -128,90 +126,7 @@ const AdminAnalyticsDashboard = () => {
     }
   };
 
-  // Chart.js configuration for line charts
-  const createLineChart = (canvasRef, data, label, color, title, chartId) => {
-    if (canvasRef.current) {
-      // Destroy existing chart instance if it exists
-      if (chartInstances.current[chartId]) {
-        chartInstances.current[chartId].destroy();
-      }
-
-      chartInstances.current[chartId] = new Chart(canvasRef.current, {
-        type: 'line',
-        data: {
-          labels: data.map(item => item.date),
-          datasets: [{
-            label: label,
-            data: data.map(item => item.count),
-            borderColor: color,
-            backgroundColor: `${color}33`, // 20% opacity
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: color
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'bottom', labels: { font: { size: 12 }, color: '#333' } },
-            tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 12 }, bodyFont: { size: 12 } },
-            title: { display: true, text: title, font: { size: 16, weight: 'bold' }, color: '#333' }
-          },
-          scales: {
-            x: { ticks: { font: { size: 12 }, color: '#333' } },
-            y: { beginAtZero: true, ticks: { font: { size: 12 }, color: '#333' } }
-          }
-        }
-      });
-    }
-  };
-
-  // Chart.js configuration for multi-line charts (for combined trends)
-  const createMultiLineChart = (canvasRef, data, labels, colors, title, chartId) => {
-    if (canvasRef.current) {
-      // Destroy existing chart instance if it exists
-      if (chartInstances.current[chartId]) {
-        chartInstances.current[chartId].destroy();
-      }
-
-      // Prepare datasets for multiple lines
-      const datasets = labels.map((label, index) => ({
-        label: label,
-        data: data.map(item => index === 0 ? item.count : item.audits),
-        borderColor: colors[index],
-        backgroundColor: `${colors[index]}33`, // 20% opacity
-        fill: false,
-        tension: 0.4,
-        pointRadius: 4,
-        pointBackgroundColor: colors[index]
-      }));
-
-      chartInstances.current[chartId] = new Chart(canvasRef.current, {
-        type: 'line',
-        data: {
-          labels: data.map(item => item.date),
-          datasets: datasets
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'bottom', labels: { font: { size: 12 }, color: '#333' } },
-            tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 12 }, bodyFont: { size: 12 } },
-            title: { display: true, text: title, font: { size: 16, weight: 'bold' }, color: '#333' }
-          },
-          scales: {
-            x: { ticks: { font: { size: 12 }, color: '#333' } },
-            y: { beginAtZero: true, ticks: { font: { size: 12 }, color: '#333' } }
-          }
-        }
-      });
-    }
-  };
-
-  // Updated Chart.js configuration for bar charts with better text handling
+  // Chart.js configuration for bar charts
   const createBarChart = (canvasRef, data, labelKey, valueKey, color, title, chartId) => {
     if (canvasRef.current) {
       // Destroy existing chart instance if it exists
@@ -223,19 +138,12 @@ const AdminAnalyticsDashboard = () => {
       const truncateLabel = (label, maxLength = 30) => {
         return label.length > maxLength ? label.substring(0, maxLength) + '...' : label;
       };
-
-      // Special handling for high-risk questions chart
-      const isHighRiskChart = chartId === 'auditHighRiskChart';
       
       chartInstances.current[chartId] = new Chart(canvasRef.current, {
         type: 'bar',
         data: {
-          labels: data.map(item => isHighRiskChart ? truncateLabel(item[labelKey], 40) : item[labelKey]),
-          datasets: valueKey instanceof Array ? valueKey.map((key, index) => ({
-            label: ['High', 'Medium', 'Low'][index],
-            data: data.map(item => item[key]),
-            backgroundColor: color[index]
-          })) : [{
+          labels: data.map(item => truncateLabel(item[labelKey], 40)),
+          datasets: [{
             label: 'Count',
             data: data.map(item => item[valueKey]),
             backgroundColor: color,
@@ -246,24 +154,19 @@ const AdminAnalyticsDashboard = () => {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          indexAxis: isHighRiskChart ? 'y' : 'x', // Horizontal bars for high-risk questions
+          indexAxis: 'y', // Horizontal bars
           plugins: {
-            legend: { 
-              display: valueKey instanceof Array, 
-              position: 'bottom', 
-              labels: { font: { size: 12 }, color: '#333' } 
-            },
+            legend: { display: false },
             tooltip: { 
               backgroundColor: 'rgba(0,0,0,0.8)', 
               titleFont: { size: 12 }, 
               bodyFont: { size: 12 },
-              // Show full text in tooltip for truncated labels
-              callbacks: isHighRiskChart ? {
+              callbacks: {
                 title: function(context) {
                   const fullLabel = data[context[0].dataIndex][labelKey];
                   return fullLabel;
                 }
-              } : undefined
+              }
             },
             title: { 
               display: true, 
@@ -275,35 +178,111 @@ const AdminAnalyticsDashboard = () => {
           scales: {
             x: { 
               beginAtZero: true,
-              ticks: { 
-                font: { size: isHighRiskChart ? 11 : 12 }, 
-                color: '#333',
-                maxRotation: isHighRiskChart ? 0 : 45,
-                minRotation: isHighRiskChart ? 0 : 0
-              } 
+              ticks: { font: { size: 12 }, color: '#333' }
             },
             y: { 
-              beginAtZero: isHighRiskChart ? false : true, 
               ticks: { 
                 font: { size: 11 }, 
                 color: '#333',
-                maxRotation: 0,
-                callback: function(value, index) {
-                  if (isHighRiskChart && typeof this.getLabelForValue(value) === 'string') {
-                    const label = this.getLabelForValue(value);
-                    return label.length > 25 ? label.substring(0, 25) + '...' : label;
-                  }
-                  return this.getLabelForValue(value);
-                }
+                maxRotation: 0
               } 
             }
           },
           layout: {
-            padding: {
-              left: isHighRiskChart ? 10 : 0,
-              right: 10,
-              top: 10,
-              bottom: isHighRiskChart ? 10 : 20
+            padding: { left: 10, right: 10, top: 10, bottom: 10 }
+          }
+        }
+      });
+    }
+  };
+
+  // Chart.js configuration for doughnut charts
+  const createDoughnutChart = (canvasRef, data, labels, colors, title, chartId) => {
+    if (canvasRef.current) {
+      if (chartInstances.current[chartId]) {
+        chartInstances.current[chartId].destroy();
+      }
+
+      chartInstances.current[chartId] = new Chart(canvasRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { size: 12 }, color: '#333' }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              titleFont: { size: 12 },
+              bodyFont: { size: 12 }
+            },
+            title: {
+              display: true,
+              text: title,
+              font: { size: 16, weight: 'bold' },
+              color: '#333'
+            }
+          },
+          animation: {
+            animateScale: true,
+            animateRotate: true
+          }
+        }
+      });
+    }
+  };
+
+  // Chart.js configuration for multi-dataset bar charts
+  const createMultiBarChart = (canvasRef, data, datasets, title, chartId) => {
+    if (canvasRef.current) {
+      if (chartInstances.current[chartId]) {
+        chartInstances.current[chartId].destroy();
+      }
+
+      chartInstances.current[chartId] = new Chart(canvasRef.current, {
+        type: 'bar',
+        data: {
+          labels: data,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { size: 12 }, color: '#333' }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              titleFont: { size: 12 },
+              bodyFont: { size: 12 }
+            },
+            title: {
+              display: true,
+              text: title,
+              font: { size: 16, weight: 'bold' },
+              color: '#333'
+            }
+          },
+          scales: {
+            x: {
+              ticks: { font: { size: 12 }, color: '#333' }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { font: { size: 12 }, color: '#333' }
             }
           }
         }
@@ -314,133 +293,179 @@ const AdminAnalyticsDashboard = () => {
   // Initialize charts when analyticsData changes
   useEffect(() => {
     if (analyticsData) {
-      if (analyticsData.type === 'vulnerability' || analyticsData.type === 'combined') {
-        const vulnData = analyticsData.type === 'combined' ? analyticsData.vulnerability : analyticsData;
+      if (analyticsData.type === 'combined') {
+        // Overall risk distribution combining both types
+        const vulnData = analyticsData.vulnerability;
+        const auditData = analyticsData.audit;
+        
+        const overallHigh = (vulnData.riskDistribution?.high || 0) + (auditData.riskDistribution?.high || 0);
+        const overallMedium = (vulnData.riskDistribution?.medium || 0) + (auditData.riskDistribution?.medium || 0);
+        const overallLow = (vulnData.riskDistribution?.low || 0) + (auditData.riskDistribution?.low || 0);
+
         createPieChart(
-          vulnRiskChartRef,
+          overallRiskChartRef,
+          [overallHigh, overallMedium, overallLow],
+          ['High Risk', 'Medium Risk', 'Low Risk'],
+          ['#dc3545', '#ffc107', '#28a745'],
+          'Overall Risk Distribution',
+          'overallRiskChart'
+        );
+
+        // Individual risk distributions
+        createPieChart(
+          vulnerabilityRiskChartRef,
           [vulnData.riskDistribution?.high || 0, vulnData.riskDistribution?.medium || 0, vulnData.riskDistribution?.low || 0],
           ['High', 'Medium', 'Low'],
           ['#dc3545', '#ffc107', '#28a745'],
-          'Risk Level Distribution',
-          'vulnRiskChart'
+          'Vulnerability Risk Distribution',
+          'vulnerabilityRiskChart'
         );
-        createPieChart(
-          vulnSeverityChartRef,
-          [vulnData.severityDistribution?.high || 0, vulnData.severityDistribution?.medium || 0, vulnData.severityDistribution?.low || 0],
-          ['High', 'Medium', 'Low'],
-          ['#dc3545', '#ffc107', '#28a745'],
-          'Severity Distribution',
-          'vulnSeverityChart'
-        );
-        createLineChart(
-          vulnTrendsChartRef,
-          vulnData.submissionTrends || [],
-          'Vulnerabilities',
-          '#007bff',
-          'Submission Trends',
-          'vulnTrendsChart'
-        );
-        createBarChart(
-          vulnCommonChartRef,
-          vulnData.commonVulnerabilities || [],
-          'category',
-          'count',
-          '#007bff',
-          'Common Vulnerabilities',
-          'vulnCommonChart'
-        );
-      }
-      if (analyticsData.type === 'audit' || analyticsData.type === 'combined') {
-        const auditData = analyticsData.type === 'combined' ? analyticsData.audit : analyticsData;
+
         createPieChart(
           auditRiskChartRef,
           [auditData.riskDistribution?.high || 0, auditData.riskDistribution?.medium || 0, auditData.riskDistribution?.low || 0],
           ['High', 'Medium', 'Low'],
           ['#dc3545', '#ffc107', '#28a745'],
-          'Submission Risk Distribution',
+          'Audit Risk Distribution',
           'auditRiskChart'
         );
-        createPieChart(
-          auditProportionChartRef,
-          [auditData.riskProportion?.high || 0, auditData.riskProportion?.medium || 0, auditData.riskProportion?.low || 0],
-          ['High (%)', 'Medium (%)', 'Low (%)'],
-          ['#dc3545', '#ffc107', '#28a745'],
-          'Risk Proportion',
-          'auditProportionChart'
-        );
-        createPieChart(
-          auditAnswerRiskChartRef,
-          [auditData.answerRiskDistribution?.high || 0, auditData.answerRiskDistribution?.medium || 0, auditData.answerRiskDistribution?.low || 0],
-          ['High (%)', 'Medium (%)', 'Low (%)'],
-          ['#dc3545', '#ffc107', '#28a745'],
-          'Answer Risk Distribution',
-          'auditAnswerRiskChart'
-        );
-        createLineChart(
-          auditTrendsChartRef,
-          auditData.submissionTrends || [],
-          'Audits',
-          '#17a2b8',
-          'Submission Trends',
-          'auditTrendsChart'
-        );
-        createBarChart(
-          auditHighRiskChartRef,
-          auditData.commonHighRisks || [],
-          'question',
-          'count',
-          '#dc3545',
-          'Common High-Risk Questions',
-          'auditHighRiskChart'
-        );
-      }
-      if (analyticsData.type === 'combined') {
-        createBarChart(
-          combinedRiskChartRef,
-          [
-            {
-              category: 'Vulnerabilities',
-              high: analyticsData.vulnerability.riskDistribution?.high || 0,
-              medium: analyticsData.vulnerability.riskDistribution?.medium || 0,
-              low: analyticsData.vulnerability.riskDistribution?.low || 0
-            },
-            {
-              category: 'Audits',
-              high: analyticsData.audit.riskDistribution?.high || 0,
-              medium: analyticsData.audit.riskDistribution?.medium || 0,
-              low: analyticsData.audit.riskDistribution?.low || 0
-            }
-          ],
-          'category',
-          ['high', 'medium', 'low'],
-          ['#dc3545', '#ffc107', '#28a745'],
-          'Risk Distribution Comparison',
-          'combinedRiskChart'
-        );
-        
-        // Merge and align dates for combined trends
-        const vulnTrends = analyticsData.vulnerability.submissionTrends || [];
-        const auditTrends = analyticsData.audit.submissionTrends || [];
-        const allDates = [...new Set([...vulnTrends.map(t => t.date), ...auditTrends.map(t => t.date)])].sort();
 
-        const combinedTrendsData = allDates.map(date => {
-          const vulnItem = vulnTrends.find(t => t.date === date);
-          const auditItem = auditTrends.find(t => t.date === date);
-          return {
-            date: date,
-            count: vulnItem ? vulnItem.count : 0, // Vulnerabilities count
-            audits: auditItem ? auditItem.count : 0 // Audits count
-          };
-        });
+        // Top vulnerabilities
+        if (vulnData.commonVulnerabilities && vulnData.commonVulnerabilities.length > 0) {
+          createBarChart(
+            topVulnerabilitiesChartRef,
+            vulnData.commonVulnerabilities.slice(0, 5),
+            'category',
+            'count',
+            '#dc3545',
+            'Top 5 Vulnerability Categories',
+            'topVulnerabilitiesChart'
+          );
+        }
 
-        createMultiLineChart(
-          combinedTrendsChartRef,
-          combinedTrendsData,
-          ['Vulnerabilities', 'Audits'],
-          ['#007bff', '#17a2b8'],
-          'Submission Trends Comparison',
-          'combinedTrendsChart'
+        // Top risk questions
+        if (auditData.commonHighRisks && auditData.commonHighRisks.length > 0) {
+          createBarChart(
+            topRiskQuestionsChartRef,
+            auditData.commonHighRisks.slice(0, 5),
+            'question',
+            'count',
+            '#ffc107',
+            'Top 5 High-Risk Questions',
+            'topRiskQuestionsChart'
+          );
+        }
+
+
+        // Review statistics
+        if (auditData.reviewStats) {
+          createDoughnutChart(
+            reviewStatsChartRef,
+            [auditData.reviewStats.completed, auditData.reviewStats.under_review, auditData.reviewStats.pending_review],
+            ['Completed', 'Under Review', 'Pending Review'],
+            ['#28a745', '#ffc107', '#dc3545'],
+            'Audit Review Status',
+            'reviewStatsChart'
+          );
+        }
+
+        // Conversion statistics
+        if (analyticsData.conversionStats) {
+          createDoughnutChart(
+            conversionStatsChartRef,
+            [analyticsData.conversionStats.audits_with_vulnerabilities, analyticsData.conversionStats.total_audits - analyticsData.conversionStats.audits_with_vulnerabilities],
+            ['Generated Vulnerabilities', 'No Vulnerabilities'],
+            ['#dc3545', '#6c757d'],
+            'Audit to Vulnerability Conversion',
+            'conversionStatsChart'
+          );
+        }
+
+        // Admin vs System Risk Comparison
+        if (auditData.adminVsSystemRisk) {
+          const adminData = auditData.adminVsSystemRisk;
+          createMultiBarChart(
+            adminVsSystemChartRef,
+            ['High', 'Medium', 'Low'],
+            [
+              {
+                label: 'System Risk',
+                data: [
+                  adminData.system_risk_distribution.high,
+                  adminData.system_risk_distribution.medium,
+                  adminData.system_risk_distribution.low
+                ],
+                backgroundColor: '#17a2b8'
+              },
+              {
+                label: 'Admin Risk',
+                data: [
+                  adminData.admin_risk_distribution.high,
+                  adminData.admin_risk_distribution.medium,
+                  adminData.admin_risk_distribution.low
+                ],
+                backgroundColor: '#6f42c1'
+              }
+            ],
+            'System vs Admin Risk Assessment',
+            'adminVsSystemChart'
+          );
+        }
+
+        // Question Category Statistics
+        if (auditData.questionCategoryStats && auditData.questionCategoryStats.length > 0) {
+          createBarChart(
+            categoryStatsChartRef,
+            auditData.questionCategoryStats.slice(0, 8),
+            'category',
+            'high_risk_count',
+            '#ffc107',
+            'High-Risk Issues by Category',
+            'categoryStatsChart'
+          );
+        }
+      } else if (analyticsData.type === 'vulnerability') {
+        createPieChart(
+          vulnerabilityRiskChartRef,
+          [analyticsData.riskDistribution?.high || 0, analyticsData.riskDistribution?.medium || 0, analyticsData.riskDistribution?.low || 0],
+          ['High', 'Medium', 'Low'],
+          ['#dc3545', '#ffc107', '#28a745'],
+          'Vulnerability Risk Distribution',
+          'vulnerabilityRiskChart'
         );
+
+        if (analyticsData.commonVulnerabilities && analyticsData.commonVulnerabilities.length > 0) {
+          createBarChart(
+            topVulnerabilitiesChartRef,
+            analyticsData.commonVulnerabilities.slice(0, 5),
+            'category',
+            'count',
+            '#dc3545',
+            'Top 5 Vulnerability Categories',
+            'topVulnerabilitiesChart'
+          );
+        }
+      } else if (analyticsData.type === 'audit') {
+        createPieChart(
+          auditRiskChartRef,
+          [analyticsData.riskDistribution?.high || 0, analyticsData.riskDistribution?.medium || 0, analyticsData.riskDistribution?.low || 0],
+          ['High', 'Medium', 'Low'],
+          ['#dc3545', '#ffc107', '#28a745'],
+          'Audit Risk Distribution',
+          'auditRiskChart'
+        );
+
+        if (analyticsData.commonHighRisks && analyticsData.commonHighRisks.length > 0) {
+          createBarChart(
+            topRiskQuestionsChartRef,
+            analyticsData.commonHighRisks.slice(0, 5),
+            'question',
+            'count',
+            '#ffc107',
+            'Top 5 High-Risk Questions',
+            'topRiskQuestionsChart'
+          );
+        }
       }
 
       // Cleanup function to destroy all charts on unmount
@@ -501,232 +526,263 @@ const AdminAnalyticsDashboard = () => {
     </div>
   );
 
-  // Updated renderVulnerabilityAnalytics function (removed Assignment Rate)
-  const renderVulnerabilityAnalytics = (data) => (
-    <div className="accordion" id="vulnerabilityAccordion">
-      <div className="accordion-item border-0 shadow-sm">
-        <h2 className="accordion-header">
-          <button
-            className="accordion-button"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#vulnerabilityCollapse"
-            aria-expanded="true"
-            aria-controls="vulnerabilityCollapse"
-          >
-            <i className="bi bi-bug-fill text-primary me-2"></i> Vulnerability Analytics
-          </button>
-        </h2>
-        <div id="vulnerabilityCollapse" className="accordion-collapse collapse show" data-bs-parent="#vulnerabilityAccordion">
-          <div className="accordion-body">
-            <div className="row mb-4">
-              {renderStatCard('Total Submissions', data.totalSubmissions, 'bi-bug-fill', 'primary', '')}
-              {renderStatCard('Average Risk Score', data.averageRiskScore, 'bi-speedometer2', 'info', '')}
-              {renderStatCard('Unassigned', data.assignmentStats?.unassigned || 0, 'bi-clock-fill', 'warning', '')}
+  const renderKeyMetrics = (data) => {
+    if (data.type === 'combined') {
+      const vulnData = data.vulnerability;
+      const auditData = data.audit;
+      const totalHigh = (vulnData.riskDistribution?.high || 0) + (auditData.riskDistribution?.high || 0);
+      const totalMedium = (vulnData.riskDistribution?.medium || 0) + (auditData.riskDistribution?.medium || 0);
+      const totalLow = (vulnData.riskDistribution?.low || 0) + (auditData.riskDistribution?.low || 0);
+      const totalItems = totalHigh + totalMedium + totalLow;
+
+      return (
+        <div className="row mb-4">
+          {renderStatCard('Total Items', totalItems, 'bi-bar-chart-fill', 'primary', 'All submissions')}
+          {renderStatCard('High Risk', totalHigh, 'bi-exclamation-triangle-fill', 'danger', `${totalItems > 0 ? Math.round((totalHigh / totalItems) * 100) : 0}% of total`)}
+          {renderStatCard('Total Vulnerabilities', vulnData.resolutionStats?.total_vulnerabilities || 0, 'bi-bug-fill', 'danger', 'All vulnerabilities')}
+          {renderStatCard('Audit Conversion', data.conversionStats?.conversion_rate || 0, 'bi-arrow-right-circle-fill', 'info', `${data.conversionStats?.audits_with_vulnerabilities || 0}/${data.conversionStats?.total_audits || 0} audits`)}
+        </div>
+      );
+    } else if (data.type === 'vulnerability') {
+      const totalItems = (data.riskDistribution?.high || 0) + (data.riskDistribution?.medium || 0) + (data.riskDistribution?.low || 0);
+      return (
+        <div className="row mb-4">
+          {renderStatCard('Total Submissions', data.totalSubmissions, 'bi-bar-chart-fill', 'primary', '')}
+          {renderStatCard('High Risk', data.riskDistribution?.high || 0, 'bi-exclamation-triangle-fill', 'danger', `${totalItems > 0 ? Math.round(((data.riskDistribution?.high || 0) / totalItems) * 100) : 0}% of total`)}
+          {renderStatCard('Total Vulnerabilities', data.resolutionStats?.total_vulnerabilities || 0, 'bi-bug-fill', 'danger', 'All vulnerabilities')}
+        </div>
+      );
+    } else {
+      const totalItems = (data.riskDistribution?.high || 0) + (data.riskDistribution?.medium || 0) + (data.riskDistribution?.low || 0);
+      return (
+        <div className="row mb-4">
+          {renderStatCard('Total Submissions', data.totalSubmissions, 'bi-bar-chart-fill', 'primary', '')}
+          {renderStatCard('High Risk', data.riskDistribution?.high || 0, 'bi-exclamation-triangle-fill', 'danger', `${totalItems > 0 ? Math.round(((data.riskDistribution?.high || 0) / totalItems) * 100) : 0}% of total`)}
+          {renderStatCard('Completion Rate', data.reviewStats?.completion_rate || 0, 'bi-check-circle-fill', 'success', `${data.reviewStats?.completed || 0}/${data.reviewStats?.total_submissions || 0} completed`)}
+        </div>
+      );
+    }
+  };
+
+  const renderRiskDistribution = (data) => {
+    if (data.type === 'combined') {
+      return (
+        <div className="row mb-4">
+          <div className="col-lg-4 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-pie-chart-fill text-primary me-2"></i>Overall Risk Distribution</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={overallRiskChartRef} aria-label="Overall Risk Distribution"></canvas>
+                </div>
+              </div>
             </div>
-            <div className="row">
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>Risk Level Distribution</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={vulnRiskChartRef} aria-label="Vulnerability Risk Level Distribution"></canvas>
-                    </div>
-                  </div>
+          </div>
+          <div className="col-lg-4 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-bug-fill text-danger me-2"></i>Vulnerabilities</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={vulnerabilityRiskChartRef} aria-label="Vulnerability Risk Distribution"></canvas>
                 </div>
               </div>
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-bar-chart-fill text-info me-2"></i>Severity Distribution</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={vulnSeverityChartRef} aria-label="Vulnerability Severity Distribution"></canvas>
-                    </div>
-                  </div>
-                </div>
+            </div>
+          </div>
+          <div className="col-lg-4 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-clipboard-check text-info me-2"></i>Audits</h6>
               </div>
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-graph-up text-primary me-2"></i>Submission Trends</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={vulnTrendsChartRef} aria-label="Vulnerability Submission Trends"></canvas>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-list-ul text-danger me-2"></i>Common Vulnerabilities</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={vulnCommonChartRef} aria-label="Common Vulnerabilities"></canvas>
-                    </div>
-                    <small className="text-muted">
-                      Top 5 Categories: {data.commonVulnerabilities?.slice(0, 5).map(v => v.category).join(', ') || 'None'}
-                    </small>
-                  </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={auditRiskChartRef} aria-label="Audit Risk Distribution"></canvas>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
+      );
+    } else {
+      const chartRef = data.type === 'vulnerability' ? vulnerabilityRiskChartRef : auditRiskChartRef;
+      const icon = data.type === 'vulnerability' ? 'bi-bug-fill' : 'bi-clipboard-check';
+      const color = data.type === 'vulnerability' ? 'danger' : 'info';
+      const title = data.type === 'vulnerability' ? 'Vulnerability Risk Distribution' : 'Audit Risk Distribution';
 
-  // Updated renderAuditAnalytics function with better chart container
-  const renderAuditAnalytics = (data) => (
-    <div className="accordion" id="auditAccordion">
-      <div className="accordion-item border-0 shadow-sm">
-        <h2 className="accordion-header">
-          <button
-            className="accordion-button"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#auditCollapse"
-            aria-expanded="true"
-            aria-controls="auditCollapse"
-          >
-            <i className="bi bi-clipboard-check text-info me-2"></i> Audit Analytics
-          </button>
-        </h2>
-        <div id="auditCollapse" className="accordion-collapse collapse show" data-bs-parent="#auditAccordion">
-          <div className="accordion-body">
-            <div className="row mb-4">
-              {renderStatCard('Total Submissions', data.totalSubmissions, 'bi-clipboard-check', 'info', '')}
-              {renderStatCard('Average Risk Score', data.averageRiskScore, 'bi-speedometer2', 'primary', '')}
-              {renderStatCard('High Risk Audits', data.riskDistribution?.high || 0, 'bi-exclamation-triangle-fill', 'danger', '')}
-              {renderStatCard('Total Answers', data.answerRiskDistribution?.total_answers || 0, 'bi-question-circle-fill', 'success', '')}
-            </div>
-            <div className="row">
-              <div className="col-lg-4 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>Submission Risk Distribution</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={auditRiskChartRef} aria-label="Audit Submission Risk Distribution"></canvas>
-                    </div>
-                  </div>
-                </div>
+      return (
+        <div className="row mb-4">
+          <div className="col-lg-6 mx-auto mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className={`bi ${icon} text-${color} me-2`}></i>{title}</h6>
               </div>
-              <div className="col-lg-4 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-percent text-info me-2"></i>Risk Proportion (%)</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={auditProportionChartRef} aria-label="Audit Risk Proportion"></canvas>
-                    </div>
-                    <small className="text-muted">Total Submissions: {data.riskProportion?.total_submissions || 0}</small>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-4 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-pie-chart-fill text-success me-2"></i>Answer Risk Distribution</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={auditAnswerRiskChartRef} aria-label="Audit Answer Risk Distribution"></canvas>
-                    </div>
-                    <small className="text-muted">Total Answers: {data.answerRiskDistribution?.total_answers || 0}</small>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-graph-up text-primary me-2"></i>Submission Trends</h6>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <canvas ref={auditTrendsChartRef} aria-label="Audit Submission Trends"></canvas>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-6 mb-4">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white">
-                    <h6 className="fw-bold mb-0"><i className="bi bi-question-circle-fill text-danger me-2"></i>Common High-Risk Questions</h6>
-                  </div>
-                  <div className="card-body">
-                    {/* Increased height and better container for horizontal chart */}
-                    <div style={{ height: '500px', width: '100%' }}>
-                      <canvas ref={auditHighRiskChartRef} aria-label="Common High-Risk Questions"></canvas>
-                    </div>
-                    <div className="mt-2">
-                      <small className="text-muted">
-                        Hover over bars for full question text
-                      </small>
-                    </div>
-                  </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={chartRef} aria-label={title}></canvas>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
+      );
+    }
+  };
 
-  const renderCombinedAnalytics = (data) => (
-    <div>
+  const renderTopIssues = (data) => {
+    const hasVulnerabilities = data.type === 'combined' ? data.vulnerability.commonVulnerabilities?.length > 0 : data.type === 'vulnerability' && data.commonVulnerabilities?.length > 0;
+    const hasRiskQuestions = data.type === 'combined' ? data.audit.commonHighRisks?.length > 0 : data.type === 'audit' && data.commonHighRisks?.length > 0;
+
+    if (!hasVulnerabilities && !hasRiskQuestions) {
+      return null;
+    }
+
+    return (
       <div className="row mb-4">
-        {renderStatCard('Total Submissions', data.summary.totalSubmissions, 'bi-bar-chart-fill', 'primary', '')}
-        {renderStatCard('Vulnerability Submissions', data.summary.vulnerabilitySubmissions, 'bi-bug-fill', 'danger', '')}
-        {renderStatCard('Audit Submissions', data.summary.auditSubmissions, 'bi-clipboard-check', 'info', '')}
-        {renderStatCard(
-          'High Risk Items',
-          (data.vulnerability.riskDistribution?.high || 0) + (data.audit.riskDistribution?.high || 0),
-          'bi-exclamation-triangle-fill',
-          'danger',
-          ''
+        {hasVulnerabilities && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-list-ul text-danger me-2"></i>Top Vulnerability Categories</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '400px' }}>
+                  <canvas ref={topVulnerabilitiesChartRef} aria-label="Top Vulnerability Categories"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {hasRiskQuestions && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-question-circle-fill text-warning me-2"></i>Top High-Risk Questions</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '400px' }}>
+                  <canvas ref={topRiskQuestionsChartRef} aria-label="Top High-Risk Questions"></canvas>
+                </div>
+                <div className="mt-2">
+                  <small className="text-muted">
+                    Hover over bars for full question text
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
+    );
+  };
+
+  const renderProcessInsights = (data) => {
+    if (data.type !== 'combined') return null;
+
+    const vulnData = data.vulnerability;
+    const auditData = data.audit;
+
+    return (
       <div className="row mb-4">
-        <div className="col-lg-6 mb-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white">
-              <h6 className="fw-bold mb-0"><i className="bi bi-balance-scale text-info me-2"></i>Risk Distribution Comparison</h6>
-            </div>
-            <div className="card-body">
-              <div style={{ height: '300px' }}>
-                <canvas ref={combinedRiskChartRef} aria-label="Risk Distribution Comparison"></canvas>
+        {/* Review Statistics */}
+        {auditData.reviewStats && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-clipboard-check text-info me-2"></i>Review Status</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={reviewStatsChartRef} aria-label="Audit Review Status"></canvas>
+                </div>
+                <div className="mt-2">
+                  <small className="text-muted">
+                    Completion Rate: {auditData.reviewStats.completion_rate}%
+                  </small>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="col-lg-6 mb-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white">
-              <h6 className="fw-bold mb-0"><i className="bi bi-graph-up-arrow text-success me-2"></i>Submission Trends Comparison</h6>
-            </div>
-            <div className="card-body">
-              <div style={{ height: '300px' }}>
-                <canvas ref={combinedTrendsChartRef} aria-label="Submission Trends Comparison"></canvas>
+        )}
+
+        {/* Conversion Statistics */}
+        {data.conversionStats && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-arrow-right-circle-fill text-primary me-2"></i>Audit Conversion</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '300px' }}>
+                  <canvas ref={conversionStatsChartRef} aria-label="Audit to Vulnerability Conversion"></canvas>
+                </div>
+                <div className="mt-2">
+                  <small className="text-muted">
+                    Conversion Rate: {data.conversionStats.conversion_rate}%<br/>
+                    {data.conversionStats.total_vulnerabilities_created} vulnerabilities created
+                  </small>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
-      {renderVulnerabilityAnalytics(data.vulnerability)}
-      {renderAuditAnalytics(data.audit)}
-    </div>
-  );
+    );
+  };
+
+  const renderAdvancedAnalytics = (data) => {
+    if (data.type !== 'combined') return null;
+
+    const auditData = data.audit;
+
+    return (
+      <div className="row mb-4">
+        {/* Admin vs System Risk Comparison */}
+        {auditData.adminVsSystemRisk && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-balance-scale text-purple me-2"></i>Risk Assessment Comparison</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '400px' }}>
+                  <canvas ref={adminVsSystemChartRef} aria-label="System vs Admin Risk Assessment"></canvas>
+                </div>
+                <div className="mt-2">
+                  <small className="text-muted">
+                    Admin Overrides: {auditData.adminVsSystemRisk.admin_overrides} submissions
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Question Category Statistics */}
+        {auditData.questionCategoryStats && auditData.questionCategoryStats.length > 0 && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0"><i className="bi bi-tags-fill text-warning me-2"></i>High-Risk by Category</h6>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '400px' }}>
+                  <canvas ref={categoryStatsChartRef} aria-label="High-Risk Issues by Category"></canvas>
+                </div>
+                <div className="mt-2">
+                  <small className="text-muted">
+                    Top categories with highest risk issues
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-vh-100 bg-light">
@@ -734,8 +790,8 @@ const AdminAnalyticsDashboard = () => {
         <div className="container-fluid">
           <div className="row align-items-center">
             <div className="col-md-6">
-              <h1 className="h3 fw-bold mb-1">Analytics Dashboard</h1>
-              <p className="text-muted mb-0">Comprehensive security insights and metrics</p>
+              <h1 className="h3 fw-bold mb-1">Security Analytics Dashboard</h1>
+              <p className="text-muted mb-0">Risk assessment insights and security metrics</p>
             </div>
             <div className="col-md-6 text-end">
               <button
@@ -840,9 +896,20 @@ const AdminAnalyticsDashboard = () => {
 
         {analyticsData && (
           <div className="analytics-content">
-            {analyticsData.type === 'vulnerability' && renderVulnerabilityAnalytics(analyticsData)}
-            {analyticsData.type === 'audit' && renderAuditAnalytics(analyticsData)}
-            {analyticsData.type === 'combined' && renderCombinedAnalytics(analyticsData)}
+            {/* Key Metrics */}
+            {renderKeyMetrics(analyticsData)}
+            
+            {/* Risk Distribution */}
+            {renderRiskDistribution(analyticsData)}
+            
+            {/* Process Insights - Only for combined view */}
+            {renderProcessInsights(analyticsData)}
+            
+            {/* Top Issues */}
+            {renderTopIssues(analyticsData)}
+            
+            {/* Advanced Analytics - Only for combined view */}
+            {renderAdvancedAnalytics(analyticsData)}
           </div>
         )}
       </div>

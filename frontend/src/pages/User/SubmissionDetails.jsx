@@ -1,7 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
 import api from '../../api/axios';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+} from 'chart.js';
+
+// Register Chart.js components
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement
+);
 
 const getRiskLevelClass = (level) => {
     const classes = {
@@ -50,6 +71,10 @@ const SubmissionDetails = () => {
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
     const [expandedAnswers, setExpandedAnswers] = useState({});
+    
+    // Chart refs
+    const riskDistributionChartRef = useRef(null);
+    const categoryBreakdownChartRef = useRef(null);
 
     const fetchSubmissionDetails = React.useCallback(async () => {
         try {
@@ -119,6 +144,44 @@ const SubmissionDetails = () => {
         fetchSubmissionDetails();
     }, [id, user, navigate, fetchSubmissionDetails]);
 
+    // Initialize charts when submission data is loaded
+    useEffect(() => {
+        if (submission && submission.answers) {
+            const riskStats = getRiskStats();
+            
+            // Create charts with a small delay to ensure DOM is ready
+            setTimeout(() => {
+                createRiskDistributionChart(riskStats);
+                createCategoryBreakdownChart(submission.answers);
+            }, 100);
+        }
+    }, [submission]);
+
+    // Recreate charts when switching to overview or analytics tab
+    useEffect(() => {
+        if ((activeTab === 'overview' || activeTab === 'analytics') && submission && submission.answers) {
+            const riskStats = getRiskStats();
+            
+            // Create charts with a delay to ensure the tab content is rendered
+            setTimeout(() => {
+                createRiskDistributionChart(riskStats);
+                createCategoryBreakdownChart(submission.answers);
+            }, 200);
+        }
+    }, [activeTab, submission]);
+
+    // Cleanup charts on unmount
+    useEffect(() => {
+        return () => {
+            if (window.riskDistributionChart) {
+                window.riskDistributionChart.destroy();
+            }
+            if (window.categoryBreakdownChart) {
+                window.categoryBreakdownChart.destroy();
+            }
+        };
+    }, []);
+
     const toggleAnswerExpansion = (answerId) => {
         setExpandedAnswers(prev => ({
             ...prev,
@@ -149,6 +212,163 @@ const SubmissionDetails = () => {
         if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
         return date.toLocaleDateString();
     };
+
+    // Chart creation functions
+    const createRiskDistributionChart = (riskStats) => {
+        if (!riskDistributionChartRef.current) return;
+
+        const ctx = riskDistributionChartRef.current.getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (window.riskDistributionChart) {
+            window.riskDistributionChart.destroy();
+        }
+
+        window.riskDistributionChart = new ChartJS(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+                datasets: [{
+                    data: [riskStats.high, riskStats.medium, riskStats.low],
+                    backgroundColor: [
+                        '#dc3545', // Bootstrap danger (red)
+                        '#ffc107', // Bootstrap warning (yellow)
+                        '#198754'  // Bootstrap success (green)
+                    ],
+                    borderColor: [
+                        '#dc3545',
+                        '#ffc107',
+                        '#198754'
+                    ],
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    const createCategoryBreakdownChart = (answers) => {
+        if (!categoryBreakdownChartRef.current || !answers) return;
+
+        const ctx = categoryBreakdownChartRef.current.getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (window.categoryBreakdownChart) {
+            window.categoryBreakdownChart.destroy();
+        }
+
+        // Group answers by category and risk level
+        const categoryData = {};
+        answers.forEach(answer => {
+            const category = answer.question?.category || 'Uncategorized';
+            const riskLevel = answer.admin_risk_level || answer.system_risk_level || 'low';
+            
+            if (!categoryData[category]) {
+                categoryData[category] = { high: 0, medium: 0, low: 0 };
+            }
+            categoryData[category][riskLevel]++;
+        });
+
+        const categories = Object.keys(categoryData);
+        const highData = categories.map(cat => categoryData[cat].high);
+        const mediumData = categories.map(cat => categoryData[cat].medium);
+        const lowData = categories.map(cat => categoryData[cat].low);
+
+        window.categoryBreakdownChart = new ChartJS(ctx, {
+            type: 'bar',
+            data: {
+                labels: categories,
+                datasets: [
+                    {
+                        label: 'High Risk',
+                        data: highData,
+                        backgroundColor: '#dc3545',
+                        borderColor: '#dc3545',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Medium Risk',
+                        data: mediumData,
+                        backgroundColor: '#ffc107',
+                        borderColor: '#ffc107',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Low Risk',
+                        data: lowData,
+                        backgroundColor: '#198754',
+                        borderColor: '#198754',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0,
+                            font: {
+                                size: 10
+                            }
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+    };
+
 
     if (loading) {
         return (
@@ -386,6 +606,18 @@ const SubmissionDetails = () => {
                                 </li>
                                 <li className="nav-item" role="presentation">
                                     <button 
+                                        className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('analytics')}
+                                        type="button"
+                                        aria-selected={activeTab === 'analytics'}
+                                        role="tab"
+                                    >
+                                        <i className="bi bi-graph-up me-2" aria-hidden="true"></i>
+                                        Analytics
+                                    </button>
+                                </li>
+                                <li className="nav-item" role="presentation">
+                                    <button 
                                         className={`nav-link ${activeTab === 'recommendations' ? 'active' : ''}`}
                                         onClick={() => setActiveTab('recommendations')}
                                         type="button"
@@ -402,42 +634,48 @@ const SubmissionDetails = () => {
                             {/* Overview Tab */}
                             {activeTab === 'overview' && (
                                 <div className="tab-pane fade show active" role="tabpanel">
-                                    <div className="row">
-                                        <div className="col-md-6 mb-4">
-                                            <div className="card border-0 shadow-sm bg-light h-100">
-                                                <div className="card-body">
-                                                    <h6 className="fw-bold text-primary mb-3">
-                                                        <i className="bi bi-bar-chart me-2" aria-hidden="true"></i>
+                                    {/* Risk Distribution Chart */}
+                                    <div className="row mb-4">
+                                        <div className="col-lg-6 mb-4">
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-0 py-3">
+                                                    <h6 className="fw-bold text-primary mb-0">
+                                                        <i className="bi bi-pie-chart me-2" aria-hidden="true"></i>
                                                         Risk Distribution
                                                     </h6>
-                                                    <div className="row text-center">
-                                                        <div className="col-4">
-                                                            <div className="text-danger h4 fw-bold">{riskStats.high}</div>
-                                                            <p className="text-muted small fw-semibold mb-0">High</p>
-                                                        </div>
-                                                        <div className="col-4">
-                                                            <div className="text-warning h4 fw-bold">{riskStats.medium}</div>
-                                                            <p className="text-muted small fw-semibold mb-0">Medium</p>
-                                                        </div>
-                                                        <div className="col-4">
-                                                            <div className="text-success h4 fw-bold">{riskStats.low}</div>
-                                                            <p className="text-muted small fw-semibold mb-0">Low</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="progress mt-3" style={{ height: '10px' }}>
-                                                        <div className="progress-bar bg-danger" style={{ width: `${(riskStats.high / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.high / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
-                                                        <div className="progress-bar bg-warning" style={{ width: `${(riskStats.medium / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.medium / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
-                                                        <div className="progress-bar bg-success" style={{ width: `${(riskStats.low / totalAnswers) * 100}%` }} role="progressbar" aria-valuenow={(riskStats.low / totalAnswers) * 100} aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <div className="card-body">
+                                                    <div style={{ height: '300px', position: 'relative' }}>
+                                                        <canvas ref={riskDistributionChartRef}></canvas>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="col-md-6 mb-4">
-                                            <div className="card border-0 shadow-sm bg-light h-100">
+                                        <div className="col-lg-6 mb-4">
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-0 py-3">
+                                                    <h6 className="fw-bold text-primary mb-0">
+                                                        <i className="bi bi-bar-chart me-2" aria-hidden="true"></i>
+                                                        Category Breakdown
+                                                    </h6>
+                                                </div>
                                                 <div className="card-body">
+                                                    <div style={{ height: '300px', position: 'relative' }}>
+                                                        <canvas ref={categoryBreakdownChartRef}></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Summary Statistics */}
+                                    <div className="row">
+                                        <div className="col-md-4 mb-4">
+                                            <div className="card border-0 shadow-sm bg-light h-100">
+                                                <div className="card-body text-center">
                                                     <h6 className="fw-bold text-primary mb-3">
                                                         <i className="bi bi-info-circle me-2" aria-hidden="true"></i>
-                                                        Assessment Details
+                                                        Assessment Summary
                                                     </h6>
                                                     <div className="row g-3">
                                                         <div className="col-12">
@@ -459,6 +697,54 @@ const SubmissionDetails = () => {
                                                                     {submission.status?.replace('_', ' ').toUpperCase()}
                                                                 </span>
                                                             </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4 mb-4">
+                                            <div className="card border-0 shadow-sm bg-light h-100">
+                                                <div className="card-body text-center">
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+                                                        Risk Counts
+                                                    </h6>
+                                                    <div className="row text-center">
+                                                        <div className="col-4">
+                                                            <div className="text-danger h4 fw-bold">{riskStats.high}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">High</p>
+                                                        </div>
+                                                        <div className="col-4">
+                                                            <div className="text-warning h4 fw-bold">{riskStats.medium}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Medium</p>
+                                                        </div>
+                                                        <div className="col-4">
+                                                            <div className="text-success h4 fw-bold">{riskStats.low}</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Low</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4 mb-4">
+                                            <div className="card border-0 shadow-sm bg-light h-100">
+                                                <div className="card-body text-center">
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-percent me-2" aria-hidden="true"></i>
+                                                        Risk Percentages
+                                                    </h6>
+                                                    <div className="row text-center">
+                                                        <div className="col-4">
+                                                            <div className="text-danger h4 fw-bold">{((riskStats.high / totalAnswers) * 100).toFixed(1)}%</div>
+                                                            <p className="text-muted small fw-semibold mb-0">High</p>
+                                                        </div>
+                                                        <div className="col-4">
+                                                            <div className="text-warning h4 fw-bold">{((riskStats.medium / totalAnswers) * 100).toFixed(1)}%</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Medium</p>
+                                                        </div>
+                                                        <div className="col-4">
+                                                            <div className="text-success h4 fw-bold">{((riskStats.low / totalAnswers) * 100).toFixed(1)}%</div>
+                                                            <p className="text-muted small fw-semibold mb-0">Low</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -630,6 +916,118 @@ const SubmissionDetails = () => {
                                             <p className="text-muted mb-0">No answers were found for this submission.</p>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Analytics Tab */}
+                            {activeTab === 'analytics' && (
+                                <div className="tab-pane fade show active" role="tabpanel">
+                                    <div className="row mb-4">
+                                        <div className="col-12">
+                                            <div className="alert alert-info border-0 shadow-sm">
+                                                <div className="d-flex align-items-center">
+                                                    <i className="bi bi-info-circle-fill me-2" aria-hidden="true"></i>
+                                                    <div>
+                                                        <strong>Analytics Overview:</strong> This section provides detailed visualizations of your security assessment results, including risk distribution, category analysis, and assessment trends.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Risk Distribution Chart */}
+                                    <div className="row mb-4">
+                                        <div className="col-lg-6 mb-4">
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-0 py-3">
+                                                    <h6 className="fw-bold text-primary mb-0">
+                                                        <i className="bi bi-pie-chart me-2" aria-hidden="true"></i>
+                                                        Risk Distribution
+                                                    </h6>
+                                                    <p className="text-muted small mb-0 mt-1">Overall risk breakdown by percentage</p>
+                                                </div>
+                                                <div className="card-body">
+                                                    <div style={{ height: '350px', position: 'relative' }}>
+                                                        <canvas ref={riskDistributionChartRef}></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-lg-6 mb-4">
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-0 py-3">
+                                                    <h6 className="fw-bold text-primary mb-0">
+                                                        <i className="bi bi-bar-chart me-2" aria-hidden="true"></i>
+                                                        Category Breakdown
+                                                    </h6>
+                                                    <p className="text-muted small mb-0 mt-1">Risk levels by security category</p>
+                                                </div>
+                                                <div className="card-body">
+                                                    <div style={{ height: '350px', position: 'relative' }}>
+                                                        <canvas ref={categoryBreakdownChartRef}></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Key Insights */}
+                                    <div className="row">
+                                        <div className="col-md-6 mb-4">
+                                            <div className="card border-0 shadow-sm bg-light">
+                                                <div className="card-body">
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-lightbulb me-2" aria-hidden="true"></i>
+                                                        Key Insights
+                                                    </h6>
+                                                    <ul className="list-unstyled mb-0">
+                                                        <li className="mb-2">
+                                                            <i className="bi bi-check-circle-fill text-success me-2" aria-hidden="true"></i>
+                                                            <strong>Total Questions:</strong> {totalAnswers} answered
+                                                        </li>
+                                                        <li className="mb-2">
+                                                            <i className="bi bi-exclamation-triangle-fill text-danger me-2" aria-hidden="true"></i>
+                                                            <strong>High Risk Items:</strong> {riskStats.high} ({(riskStats.high / totalAnswers * 100).toFixed(1)}%)
+                                                        </li>
+                                                        <li className="mb-2">
+                                                            <i className="bi bi-shield-fill-check text-success me-2" aria-hidden="true"></i>
+                                                            <strong>Low Risk Items:</strong> {riskStats.low} ({(riskStats.low / totalAnswers * 100).toFixed(1)}%)
+                                                        </li>
+                                                        <li className="mb-0">
+                                                            <i className="bi bi-graph-up text-primary me-2" aria-hidden="true"></i>
+                                                            <strong>Overall Assessment:</strong> {effectiveOverallRisk.toUpperCase()} RISK
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-6 mb-4">
+                                            <div className="card border-0 shadow-sm bg-light">
+                                                <div className="card-body">
+                                                    <h6 className="fw-bold text-primary mb-3">
+                                                        <i className="bi bi-trophy me-2" aria-hidden="true"></i>
+                                                        Assessment Score
+                                                    </h6>
+                                                    <div className="text-center">
+                                                        <div className="display-4 fw-bold text-primary mb-2">
+                                                            {Math.round(((riskStats.low + (riskStats.medium * 0.5)) / totalAnswers) * 100)}
+                                                        </div>
+                                                        <p className="text-muted mb-0">Security Score</p>
+                                                        <div className="progress mt-2" style={{ height: '8px' }}>
+                                                            <div 
+                                                                className="progress-bar bg-primary" 
+                                                                style={{ width: `${((riskStats.low + (riskStats.medium * 0.5)) / totalAnswers) * 100}%` }}
+                                                                role="progressbar"
+                                                            ></div>
+                                                        </div>
+                                                        <small className="text-muted mt-2 d-block">
+                                                            Based on: Low Risk = 100%, Medium Risk = 50%, High Risk = 0%
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

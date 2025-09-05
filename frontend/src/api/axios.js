@@ -48,7 +48,7 @@ instance.interceptors.request.use(
         // Clean up unnecessary cookies before each request
         cleanupUnnecessaryCookies();
 
-        // Get auth token
+        // Get auth token - always fetch fresh from localStorage
         const token = localStorage.getItem('token');
         
         // Set base headers
@@ -58,6 +58,13 @@ instance.interceptors.request.use(
             'X-Requested-With': 'XMLHttpRequest',
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
+        
+        // Log token usage for debugging
+        if (token) {
+            console.log('Using token for request:', token.substring(0, 20) + '...');
+        } else {
+            console.log('No token found for request');
+        }
 
         // Handle CSRF token for state-changing operations
         if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
@@ -220,6 +227,26 @@ instance.reviewAnswer = async (submissionId, answerId, reviewData) => {
         console.error('Review request failed:', error);
         throw error;
     }
+};
+
+// Function to completely reset axios instance (for logout)
+instance.resetAuth = () => {
+    // Clear any default headers
+    delete instance.defaults.headers.common['Authorization'];
+    delete instance.defaults.headers.Authorization;
+    
+    // Clear any cached tokens in interceptors
+    console.log('Axios instance auth reset');
+    
+    // Force clear any remaining cookies
+    document.cookie.split(';').forEach(cookie => {
+        const [name] = cookie.split('=');
+        const cookieName = name.trim();
+        if (cookieName && !['XSRF-TOKEN', 'laravel_session'].includes(cookieName)) {
+            document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+            document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        }
+    });
 };
 
 export default instance;

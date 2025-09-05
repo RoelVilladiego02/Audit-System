@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './useAuth';
+import api from '../api/axios';
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -16,8 +17,13 @@ const Register = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState({ score: 0, feedback: '' });
 
-    const { register, user } = useAuth();
+    const { register, user, clearAuthData } = useAuth();
     const navigate = useNavigate();
+
+    // Clear any existing auth data when component mounts
+    useEffect(() => {
+        clearAuthData();
+    }, [clearAuthData]);
 
     // Redirect if already logged in
     useEffect(() => {
@@ -128,6 +134,13 @@ const Register = () => {
         setIsLoading(true);
 
         try {
+            // Clear any existing authentication data before registration
+            console.log('Clearing existing auth data before registration...');
+            clearAuthData();
+            
+            // Wait a moment to ensure clearing is complete
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             const userData = await register(
                 formData.name.trim(),
                 formData.email.toLowerCase().trim(),
@@ -136,11 +149,19 @@ const Register = () => {
             );
             
             if (userData) {
-                // Registration successful
-                navigate('/dashboard', { 
+                console.log('Registration successful for user:', {
+                    id: userData.id,
+                    name: userData.name,
+                    email: userData.email,
+                    role: userData.role
+                });
+                
+                // Don't auto-redirect, let the user manually navigate
+                // This prevents accessing stale data
+                navigate('/login', { 
                     replace: true,
                     state: { 
-                        message: 'Registration successful! Welcome to the audit system.' 
+                        message: 'Registration successful! Please log in with your new account.' 
                     }
                 });
             } else {

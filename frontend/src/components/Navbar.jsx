@@ -7,26 +7,15 @@ const Navbar = () => {
   const location = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const clearAllCookies = () => {
-    document.cookie.split(';').forEach(cookie => {
-      const [name] = cookie.split('=');
-      document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-    });
-  };
-
   const handleLogout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
-    clearAllCookies();
-    localStorage.clear();
-    sessionStorage.clear();
     try {
       await logout();
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
-      window.location.href = '/login';
     }
+    // Note: AuthContext logout will handle all cleanup and navigation
   };
 
   const isActiveRoute = (path) => {
@@ -132,25 +121,11 @@ const Navbar = () => {
                     New Audit
                   </Link>
                 </li>
-                <li className="nav-item dropdown">
-                  <button
-                    className="nav-link dropdown-toggle bg-transparent border-0"
-                    type="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                    aria-label="My Work Options"
-                  >
-                    <i className="bi bi-folder me-1"></i>
-                    My Work
-                  </button>
-                  <ul className="dropdown-menu shadow-sm border-0">
-                    <li>
-                      <Link className="dropdown-item" to="/submissions" aria-label="My Submissions">
-                        <i className="bi bi-file-earmark-text me-2"></i>
-                        My Submissions
-                      </Link>
-                    </li>
-                  </ul>
+                <li className="nav-item">
+                  <Link className={getNavLinkClass('/submissions')} to="/submissions" aria-label="My Submissions">
+                    <i className="bi bi-file-earmark-text me-1"></i>
+                    My Submissions
+                  </Link>
                 </li>
               </>
             )}

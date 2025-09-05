@@ -57,11 +57,47 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const clearAuthData = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        delete axios.defaults.headers.common['Authorization'];
+        // Clear user state immediately
         setUser(null);
+        
+        // Clear localStorage completely
+        localStorage.clear();
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        
+        // Clear axios default headers
+        delete axios.defaults.headers.common['Authorization'];
+        
+        // Clear any cached axios instance headers
+        if (axios.defaults.headers) {
+            delete axios.defaults.headers.Authorization;
+        }
+        
+        // Reset axios instance
+        if (axios.resetAuth) {
+            axios.resetAuth();
+        }
+        
+        // Reset state
         setError('');
+        setLoading(false);
+        
+        // Force clear any remaining cookies that might contain auth data
+        document.cookie.split(';').forEach(cookie => {
+            const [name] = cookie.split('=');
+            const cookieName = name.trim();
+            if (cookieName && !['XSRF-TOKEN', 'laravel_session'].includes(cookieName)) {
+                document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+                document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+            }
+        });
+        
+        // Force clear any React state
+        setLoading(false);
+        setError('');
+        
+        console.log('Authentication data cleared completely');
     };
 
     const checkAuth = async () => {
@@ -173,6 +209,10 @@ export const AuthProvider = ({ children }) => {
         setError('');
         
         try {
+            // Clear any existing auth data before registration
+            clearAuthData();
+            await new Promise(resolve => setTimeout(resolve, 50)); // Brief pause
+            
             console.log('Attempting registration for:', email);
             
             const response = await axios.post('/auth/register', {
@@ -264,9 +304,13 @@ export const AuthProvider = ({ children }) => {
             clearAuthData();
             setLoading(false);
             
-            // Force navigation to login page
+            // Force a complete page reload to clear any cached state
             setTimeout(() => {
-                window.location.href = '/login';
+                // Clear any remaining session storage
+                sessionStorage.clear();
+                
+                // Force navigation to login page with a hard reload
+                window.location.replace('/login');
             }, 100);
         }
     };
@@ -317,6 +361,7 @@ export const AuthProvider = ({ children }) => {
         refreshToken,
         updateUser,
         clearError: () => setError(''),
+        clearAuthData, // Expose the clearAuthData function
         
         // Role checking utilities
         isAdmin: user?.role === 'admin',
