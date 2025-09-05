@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../auth/useAuth';
@@ -13,6 +13,8 @@ const AuditForm = () => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const questionRefs = useRef({});
 
     const fetchQuestions = React.useCallback(async () => {
         try {
@@ -60,6 +62,87 @@ const AuditForm = () => {
         fetchQuestions();
     }, [user, authLoading, navigate, fetchQuestions]);
 
+    // Intersection Observer to track which question is currently in view
+    useEffect(() => {
+        if (questions.length === 0) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        const questionId = parseInt(entry.target.getAttribute('data-question-id'));
+                        const questionIndex = questions.findIndex(q => q.id === questionId);
+                        if (questionIndex !== -1) {
+                            setCurrentQuestionIndex(questionIndex);
+                        }
+                    }
+                });
+            },
+            {
+                root: null,
+                rootMargin: '-20% 0px -60% 0px',
+                threshold: 0.5
+            }
+        );
+
+        // Observe all question elements
+        questions.forEach(question => {
+            const element = questionRefs.current[question.id];
+            if (element) {
+                element.setAttribute('data-question-id', question.id);
+                observer.observe(element);
+            }
+        });
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [questions]);
+
+    const scrollToNextUnansweredQuestion = (currentQuestionId) => {
+        const currentIndex = questions.findIndex(q => q.id === currentQuestionId);
+        if (currentIndex === -1) return;
+
+        // Find the next unanswered question
+        let nextIndex = currentIndex + 1;
+        while (nextIndex < questions.length) {
+            const nextQuestion = questions[nextIndex];
+            const nextAnswer = getFinalAnswer(nextQuestion.id);
+            if (!nextAnswer || nextAnswer.trim() === '') {
+                break;
+            }
+            nextIndex++;
+        }
+
+        // If we found a next unanswered question, scroll to it
+        if (nextIndex < questions.length) {
+            const nextQuestion = questions[nextIndex];
+            const questionElement = questionRefs.current[nextQuestion.id];
+            if (questionElement) {
+                setTimeout(() => {
+                    questionElement.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                        inline: 'nearest'
+                    });
+                    setCurrentQuestionIndex(nextIndex);
+                }, 300); // Small delay to allow for any UI updates
+            }
+        } else {
+            // If no more unanswered questions, scroll to submit button
+            setTimeout(() => {
+                const submitButton = document.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                        inline: 'nearest'
+                    });
+                }
+            }, 300);
+        }
+    };
+
     const handleAnswerChange = (questionId, value) => {
         setAnswers(prev => ({
             ...prev,
@@ -71,6 +154,13 @@ const AuditForm = () => {
                 [questionId]: ''
             }));
         }
+
+        // Auto-scroll to next unanswered question after a short delay
+        if (value && value.trim() !== '') {
+            setTimeout(() => {
+                scrollToNextUnansweredQuestion(questionId);
+            }, 500);
+        }
     };
 
     const handleCustomAnswerChange = (questionId, value) => {
@@ -78,6 +168,29 @@ const AuditForm = () => {
             ...prev,
             [questionId]: value
         }));
+
+        // Auto-scroll to next unanswered question when custom answer is provided
+        if (value && value.trim() !== '') {
+            setTimeout(() => {
+                scrollToNextUnansweredQuestion(questionId);
+            }, 500);
+        }
+    };
+
+    // Function to scroll to a specific question
+    const scrollToQuestion = (questionIndex) => {
+        if (questionIndex >= 0 && questionIndex < questions.length) {
+            const question = questions[questionIndex];
+            const questionElement = questionRefs.current[question.id];
+            if (questionElement) {
+                questionElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                    inline: 'nearest'
+                });
+                setCurrentQuestionIndex(questionIndex);
+            }
+        }
     };
 
     const getFinalAnswer = (questionId) => {
@@ -311,16 +424,67 @@ const AuditForm = () => {
                         </div>
                     </div>
 
-                    {/* Category Overview Section */}
+                    {/* Navigation and Category Overview Section */}
                     {questions.length > 0 && (
                         <div className="card border-0 shadow-sm mb-4">
                             <div className="card-header bg-white border-0 py-3">
-                                <h6 className="fw-bold text-primary mb-0">
-                                    <i className="bi bi-grid-3x3-gap me-2" aria-hidden="true"></i>
-                                    Form Categories Overview
-                                </h6>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <h6 className="fw-bold text-primary mb-0">
+                                        <i className="bi bi-grid-3x3-gap me-2" aria-hidden="true"></i>
+                                        Form Navigation
+                                    </h6>
+                                    <div className="d-flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => scrollToQuestion(currentQuestionIndex - 1)}
+                                            disabled={currentQuestionIndex === 0}
+                                            className="btn btn-outline-primary btn-sm"
+                                            title="Previous question"
+                                        >
+                                            <i className="bi bi-chevron-up" aria-hidden="true"></i>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => scrollToQuestion(currentQuestionIndex + 1)}
+                                            disabled={currentQuestionIndex >= questions.length - 1}
+                                            className="btn btn-outline-primary btn-sm"
+                                            title="Next question"
+                                        >
+                                            <i className="bi bi-chevron-down" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div className="card-body py-3">
+                                {/* Quick navigation buttons */}
+                                <div className="mb-3">
+                                    <div className="d-flex flex-wrap gap-1">
+                                        {questions.map((question, index) => {
+                                            const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
+                                            const isCurrent = index === currentQuestionIndex;
+                                            return (
+                                                <button
+                                                    key={question.id}
+                                                    type="button"
+                                                    onClick={() => scrollToQuestion(index)}
+                                                    className={`btn btn-sm ${
+                                                        isCurrent 
+                                                            ? 'btn-primary' 
+                                                            : isAnswered 
+                                                                ? 'btn-success' 
+                                                                : 'btn-outline-secondary'
+                                                    }`}
+                                                    style={{ minWidth: '40px' }}
+                                                    title={`Question ${index + 1}: ${question.question.substring(0, 50)}...`}
+                                                >
+                                                    {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                
+                                {/* Category Overview */}
                                 <div className="row g-2">
                                     {(() => {
                                         const categories = [...new Set(questions.map(q => q.category).filter(Boolean))];
@@ -385,14 +549,30 @@ const AuditForm = () => {
                         <form onSubmit={handleSubmit}>
                             {questions.map((question, index) => {
                                 const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
+                                const isCurrent = index === currentQuestionIndex;
                                 return (
-                                    <div key={question.id} className="card border-0 shadow-sm mb-4">
+                                    <div 
+                                        key={question.id} 
+                                        ref={(el) => { questionRefs.current[question.id] = el; }}
+                                        className={`card border-0 shadow-sm mb-4 ${isCurrent ? 'border-primary border-2' : ''}`}
+                                        style={{
+                                            transition: 'all 0.3s ease',
+                                            transform: isCurrent ? 'scale(1.02)' : 'scale(1)',
+                                            boxShadow: isCurrent ? '0 0.5rem 1rem rgba(13, 110, 253, 0.15)' : '0 0.125rem 0.25rem rgba(0, 0, 0, 0.075)'
+                                        }}
+                                    >
                                         <div className="card-header bg-white border-0 py-3">
                                             <div className="d-flex align-items-center mb-2">
-                                                <span className={`badge ${isAnswered ? 'bg-success' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
+                                                <span className={`badge ${isAnswered ? 'bg-success' : isCurrent ? 'bg-primary' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
                                                     {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
                                                 </span>
                                                 <h6 className="fw-bold mb-0 flex-grow-1">{question.question}</h6>
+                                                {isCurrent && (
+                                                    <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1 rounded-pill">
+                                                        <i className="bi bi-eye me-1" aria-hidden="true"></i>
+                                                        Current
+                                                    </span>
+                                                )}
                                             </div>
                                             {question.category && (
                                                 <div className="d-flex align-items-center">
@@ -428,9 +608,10 @@ const AuditForm = () => {
                                                     id={`answer-${question.id}`}
                                                     value={answers[question.id] || ''}
                                                     onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                                    className={`form-select ${isAnswered ? 'border-success bg-success bg-opacity-10' : 'border-secondary'}`}
+                                                    className={`form-select ${isAnswered ? 'border-success bg-success bg-opacity-10' : isCurrent ? 'border-primary' : 'border-secondary'}`}
                                                     required
                                                     aria-label={`Answer for question ${index + 1}`}
+                                                    autoFocus={isCurrent}
                                                 >
                                                     <option value="">Choose your answer...</option>
                                                     {question.possible_answers?.map((answer, answerIndex) => (
@@ -464,11 +645,12 @@ const AuditForm = () => {
                                                         id={`custom-${question.id}`}
                                                         value={customAnswers[question.id] || ''}
                                                         onChange={(e) => handleCustomAnswerChange(question.id, e.target.value)}
-                                                        className="form-control"
+                                                        className={`form-control ${isCurrent ? 'border-primary' : ''}`}
                                                         rows="3"
                                                         placeholder="Provide your specific answer here..."
                                                         required
                                                         aria-label={`Custom answer for question ${index + 1}`}
+                                                        autoFocus={isCurrent && answers[question.id] === 'Others'}
                                                     />
                                                     <div className="form-text">
                                                         <i className="bi bi-info-circle me-1" aria-hidden="true"></i>
@@ -521,6 +703,34 @@ const AuditForm = () => {
                                 </div>
                             </div>
                         </form>
+                    )}
+
+                    {/* Floating Action Button for Quick Navigation */}
+                    {questions.length > 0 && (
+                        <div className="position-fixed" style={{ bottom: '20px', right: '20px', zIndex: 1000 }}>
+                            <div className="btn-group-vertical" role="group">
+                                <button
+                                    type="button"
+                                    onClick={() => scrollToQuestion(currentQuestionIndex - 1)}
+                                    disabled={currentQuestionIndex === 0}
+                                    className="btn btn-primary btn-sm rounded-circle mb-2"
+                                    style={{ width: '50px', height: '50px' }}
+                                    title="Previous question"
+                                >
+                                    <i className="bi bi-chevron-up" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => scrollToQuestion(currentQuestionIndex + 1)}
+                                    disabled={currentQuestionIndex >= questions.length - 1}
+                                    className="btn btn-primary btn-sm rounded-circle"
+                                    style={{ width: '50px', height: '50px' }}
+                                    title="Next question"
+                                >
+                                    <i className="bi bi-chevron-down" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
