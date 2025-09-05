@@ -24,9 +24,9 @@ class DatabaseSeeder extends Seeder
             AuditAnswerSeeder::class,
             
             // Finally create submissions and their relationships
-            AuditSubmissionSeeder::class,
-            VulnerabilitySubmissionSeeder::class,
-            VulnerabilitySeeder::class,
+            // AuditSubmissionSeeder::class,
+            // VulnerabilitySubmissionSeeder::class,
+            // VulnerabilitySeeder::class,
         ]);
     }
 }

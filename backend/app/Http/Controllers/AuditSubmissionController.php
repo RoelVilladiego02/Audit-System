@@ -274,6 +274,84 @@ class AuditSubmissionController extends Controller
     }
 
     /**
+     * Admin bulk review answers in a submission with per-answer data.
+     */
+    public function bulkReviewAnswers(Request $request, AuditSubmission $submission): JsonResponse
+    {
+        try {
+            if (!auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Only admins can bulk review answers'], 403);
+            }
+
+            $validated = $request->validate([
+                'answers' => 'required|array|min:1',
+                'answers.*.answer_id' => 'required|integer|exists:audit_answers,id',
+                'answers.*.admin_risk_level' => 'required|in:low,medium,high',
+                'answers.*.admin_notes' => 'nullable|string|max:1000',
+                'answers.*.recommendation' => 'required|string|min:5|max:1000',
+            ]);
+
+            $reviewedCount = 0;
+            DB::beginTransaction();
+            try {
+                foreach ($validated['answers'] as $reviewData) {
+                    $answer = AuditAnswer::find($reviewData['answer_id']);
+                    
+                    if (!$answer || $answer->audit_submission_id !== $submission->id) {
+                        throw ValidationException::withMessages([
+                            'answers' => "Answer with ID {$reviewData['answer_id']} not found or does not belong to this submission."
+                        ]);
+                    }
+                    
+                    if ($answer->reviewed_by) {
+                        // Skip already reviewed answers to avoid overriding
+                        continue;
+                    }
+
+                    $answer->reviewByAdmin(
+                        auth()->user(),
+                        $reviewData['admin_risk_level'],
+                        $reviewData['admin_notes'] ?? '',
+                        $reviewData['recommendation']
+                    );
+                    $reviewedCount++;
+                }
+
+                if ($submission->status === 'submitted' && $reviewedCount > 0) {
+                    $submission->update(['status' => 'under_review']);
+                }
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+            return response()->json([
+                'message' => "Bulk reviewed {$reviewedCount} answers.",
+                'reviewed_count' => $reviewedCount,
+                'submission_status' => $submission->fresh()->status,
+                'submission_progress' => $this->calculateReviewProgress($submission->fresh()),
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Failed to bulk review answers: ' . $e->getMessage(), [
+                'submission_id' => $submission->id,
+                'user_id' => auth()->id(),
+                'request_data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Failed to bulk review answers.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
      * Admin review individual answer.
      */
     public function reviewAnswer(Request $request, AuditSubmission $submission, AuditAnswer $answer): JsonResponse

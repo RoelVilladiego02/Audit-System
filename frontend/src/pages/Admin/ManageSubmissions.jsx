@@ -829,6 +829,12 @@ const FinalReviewForm = ({
     onCancel,
     submission 
 }) => {
+    // Preselect risk based on current overall risk
+    useEffect(() => {
+        if (!adminOverallRisk && submission?.effective_overall_risk) {
+            setAdminOverallRisk(submission.effective_overall_risk);
+        }
+    }, [adminOverallRisk, submission?.effective_overall_risk, setAdminOverallRisk]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [validationError, setValidationError] = useState('');
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -1167,6 +1173,41 @@ const SubmissionDetails = ({
         }
     };
 
+    // Mark All as Reviewed logic
+    const [markingAll, setMarkingAll] = useState(false);
+    const allReviewed = submission?.answers?.length > 0 && submission.answers.every(a => a.reviewed_by && a.admin_risk_level && a.recommendation);
+        const handleMarkAllReviewed = async () => {
+        setMarkingAll(true);
+        try {
+            // Only include unreviewed answers in the payload
+            const answersPayload = (submission.answers || []).filter(answer => !answer.reviewed_by).map(answer => ({
+                answer_id: answer.id,
+                admin_risk_level: answer.system_risk_level || 'low', // Preserve system risk as default
+                admin_notes: answer.admin_notes || '',
+                recommendation: answer.recommendation || 'Reviewed and accepted system assessment.'
+            }));
+
+            if (answersPayload.length === 0) {
+                setError('All answers are already reviewed.');
+                return;
+            }
+
+            const response = await api.put(`/audit-submissions/${submission.id}/answers/bulk-review`, {
+                answers: answersPayload
+            });
+
+            console.log('Bulk review response:', response.data);
+
+            await fetchSubmissionDetails(submission.id);
+            setError(null);
+        } catch (err) {
+            console.error('Bulk review error:', err);
+            setError(err.response?.data?.message || 'Failed to mark all as reviewed.');
+        } finally {
+            setMarkingAll(false);
+        }
+    };
+
     return (
         <div className="card border-0 shadow-sm">
             <div className="card-header bg-white">
@@ -1192,8 +1233,8 @@ const SubmissionDetails = ({
                     </div>
                     <div className="text-end">
                         <span className={`badge fs-6 ${getRiskColor(submission.effective_overall_risk)}`}>
-                            {getRiskIcon(submission.effective_overall_risk)}
-                            Overall Risk: {submission.effective_overall_risk.toUpperCase()}
+                            {getRiskIcon(submission.admin_overall_risk || submission.system_overall_risk || 'pending')}
+                            Overall Risk: {(submission.admin_overall_risk || submission.system_overall_risk || 'pending').toUpperCase()}
                         </span>
                         {submission.review_progress !== undefined && (
                             <div className="mt-2">
@@ -1207,6 +1248,22 @@ const SubmissionDetails = ({
                             </div>
                         )}
                     </div>
+                </div>
+                {/* Mark All as Reviewed Button */}
+                <div className="d-flex justify-content-end mt-3">
+                    <button
+                        className="btn btn-outline-success"
+                        onClick={handleMarkAllReviewed}
+                        disabled={allReviewed || markingAll}
+                        aria-label="Mark all answers as reviewed"
+                    >
+                        {markingAll ? (
+                            <span className="spinner-border spinner-border-sm me-2" />
+                        ) : (
+                            <i className="bi bi-check2-all me-1"></i>
+                        )}
+                        Mark All as Reviewed
+                    </button>
                 </div>
             </div>
 

@@ -51,6 +51,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{submission}/answers/{answer}/review', [AuditSubmissionController::class, 'reviewAnswer'])
                 ->where(['submission' => '[0-9]+', 'answer' => '[0-9]+'])
                 ->name('review-answer');
+            // Bulk review all answers in a submission
+            Route::put('/{submission}/answers/bulk-review', [AuditSubmissionController::class, 'bulkReviewAnswers'])
+                ->where(['submission' => '[0-9]+'])
+                ->name('bulk-review-answers');
             Route::put('/{submission}/complete', [AuditSubmissionController::class, 'completeReview'])
                 ->name('complete');
             Route::get('/admin/dashboard', [AuditSubmissionController::class, 'adminDashboard'])
