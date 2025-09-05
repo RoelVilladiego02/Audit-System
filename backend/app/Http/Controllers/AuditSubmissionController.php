@@ -683,15 +683,6 @@ class AuditSubmissionController extends Controller
                         ->pluck('count', 'risk')
                         ->toArray(),
                 ],
-                'trends' => AuditSubmission::where('created_at', '>=', $startDate)
-                    ->select(
-                        DB::raw('DATE(created_at) as date'),
-                        DB::raw('count(*) as submissions'),
-                        DB::raw('sum(case when status = "completed" then 1 else 0 end) as completed')
-                    )
-                    ->groupBy('date')
-                    ->orderBy('date')
-                    ->get(),
                 'question_insights' => AuditAnswer::join('audit_questions', 'audit_answers.audit_question_id', '=', 'audit_questions.id')
                     ->select(
                         'audit_questions.question',

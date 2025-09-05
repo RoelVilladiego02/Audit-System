@@ -79,23 +79,38 @@ class AuditSubmission extends Model
         $answers = $this->answers()->with('question')->get();
         if ($answers->isEmpty()) return 'low';
 
-        $riskScores = ['low' => 1, 'medium' => 2, 'high' => 3];
-        $totalScore = 0;
-        $count = 0;
+        $highCount = 0;
+        $mediumCount = 0;
+        $lowCount = 0;
 
         foreach ($answers as $answer) {
             // Ensure we have a proper risk level
             $riskLevel = $answer->admin_risk_level ?? $answer->system_risk_level ?? 'low';
-            $totalScore += $riskScores[$riskLevel] ?? 1;
-            $count++;
+            switch ($riskLevel) {
+                case 'high': $highCount++; break;
+                case 'medium': $mediumCount++; break;
+                case 'low': $lowCount++; break;
+            }
         }
 
-        if ($count === 0) return 'low';
+        $total = $highCount + $mediumCount + $lowCount;
+        if ($total === 0) return 'low';
 
-        $averageScore = $totalScore / $count;
+        $highPercentage = ($highCount / $total) * 100;
+        $mediumPercentage = ($mediumCount / $total) * 100;
+
+        // If more than 40% are high risk, overall is high (adjusted for binary system)
+        if ($highPercentage >= 40) return 'high';
         
-        if ($averageScore >= 2.5) return 'high';
-        if ($averageScore >= 1.5) return 'medium';
+        // If more than 20% are high risk, overall is medium
+        if ($highPercentage >= 20) return 'medium';
+        
+        // If more than 50% are medium risk, overall is medium
+        if ($mediumPercentage >= 50) return 'medium';
+        
+        // If any high risk exists, minimum is medium
+        if ($highCount > 0) return 'medium';
+        
         return 'low';
     }
 
@@ -103,6 +118,14 @@ class AuditSubmission extends Model
     public function getEffectiveOverallRiskAttribute(): string
     {
         return $this->admin_overall_risk ?? $this->system_overall_risk ?? 'pending';
+    }
+
+    // Recalculate and update system overall risk
+    public function recalculateSystemOverallRisk(): string
+    {
+        $newRisk = $this->calculateSystemOverallRisk();
+        $this->update(['system_overall_risk' => $newRisk]);
+        return $newRisk;
     }
 
     // Scopes

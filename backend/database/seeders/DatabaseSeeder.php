@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
             AuditQuestionSeeder::class,
             AuditAnswerSeeder::class,
             
+            // Test scenarios for risk calculation validation
+            // AuditSubmissionTestSeeder::class,
+            
             // Finally create submissions and their relationships
             // AuditSubmissionSeeder::class,
             // VulnerabilitySubmissionSeeder::class,

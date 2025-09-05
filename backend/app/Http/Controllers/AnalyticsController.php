@@ -116,9 +116,10 @@ class AnalyticsController extends Controller
             'averageRiskScore' => $this->getAverageRiskScore($query->clone()),
             'statusDistribution' => $this->getStatusDistribution($query->clone()),
             'assignmentStats' => $this->getAssignmentStats($query->clone()),
-            'submissionTrends' => $this->getVulnerabilityTrends($query->clone()),
             'commonVulnerabilities' => $this->getCommonVulnerabilities($query->clone()),
             'severityDistribution' => $this->getVulnerabilitySeverityDistribution($query->clone()),
+            'resolutionStats' => $this->getVulnerabilityResolutionStats($query->clone()),
+            'sourceBreakdown' => $this->getVulnerabilitySourceBreakdown($query->clone()),
         ];
     }
 
@@ -140,8 +141,10 @@ class AnalyticsController extends Controller
             'riskProportion' => $this->getAuditRiskProportion($query->clone()),
             'answerRiskDistribution' => $this->getAnswerRiskDistribution($query->clone()),
             'averageRiskScore' => $this->getAuditAverageRiskScore($query->clone()),
-            'submissionTrends' => $this->getAuditTrends($query->clone()),
             'commonHighRisks' => $this->getCommonHighRiskAudits($query->clone()),
+            'reviewStats' => $this->getAuditReviewStats($query->clone()),
+            'questionCategoryStats' => $this->getQuestionCategoryStats($query->clone()),
+            'adminVsSystemRisk' => $this->getAdminVsSystemRiskComparison($query->clone()),
         ];
     }
 
@@ -153,6 +156,15 @@ class AnalyticsController extends Controller
         $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId);
         $auditData = $this->getAuditAnalytics($startDate, $userId);
 
+        // Get audit-to-vulnerability conversion stats
+        $auditQuery = AuditSubmission::query()
+            ->when($userId, function ($q) use ($userId) {
+                return $q->where('user_id', (int) $userId);
+            })
+            ->where('created_at', '>=', $startDate);
+
+        $conversionStats = $this->getAuditToVulnerabilityConversion($auditQuery);
+
         return [
             'type' => 'combined',
             'vulnerability' => $vulnData,
@@ -161,7 +173,8 @@ class AnalyticsController extends Controller
                 'totalSubmissions' => $vulnData['totalSubmissions'] + $auditData['totalSubmissions'],
                 'vulnerabilitySubmissions' => $vulnData['totalSubmissions'],
                 'auditSubmissions' => $auditData['totalSubmissions'],
-            ]
+            ],
+            'conversionStats' => $conversionStats
         ];
     }
 
@@ -328,45 +341,6 @@ class AnalyticsController extends Controller
         ];
     }
 
-    /**
-     * Get vulnerability submission trends.
-     */
-    private function getVulnerabilityTrends($query): array
-    {
-        return $query->select(
-            DB::raw("DATE(created_at) as date"),
-            DB::raw('count(*) as count')
-        )
-        ->groupBy('date')
-        ->orderBy('date')
-        ->get()
-        ->map(function($trend) {
-            return [
-                'date' => Carbon::parse($trend->date)->format('M d'),
-                'count' => (int) $trend->count
-            ];
-        })->toArray();
-    }
-
-    /**
-     * Get audit submission trends.
-     */
-    private function getAuditTrends($query): array
-    {
-        return $query->select(
-            DB::raw("DATE(created_at) as date"),
-            DB::raw('count(*) as count')
-        )
-        ->groupBy('date')
-        ->orderBy('date')
-        ->get()
-        ->map(function($trend) {
-            return [
-                'date' => Carbon::parse($trend->date)->format('M d'),
-                'count' => (int) $trend->count
-            ];
-        })->toArray();
-    }
 
     /**
      * Get common vulnerabilities.
@@ -428,5 +402,240 @@ class AnalyticsController extends Controller
                     'count' => (int) $item->count
                 ];
             })->toArray();
+    }
+
+    /**
+     * Get vulnerability resolution statistics.
+     */
+    private function getVulnerabilityResolutionStats($query): array
+    {
+        $submissionIds = $query->pluck('id');
+
+        if ($submissionIds->isEmpty()) {
+            return [
+                'total_vulnerabilities' => 0,
+                'resolved_vulnerabilities' => 0,
+                'unresolved_vulnerabilities' => 0,
+                'resolution_rate' => 0,
+                'avg_resolution_time_hours' => 0
+            ];
+        }
+
+        $totalVulns = Vulnerability::whereIn('vulnerability_submission_id', $submissionIds)->count();
+        $resolvedVulns = Vulnerability::whereIn('vulnerability_submission_id', $submissionIds)
+            ->where('is_resolved', true)
+            ->count();
+        $unresolvedVulns = $totalVulns - $resolvedVulns;
+
+        // Calculate average resolution time
+        $avgResolutionTime = Vulnerability::whereIn('vulnerability_submission_id', $submissionIds)
+            ->where('is_resolved', true)
+            ->whereNotNull('resolved_at')
+            ->select(DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) as avg_hours'))
+            ->first()
+            ->avg_hours ?? 0;
+
+        return [
+            'total_vulnerabilities' => (int) $totalVulns,
+            'resolved_vulnerabilities' => (int) $resolvedVulns,
+            'unresolved_vulnerabilities' => (int) $unresolvedVulns,
+            'resolution_rate' => $totalVulns > 0 ? round(($resolvedVulns / $totalVulns) * 100, 1) : 0,
+            'avg_resolution_time_hours' => round((float) $avgResolutionTime, 1)
+        ];
+    }
+
+    /**
+     * Get vulnerability source breakdown (manual vs audit-generated).
+     */
+    private function getVulnerabilitySourceBreakdown($query): array
+    {
+        $submissionIds = $query->pluck('id');
+
+        if ($submissionIds->isEmpty()) {
+            return [
+                'manual_submissions' => 0,
+                'audit_generated_submissions' => 0,
+                'total_submissions' => 0
+            ];
+        }
+
+        // Count manual submissions (those not generated from audits)
+        $manualSubmissions = $query->whereDoesntHave('user.auditSubmissions', function($q) {
+            $q->where('status', 'completed');
+        })->count();
+
+        // Count audit-generated submissions (those with titles starting with "High Risk Audit")
+        $auditGeneratedSubmissions = $query->where('title', 'LIKE', 'High Risk Audit - %')->count();
+
+        return [
+            'manual_submissions' => (int) $manualSubmissions,
+            'audit_generated_submissions' => (int) $auditGeneratedSubmissions,
+            'total_submissions' => (int) $submissionIds->count()
+        ];
+    }
+
+    /**
+     * Get audit review statistics.
+     */
+    private function getAuditReviewStats($query): array
+    {
+        $totalSubmissions = $query->count();
+        $pendingReview = $query->clone()->where('status', 'submitted')->count();
+        $underReview = $query->clone()->where('status', 'under_review')->count();
+        $completed = $query->clone()->where('status', 'completed')->count();
+
+        // Calculate average review time for completed audits
+        $avgReviewTime = $query->clone()->where('status', 'completed')
+            ->whereNotNull('reviewed_at')
+            ->select(DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, reviewed_at)) as avg_hours'))
+            ->first()
+            ->avg_hours ?? 0;
+
+        return [
+            'total_submissions' => (int) $totalSubmissions,
+            'pending_review' => (int) $pendingReview,
+            'under_review' => (int) $underReview,
+            'completed' => (int) $completed,
+            'completion_rate' => $totalSubmissions > 0 ? round(($completed / $totalSubmissions) * 100, 1) : 0,
+            'avg_review_time_hours' => round((float) $avgReviewTime, 1)
+        ];
+    }
+
+    /**
+     * Get question category statistics.
+     */
+    private function getQuestionCategoryStats($query): array
+    {
+        $submissionIds = $query->pluck('id');
+
+        if ($submissionIds->isEmpty()) {
+            return [];
+        }
+
+        return AuditAnswer::whereIn('audit_submission_id', $submissionIds)
+            ->join('audit_questions', 'audit_answers.audit_question_id', '=', 'audit_questions.id')
+            ->groupBy('audit_questions.category')
+            ->select(
+                'audit_questions.category',
+                DB::raw('count(*) as total_answers'),
+                DB::raw('sum(case when COALESCE(audit_answers.admin_risk_level, audit_answers.system_risk_level) = "high" then 1 else 0 end) as high_risk_count'),
+                DB::raw('sum(case when COALESCE(audit_answers.admin_risk_level, audit_answers.system_risk_level) = "medium" then 1 else 0 end) as medium_risk_count'),
+                DB::raw('sum(case when COALESCE(audit_answers.admin_risk_level, audit_answers.system_risk_level) = "low" then 1 else 0 end) as low_risk_count')
+            )
+            ->orderByDesc('total_answers')
+            ->limit(10)
+            ->get()
+            ->map(function($item) {
+                $total = $item->total_answers;
+                return [
+                    'category' => (string) $item->category,
+                    'total_answers' => (int) $total,
+                    'high_risk_count' => (int) $item->high_risk_count,
+                    'medium_risk_count' => (int) $item->medium_risk_count,
+                    'low_risk_count' => (int) $item->low_risk_count,
+                    'high_risk_percentage' => $total > 0 ? round(($item->high_risk_count / $total) * 100, 1) : 0
+                ];
+            })->toArray();
+    }
+
+    /**
+     * Get admin vs system risk comparison.
+     */
+    private function getAdminVsSystemRiskComparison($query): array
+    {
+        $submissionIds = $query->pluck('id');
+
+        if ($submissionIds->isEmpty()) {
+            return [
+                'system_risk_distribution' => ['high' => 0, 'medium' => 0, 'low' => 0],
+                'admin_risk_distribution' => ['high' => 0, 'medium' => 0, 'low' => 0],
+                'admin_overrides' => 0,
+                'total_submissions' => 0
+            ];
+        }
+
+        // System risk distribution
+        $systemRisk = AuditSubmission::whereIn('id', $submissionIds)
+            ->whereNotNull('system_overall_risk')
+            ->groupBy('system_overall_risk')
+            ->select('system_overall_risk as risk', DB::raw('count(*) as count'))
+            ->pluck('count', 'risk')
+            ->toArray();
+
+        // Admin risk distribution
+        $adminRisk = AuditSubmission::whereIn('id', $submissionIds)
+            ->whereNotNull('admin_overall_risk')
+            ->groupBy('admin_overall_risk')
+            ->select('admin_overall_risk as risk', DB::raw('count(*) as count'))
+            ->pluck('count', 'risk')
+            ->toArray();
+
+        // Count admin overrides
+        $adminOverrides = AuditSubmission::whereIn('id', $submissionIds)
+            ->whereNotNull('admin_overall_risk')
+            ->whereNotNull('system_overall_risk')
+            ->whereColumn('admin_overall_risk', '!=', 'system_overall_risk')
+            ->count();
+
+        return [
+            'system_risk_distribution' => [
+                'high' => (int) ($systemRisk['high'] ?? 0),
+                'medium' => (int) ($systemRisk['medium'] ?? 0),
+                'low' => (int) ($systemRisk['low'] ?? 0)
+            ],
+            'admin_risk_distribution' => [
+                'high' => (int) ($adminRisk['high'] ?? 0),
+                'medium' => (int) ($adminRisk['medium'] ?? 0),
+                'low' => (int) ($adminRisk['low'] ?? 0)
+            ],
+            'admin_overrides' => (int) $adminOverrides,
+            'total_submissions' => (int) $submissionIds->count()
+        ];
+    }
+
+    /**
+     * Get audit-to-vulnerability conversion statistics.
+     */
+    private function getAuditToVulnerabilityConversion($query): array
+    {
+        $submissionIds = $query->pluck('id');
+
+        if ($submissionIds->isEmpty()) {
+            return [
+                'total_audits' => 0,
+                'audits_with_vulnerabilities' => 0,
+                'conversion_rate' => 0,
+                'total_vulnerabilities_created' => 0
+            ];
+        }
+
+        $totalAudits = $submissionIds->count();
+        
+        // Count audits that have generated vulnerabilities
+        $auditsWithVulns = VulnerabilitySubmission::whereIn('user_id', function($q) use ($submissionIds) {
+            $q->select('user_id')
+              ->from('audit_submissions')
+              ->whereIn('id', $submissionIds);
+        })
+        ->where('title', 'LIKE', 'High Risk Audit - %')
+        ->count();
+
+        // Count total vulnerabilities created from these audits
+        $totalVulnsCreated = VulnerabilitySubmission::whereIn('user_id', function($q) use ($submissionIds) {
+            $q->select('user_id')
+              ->from('audit_submissions')
+              ->whereIn('id', $submissionIds);
+        })
+        ->where('title', 'LIKE', 'High Risk Audit - %')
+        ->withCount('vulnerabilities')
+        ->get()
+        ->sum('vulnerabilities_count');
+
+        return [
+            'total_audits' => (int) $totalAudits,
+            'audits_with_vulnerabilities' => (int) $auditsWithVulns,
+            'conversion_rate' => $totalAudits > 0 ? round(($auditsWithVulns / $totalAudits) * 100, 1) : 0,
+            'total_vulnerabilities_created' => (int) $totalVulnsCreated
+        ];
     }
 }
