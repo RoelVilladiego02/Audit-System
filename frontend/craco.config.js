@@ -2,6 +2,12 @@
 const { CORS_ORIGIN, DEBUG } = require('./src/config/environment');
 
 module.exports = {
+    babel: {
+        plugins: [
+            // Only include React Refresh in development
+            ...(process.env.NODE_ENV === 'development' ? ['react-refresh/babel'] : [])
+        ]
+    },
     webpack: {
         configure: (webpackConfig, { env, paths }) => {
             // Configure dev server for development
