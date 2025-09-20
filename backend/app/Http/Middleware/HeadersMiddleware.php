@@ -27,7 +27,7 @@ class HeadersMiddleware
             $response->headers->set('Access-Control-Allow-Origin', $allowedOrigins[0]);
         }
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-XSRF-TOKEN, X-HTTP-Method-Override');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-XSRF-TOKEN, X-HTTP-Method-Override, ngrok-skip-browser-warning');
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
         
         // Remove any duplicate cookies

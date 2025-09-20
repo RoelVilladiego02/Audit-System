@@ -31,7 +31,8 @@ return [
         'X-Requested-With',
         'Accept',
         'X-XSRF-TOKEN',
-        'X-HTTP-Method-Override'
+        'X-HTTP-Method-Override',
+        'ngrok-skip-browser-warning'
     ],
 
     'exposed_headers' => [],
