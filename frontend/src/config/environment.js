@@ -13,8 +13,8 @@ const config = {
     // Updated with your actual ngrok URL
     API_URL: 'https://f58deeaacf82.ngrok-free.app/api',
     BASE_URL: 'https://f58deeaacf82.ngrok-free.app',
-    // TODO: Replace with your actual Vercel domain after deployment
-    CORS_ORIGIN: 'https://your-app-name.vercel.app',
+    // Updated with your actual Vercel domain
+    CORS_ORIGIN: 'https://audit-system-orpin.vercel.app',
     DEBUG: false,
     ENV: 'production'
   }
