@@ -25,9 +25,16 @@ return [
         'https://audit-system-orpin.vercel.app',    // Your actual Vercel domain
     ],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'X-XSRF-TOKEN',
+        'X-HTTP-Method-Override'
+    ],
 
-    'exposed_headers' => ['*'],
+    'exposed_headers' => [],
 
     'max_age' => 0,
     
