@@ -262,18 +262,35 @@ export const AuthProvider = ({ children }) => {
             console.error('Registration error:', error);
             
             let errorMessage = 'Registration failed. Please try again.';
+            let errorType = 'general';
             
             if (error.response?.data?.errors) {
                 // Handle validation errors
                 const errors = error.response.data.errors;
                 const errorMessages = Object.values(errors).flat();
                 errorMessage = errorMessages.join('. ');
+                errorType = 'validation';
+            } else if (error.response?.data?.error) {
+                // Handle specific error messages (like "email already taken")
+                const errorText = error.response.data.error.toLowerCase();
+                if (errorText.includes('email') && errorText.includes('taken')) {
+                    errorMessage = 'This email address is already registered. Please use a different email or try logging in.';
+                    errorType = 'email_taken';
+                } else if (errorText.includes('password')) {
+                    errorMessage = 'Password requirements not met. Please check your password and try again.';
+                    errorType = 'password';
+                } else {
+                    errorMessage = error.response.data.error;
+                    errorType = 'specific';
+                }
             } else if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
             } else if (error.response?.status === 422) {
                 errorMessage = 'Invalid input. Please check your information and try again.';
+                errorType = 'validation';
             } else if (error.response?.status >= 500) {
                 errorMessage = 'Server error. Please try again later.';
+                errorType = 'server';
             } else if (error.message) {
                 errorMessage = error.message;
             }

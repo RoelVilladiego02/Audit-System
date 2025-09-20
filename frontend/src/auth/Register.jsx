@@ -312,6 +312,24 @@ const Register = () => {
                 
                 setFieldErrors(prev => ({ ...prev, ...newFieldErrors }));
                 errorMessage = 'Please correct the errors below.';
+            } else if (err.response?.data?.error) {
+                // Handle specific error messages (like "email already taken")
+                const errorText = err.response.data.error.toLowerCase();
+                if (errorText.includes('email') && errorText.includes('taken')) {
+                    errorMessage = 'This email address is already registered. Please use a different email or try logging in.';
+                    setFieldErrors(prev => ({ 
+                        ...prev, 
+                        email: 'This email is already registered. Please use a different email or try logging in.' 
+                    }));
+                } else if (errorText.includes('password')) {
+                    errorMessage = 'Password requirements not met. Please check your password and try again.';
+                    setFieldErrors(prev => ({ 
+                        ...prev, 
+                        password: 'Password requirements not met. Please check your password and try again.' 
+                    }));
+                } else {
+                    errorMessage = err.response.data.error;
+                }
             } else if (err.response?.data?.message) {
                 errorMessage = err.response.data.message;
             } else if (err.response?.status === 422) {
@@ -368,7 +386,17 @@ const Register = () => {
                                 {error && (
                                     <div className="alert alert-danger d-flex align-items-start mb-4" role="alert">
                                         <i className="bi bi-exclamation-triangle-fill me-2 mt-1 flex-shrink-0"></i>
-                                        <div className="flex-grow-1">{error}</div>
+                                        <div className="flex-grow-1">
+                                            {error}
+                                            {error.includes('already registered') && (
+                                                <div className="mt-2">
+                                                    <Link to="/login" className="btn btn-outline-primary btn-sm">
+                                                        <i className="bi bi-box-arrow-in-right me-1"></i>
+                                                        Go to Login
+                                                    </Link>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
@@ -608,6 +636,36 @@ const Register = () => {
                                         </button>
                                     </div>
                                 </form>
+
+                                {/* Email Already Taken Suggestion */}
+                                {fieldErrors.email && fieldErrors.email.includes('already registered') && (
+                                    <div className="alert alert-info mt-3 mb-3">
+                                        <div className="d-flex align-items-center">
+                                            <i className="bi bi-info-circle me-2"></i>
+                                            <div>
+                                                <strong>Email already exists?</strong>
+                                                <p className="mb-2 small">This email is already registered. You can either:</p>
+                                                <div className="d-flex gap-2">
+                                                    <Link to="/login" className="btn btn-outline-primary btn-sm">
+                                                        <i className="bi bi-box-arrow-in-right me-1"></i>
+                                                        Sign In Instead
+                                                    </Link>
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn btn-outline-secondary btn-sm"
+                                                        onClick={() => {
+                                                            setFieldErrors(prev => ({ ...prev, email: '' }));
+                                                            setError('');
+                                                        }}
+                                                    >
+                                                        <i className="bi bi-pencil me-1"></i>
+                                                        Use Different Email
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Footer */}
                                 <div className="text-center">
