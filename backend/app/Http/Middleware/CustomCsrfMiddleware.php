@@ -21,8 +21,10 @@ class CustomCsrfMiddleware
         // Skip CSRF for excluded routes
         $excludedRoutes = [
             'api/auth/*',
-            'api/audit-submissions',
-            'api/vulnerability-submissions',
+            'api/audit-submissions*',
+            'api/vulnerability-submissions*',
+            'api/audit-questions*',
+            'api/vulnerabilities*',
         ];
 
         foreach ($excludedRoutes as $route) {
