@@ -1,3 +1,6 @@
+// Import environment configuration
+const { CORS_ORIGIN, DEBUG } = require('./src/config/environment');
+
 module.exports = {
     webpack: {
         configure: (webpackConfig, { env, paths }) => {
@@ -9,7 +12,7 @@ module.exports = {
                         'Access-Control-Max-Headers': '32768', // 32KB limit
                         'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, X-XSRF-TOKEN, X-HTTP-Method-Override',
                         'Access-Control-Allow-Credentials': 'true',
-                        'Access-Control-Allow-Origin': 'http://localhost:3000',
+                        'Access-Control-Allow-Origin': CORS_ORIGIN, // Using environment config
                         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS'
                     },
                     // Increase header size limits

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_URL, BASE_URL, DEBUG } from '../config/environment';
 
 // Function to get CSRF token
 const getXsrfToken = () => {
@@ -32,7 +33,7 @@ const cleanupUnnecessaryCookies = () => {
 cleanupUnnecessaryCookies();
 
 const instance = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
+    baseURL: API_URL, // Using environment config instead of process.env
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -59,11 +60,13 @@ instance.interceptors.request.use(
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
         
-        // Log token usage for debugging
-        if (token) {
-            console.log('Using token for request:', token.substring(0, 20) + '...');
-        } else {
-            console.log('No token found for request');
+        // Log token usage for debugging (only in development)
+        if (DEBUG) {
+            if (token) {
+                console.log('Using token for request:', token.substring(0, 20) + '...');
+            } else {
+                console.log('No token found for request');
+            }
         }
 
         // Handle CSRF token for state-changing operations
@@ -74,7 +77,7 @@ instance.interceptors.request.use(
             if (!csrfToken && !config.url?.includes('sanctum/csrf-cookie')) {
                 try {
                     await axios.get('/sanctum/csrf-cookie', {
-                        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+                        baseURL: BASE_URL, // Using environment config
                         withCredentials: true,
                         headers: {
                             'Accept': 'application/json'
@@ -96,10 +99,12 @@ instance.interceptors.request.use(
             config.headers['X-HTTP-Method-Override'] = 'PUT';
         }
 
-        // Log header size for debugging
-        const headerSize = JSON.stringify(config.headers).length;
-        const cookieSize = document.cookie.length;
-        console.log(`Request to ${config.url}: Headers=${headerSize}b, Cookies=${cookieSize}b, Total≈${headerSize + cookieSize}b`);
+        // Log header size for debugging (only in development)
+        if (DEBUG) {
+            const headerSize = JSON.stringify(config.headers).length;
+            const cookieSize = document.cookie.length;
+            console.log(`Request to ${config.url}: Headers=${headerSize}b, Cookies=${cookieSize}b, Total≈${headerSize + cookieSize}b`);
+        }
 
         return config;
     },
@@ -124,7 +129,7 @@ instance.interceptors.response.use(
             try {
                 // Fetch new CSRF token
                 await axios.get('/sanctum/csrf-cookie', {
-                    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+                    baseURL: BASE_URL, // Using environment config
                     withCredentials: true,
                     headers: {
                         'Accept': 'application/json'
@@ -171,7 +176,9 @@ instance.interceptors.response.use(
         // Handle 431 errors by cleaning cookies and retrying once
         if (error.response?.status === 431 && !originalRequest._headerRetry) {
             originalRequest._headerRetry = true;
-            console.warn('431 Request Header Fields Too Large - cleaning cookies and retrying');
+            if (DEBUG) {
+                console.warn('431 Request Header Fields Too Large - cleaning cookies and retrying');
+            }
             
             // More aggressive cookie cleanup
             document.cookie.split(';').forEach(cookie => {
@@ -194,13 +201,18 @@ instance.interceptors.response.use(
             return instance(originalRequest);
         }
 
-        console.error('API Error:', {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            url: error.config?.url,
-            method: error.config?.method,
-            message: error.message
-        });
+        // Log API errors (always log errors, but with different detail levels)
+        if (DEBUG) {
+            console.error('API Error:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                url: error.config?.url,
+                method: error.config?.method,
+                message: error.message
+            });
+        } else {
+            console.error('API Error:', error.message);
+        }
 
         return Promise.reject(error);
     }
@@ -234,7 +246,9 @@ instance.resetAuth = () => {
     delete instance.defaults.headers.Authorization;
     
     // Clear any cached tokens in interceptors
-    console.log('Axios instance auth reset');
+    if (DEBUG) {
+        console.log('Axios instance auth reset');
+    }
     
     // Force clear any remaining cookies
     document.cookie.split(';').forEach(cookie => {
