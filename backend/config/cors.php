@@ -19,7 +19,11 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000'],
+    'allowed_origins' => [
+        'http://localhost:3000',                    // Development
+        'https://f58deeaacf82.ngrok-free.app',      // Your ngrok URL
+        'https://your-vercel-domain.vercel.app',    // Your Vercel domain (after deployment)
+    ],
 
     'allowed_headers' => ['*'],
 
