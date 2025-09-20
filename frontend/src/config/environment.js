@@ -10,10 +10,10 @@ const config = {
     ENV: 'production'
   },
   production: {
-    // TODO: Replace with your actual ngrok URL when deploying
-    API_URL: 'https://your-ngrok-url.ngrok.io/api',
-    BASE_URL: 'https://your-ngrok-url.ngrok.io',
-    // TODO: Replace with your actual Vercel domain
+    // Updated with your actual ngrok URL
+    API_URL: 'https://f58deeaacf82.ngrok-free.app/api',
+    BASE_URL: 'https://f58deeaacf82.ngrok-free.app',
+    // TODO: Replace with your actual Vercel domain after deployment
     CORS_ORIGIN: 'https://your-app-name.vercel.app',
     DEBUG: false,
     ENV: 'production'
