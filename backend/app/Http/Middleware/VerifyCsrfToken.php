@@ -13,5 +13,7 @@ class VerifyCsrfToken extends Middleware
      */
     protected $except = [
         'api/auth/*', // Temporarily exclude auth routes due to cross-origin cookie issues
+        'api/audit-submissions', // Temporarily exclude audit submissions due to cross-origin cookie issues
+        'api/vulnerability-submissions', // Temporarily exclude vulnerability submissions due to cross-origin cookie issues
     ];
 }
