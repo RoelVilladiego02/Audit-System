@@ -35,7 +35,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "build:prod": "NODE_ENV=production craco build",
+    "build:prod": "set NODE_ENV=production && craco build",
     "test": "craco test",
     "eject": "react-scripts eject",
     "deploy:vercel": "npm run build:prod && vercel --prod",
