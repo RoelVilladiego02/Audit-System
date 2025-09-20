@@ -15,9 +15,19 @@ class HeadersMiddleware
             return $response;
         }
 
-        $response->headers->set('Access-Control-Allow-Origin', config('cors.allowed_origins')[0]);
+        // Get the origin from the request
+        $origin = $request->headers->get('Origin');
+        $allowedOrigins = config('cors.allowed_origins');
+        
+        // Check if the origin is in the allowed list
+        if (in_array($origin, $allowedOrigins)) {
+            $response->headers->set('Access-Control-Allow-Origin', $origin);
+        } else {
+            // Fallback to first allowed origin for development
+            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigins[0]);
+        }
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-XSRF-TOKEN, X-HTTP-Method-Override');
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
         
         // Remove any duplicate cookies
