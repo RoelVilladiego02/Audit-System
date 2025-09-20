@@ -197,7 +197,8 @@ export const AuthProvider = ({ children }) => {
             }
             
             setError(errorMessage);
-            clearAuthData();
+            // Don't clear auth data on login errors - just clear the error state
+            setLoading(false);
             throw new Error(errorMessage);
         } finally {
             setLoading(false);

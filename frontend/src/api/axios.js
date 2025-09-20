@@ -159,14 +159,12 @@ instance.interceptors.response.use(
                     }
                 } catch (refreshError) {
                     console.error('Auth refresh failed:', refreshError);
-                    // Clear auth data and redirect to login
+                    // Clear auth data but don't redirect automatically
+                    // Let the components handle the redirect
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
-                    window.location.href = '/login';
+                    delete instance.defaults.headers.common['Authorization'];
                 }
-            } else {
-                // No token, redirect to login
-                window.location.href = '/login';
             }
         }
 

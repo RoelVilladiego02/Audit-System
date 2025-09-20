@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 
 const ProtectedRoute = ({ children, requiredRole, allowedRoles, fallbackPath }) => {
@@ -133,14 +133,13 @@ export const AccessDenied = ({
                 <h1 className="h2 fw-bold text-dark mb-3">{title}</h1>
                 <p className="text-muted mb-4 lead">{message}</p>
                 <div className="d-flex gap-3 justify-content-center flex-wrap">
-                    <Navigate 
+                    <Link 
                         to={getDefaultRedirectPath()} 
                         className="btn btn-primary"
-                        replace
                     >
                         <i className="bi bi-house me-2"></i>
                         {redirectLabel}
-                    </Navigate>
+                    </Link>
                     <button 
                         onClick={() => window.history.back()} 
                         className="btn btn-outline-secondary"

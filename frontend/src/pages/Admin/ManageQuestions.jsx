@@ -39,7 +39,7 @@ const ManageQuestions = () => {
       } else if (err.response?.status === 401) {
         setError('Authentication failed. Please log in again.');
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        // Don't auto-redirect, let the user handle it
       } else {
         setError(err.response?.data?.message || err.message || 'Failed to load questions. Please try again later.');
       }

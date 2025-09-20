@@ -7,12 +7,14 @@ const Login = () => {
         email: '',
         password: ''
     });
-    const [error, setError] = useState('');
+    // Removed local error state - using authError from AuthContext
+    const [fieldErrors, setFieldErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+    const [touchedFields, setTouchedFields] = useState({});
     
-    const { login, user } = useAuth();
+    const { login, user, error: authError, clearError } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -24,14 +26,59 @@ const Login = () => {
         }
     }, [user, navigate]);
 
-    // Load remembered email
+    // Load remembered email and auto-fill email from registration
     useEffect(() => {
         const rememberedEmail = localStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
+        const registrationEmail = location.state?.email;
+        
+        if (registrationEmail) {
+            setFormData(prev => ({ ...prev, email: registrationEmail }));
+        } else if (rememberedEmail) {
             setFormData(prev => ({ ...prev, email: rememberedEmail }));
             setRememberMe(true);
         }
-    }, []);
+    }, [location.state]);
+
+    const validateField = (name, value) => {
+        let error = '';
+
+        switch (name) {
+            case 'email':
+                if (!value) {
+                    error = 'Email is required';
+                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    error = 'Please enter a valid email address';
+                } else if (value.length > 255) {
+                    error = 'Email cannot exceed 255 characters';
+                }
+                break;
+
+            case 'password':
+                if (!value) {
+                    error = 'Password is required';
+                } else if (value.length < 6) {
+                    error = 'Password must be at least 6 characters';
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        if (error) {
+            setFieldErrors(prev => ({
+                ...prev,
+                [name]: error
+            }));
+        } else {
+            setFieldErrors(prev => ({
+                ...prev,
+                [name]: ''
+            }));
+        }
+
+        return !error;
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -39,8 +86,45 @@ const Login = () => {
             ...prev,
             [name]: value
         }));
-        // Clear error when user starts typing
-        if (error) setError('');
+
+        // Clear errors when user starts typing
+        if (authError) clearError();
+        if (fieldErrors[name]) {
+            setFieldErrors(prev => ({
+                ...prev,
+                [name]: ''
+            }));
+        }
+    };
+
+    const handleBlur = (e) => {
+        const { name } = e.target;
+        setTouchedFields(prev => ({
+            ...prev,
+            [name]: true
+        }));
+        
+        // Validate field on blur
+        validateField(name, formData[name]);
+    };
+
+    const validateForm = () => {
+        let isValid = true;
+
+        // Validate all fields
+        Object.keys(formData).forEach(field => {
+            if (!validateField(field, formData[field])) {
+                isValid = false;
+            }
+        });
+
+        // Mark all fields as touched
+        setTouchedFields({
+            email: true,
+            password: true
+        });
+
+        return isValid;
     };
 
     const handleSubmit = async (e) => {
@@ -48,26 +132,25 @@ const Login = () => {
         if (isLoading) return;
 
         // Client-side validation
-        if (!formData.email || !formData.password) {
-            setError('Please fill in all fields.');
+        if (!validateForm()) {
+            // Focus on first field with error
+            const firstErrorField = Object.keys(fieldErrors).find(field => fieldErrors[field]);
+            if (firstErrorField) {
+                document.getElementById(firstErrorField)?.focus();
+            }
             return;
         }
 
-        if (!/\S+@\S+\.\S+/.test(formData.email)) {
-            setError('Please enter a valid email address.');
-            return;
-        }
-
-        setError('');
+        clearError(); // Clear any previous auth errors
         setIsLoading(true);
 
         try {
-            const userData = await login(formData.email, formData.password);
+            const userData = await login(formData.email.trim(), formData.password);
             
             if (userData) {
                 // Handle remember me
                 if (rememberMe) {
-                    localStorage.setItem('rememberedEmail', formData.email);
+                    localStorage.setItem('rememberedEmail', formData.email.trim());
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
@@ -82,29 +165,49 @@ const Login = () => {
                 
                 navigate(redirectTo, { replace: true });
             } else {
-                setError('Login successful but failed to retrieve user data. Please try again.');
+                // This shouldn't happen as login function should handle this
+                console.error('Login successful but failed to retrieve user data');
             }
         } catch (err) {
             console.error('Login error:', err);
             
-            let errorMessage = 'An error occurred during login. Please try again.';
+            // Use the error message from AuthContext (err.message contains the processed message)
+            let errorMessage = err.message || 'An error occurred during login. Please try again.';
             
-            if (err.response?.data?.message) {
-                errorMessage = err.response.data.message;
-            } else if (err.message) {
-                errorMessage = err.message;
+            // Handle server validation errors
+            if (err.response?.data?.errors) {
+                const serverErrors = err.response.data.errors;
+                const newFieldErrors = {};
+                
+                Object.keys(serverErrors).forEach(field => {
+                    if (Array.isArray(serverErrors[field])) {
+                        newFieldErrors[field] = serverErrors[field][0];
+                    } else {
+                        newFieldErrors[field] = serverErrors[field];
+                    }
+                });
+                
+                setFieldErrors(prev => ({ ...prev, ...newFieldErrors }));
+                errorMessage = 'Please correct the errors below.';
             }
             
-            // Handle specific error cases
+            // Handle specific error cases for field highlighting
             if (err.response?.status === 401) {
-                errorMessage = 'Invalid email or password. Please check your credentials.';
-            } else if (err.response?.status === 422) {
-                errorMessage = 'Please check your email format and try again.';
-            } else if (err.response?.status >= 500) {
-                errorMessage = 'Server error. Please try again later.';
+                setFieldErrors({
+                    email: 'Please check your credentials',
+                    password: 'Please check your credentials'
+                });
             }
             
-            setError(errorMessage);
+            // Error is already set in AuthContext, no need to set it again
+            
+            // Focus on first field with error for better UX
+            const firstErrorField = Object.keys(fieldErrors).find(field => fieldErrors[field]);
+            if (firstErrorField) {
+                setTimeout(() => {
+                    document.getElementById(firstErrorField)?.focus();
+                }, 100);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -114,39 +217,44 @@ const Login = () => {
         setShowPassword(!showPassword);
     };
 
+    const getFieldValidationClass = (fieldName) => {
+        if (!touchedFields[fieldName]) return '';
+        return fieldErrors[fieldName] ? 'is-invalid' : formData[fieldName] ? 'is-valid' : '';
+    };
+
     return (
-        <div className="min-vh-100 d-flex align-items-center bg-light">
-            <div className="container">
+        <div className="min-vh-100 d-flex align-items-center bg-light py-3">
+            <div className="container-fluid px-3">
                 <div className="row justify-content-center">
-                    <div className="col-12 col-sm-8 col-md-6 col-lg-5 col-xl-4">
+                    <div className="col-12 col-sm-8 col-md-6 col-lg-5 col-xl-4 col-xxl-3">
                         <div className="card shadow-lg border-0">
-                            <div className="card-body p-4 p-sm-5">
+                            <div className="card-body p-3 p-sm-4 p-md-5">
                                 {/* Header */}
                                 <div className="text-center mb-4">
                                     <div className="mb-3">
-                                        <i className="bi bi-shield-lock text-primary" style={{ fontSize: '3rem' }}></i>
+                                        <i className="bi bi-shield-lock text-primary" style={{ fontSize: '2.5rem' }}></i>
                                     </div>
                                     <h1 className="h3 fw-bold text-dark mb-2">
                                         Welcome Back
                                     </h1>
-                                    <p className="text-muted mb-0">
+                                    <p className="text-muted mb-0 small">
                                         Sign in to your account to continue
                                     </p>
                                 </div>
 
                                 {/* Error Alert */}
-                                {error && (
-                                    <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
-                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        <div>{error}</div>
+                                {authError && (
+                                    <div className="alert alert-danger d-flex align-items-start mb-4" role="alert">
+                                        <i className="bi bi-exclamation-triangle-fill me-2 mt-1 flex-shrink-0"></i>
+                                        <div className="flex-grow-1">{authError}</div>
                                     </div>
                                 )}
 
                                 {/* Success message for redirects */}
                                 {location.state?.message && (
-                                    <div className="alert alert-info d-flex align-items-center mb-4" role="alert">
-                                        <i className="bi bi-info-circle-fill me-2"></i>
-                                        <div>{location.state.message}</div>
+                                    <div className="alert alert-success d-flex align-items-start mb-4" role="alert">
+                                        <i className="bi bi-check-circle-fill me-2 mt-1 flex-shrink-0"></i>
+                                        <div className="flex-grow-1">{location.state.message}</div>
                                     </div>
                                 )}
 
@@ -154,8 +262,8 @@ const Login = () => {
                                 <form onSubmit={handleSubmit} noValidate>
                                     {/* Email Field */}
                                     <div className="mb-3">
-                                        <label htmlFor="email" className="form-label fw-semibold">
-                                            Email Address
+                                        <label htmlFor="email" className="form-label fw-semibold small">
+                                            Email Address <span className="text-danger">*</span>
                                         </label>
                                         <div className="input-group">
                                             <span className="input-group-text bg-light border-end-0">
@@ -166,20 +274,33 @@ const Login = () => {
                                                 name="email"
                                                 type="email"
                                                 required
-                                                className={`form-control border-start-0 ps-0 ${error && !formData.email ? 'is-invalid' : ''}`}
+                                                className={`form-control border-start-0 ps-0 ${getFieldValidationClass('email')}`}
                                                 placeholder="Enter your email address"
                                                 value={formData.email}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur}
                                                 disabled={isLoading}
                                                 autoComplete="email"
+                                                aria-describedby={fieldErrors.email ? 'email-error' : undefined}
                                             />
+                                            {formData.email && !fieldErrors.email && touchedFields.email && (
+                                                <span className="input-group-text bg-light border-start-0 text-success">
+                                                    <i className="bi bi-check"></i>
+                                                </span>
+                                            )}
                                         </div>
+                                        {fieldErrors.email && (
+                                            <div id="email-error" className="invalid-feedback d-block">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {fieldErrors.email}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Password Field */}
                                     <div className="mb-3">
-                                        <label htmlFor="password" className="form-label fw-semibold">
-                                            Password
+                                        <label htmlFor="password" className="form-label fw-semibold small">
+                                            Password <span className="text-danger">*</span>
                                         </label>
                                         <div className="input-group">
                                             <span className="input-group-text bg-light border-end-0">
@@ -190,38 +311,58 @@ const Login = () => {
                                                 name="password"
                                                 type={showPassword ? "text" : "password"}
                                                 required
-                                                className={`form-control border-start-0 border-end-0 ps-0 ${error && !formData.password ? 'is-invalid' : ''}`}
+                                                className={`form-control border-start-0 border-end-0 ps-0 ${getFieldValidationClass('password')}`}
                                                 placeholder="Enter your password"
                                                 value={formData.password}
                                                 onChange={handleChange}
+                                                onBlur={handleBlur}
                                                 disabled={isLoading}
                                                 autoComplete="current-password"
+                                                aria-describedby={fieldErrors.password ? 'password-error' : undefined}
                                             />
                                             <button
                                                 type="button"
                                                 className="input-group-text bg-light border-start-0"
                                                 onClick={togglePasswordVisibility}
                                                 disabled={isLoading}
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
                                             >
                                                 <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
                                             </button>
                                         </div>
+                                        {fieldErrors.password && (
+                                            <div id="password-error" className="invalid-feedback d-block">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {fieldErrors.password}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Remember Me */}
+                                    {/* Remember Me & Forgot Password */}
                                     <div className="mb-4">
-                                        <div className="form-check">
-                                            <input
-                                                className="form-check-input"
-                                                type="checkbox"
-                                                id="rememberMe"
-                                                checked={rememberMe}
-                                                onChange={(e) => setRememberMe(e.target.checked)}
-                                                disabled={isLoading}
-                                            />
-                                            <label className="form-check-label text-muted" htmlFor="rememberMe">
-                                                Remember my email address
-                                            </label>
+                                        <div className="d-flex justify-content-between align-items-center flex-wrap">
+                                            <div className="form-check">
+                                                <input
+                                                    className="form-check-input"
+                                                    type="checkbox"
+                                                    id="rememberMe"
+                                                    checked={rememberMe}
+                                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                                    disabled={isLoading}
+                                                />
+                                                <label className="form-check-label text-muted small" htmlFor="rememberMe">
+                                                    Remember me
+                                                </label>
+                                            </div>
+                                            <div className="mt-2 mt-sm-0">
+                                                <Link 
+                                                    to="/forgot-password" 
+                                                    className="text-primary text-decoration-none small"
+                                                    tabIndex={isLoading ? -1 : 0}
+                                                >
+                                                    Forgot password?
+                                                </Link>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -229,7 +370,7 @@ const Login = () => {
                                     <div className="d-grid mb-4">
                                         <button
                                             type="submit"
-                                            disabled={isLoading || !formData.email || !formData.password}
+                                            disabled={isLoading || Object.values(fieldErrors).some(error => error)}
                                             className="btn btn-primary btn-lg fw-semibold"
                                         >
                                             {isLoading ? (
@@ -249,12 +390,11 @@ const Login = () => {
 
                                 {/* Footer */}
                                 <div className="text-center">
-                                    <p className="text-muted mb-0">
+                                    <p className="text-muted mb-0 small">
                                         Don't have an account?{' '}
                                         <Link 
                                             to="/register" 
                                             className="text-primary text-decoration-none fw-semibold"
-                                            style={{ color: 'var(--bs-primary) !important' }}
                                         >
                                             Create Account
                                         </Link>
@@ -264,7 +404,7 @@ const Login = () => {
                         </div>
                         
                         {/* Additional Info */}
-                        <div className="text-center mt-4">
+                        <div className="text-center mt-3">
                             <small className="text-muted">
                                 <i className="bi bi-shield-check me-1"></i>
                                 Your data is secure and protected

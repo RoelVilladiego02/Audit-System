@@ -187,9 +187,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
       console.error('Form submission error:', err.response ? err.response.data : err.message);
       if (err.response?.status === 401) {
         setError('Your session has expired. Please log in again.');
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 2000);
+        // Don't auto-redirect, let the user handle it
       } else if (err.response?.status === 403) {
         setError('You do not have permission to perform this action.');
       } else if (err.response?.status === 422) {
