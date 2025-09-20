@@ -1,0 +1,36 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "browsers": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+          ]
+        }
+      }
+    ],
+    [
+      "@babel/preset-react",
+      {
+        "runtime": "automatic",
+        "development": false
+      }
+    ]
+  ],
+  "plugins": [
+    [
+      "react-refresh/babel",
+      {
+        "skipEnvCheck": true
+      }
+    ]
+  ],
+  "env": {
+    "production": {
+      "plugins": []
+    }
+  }
+}
