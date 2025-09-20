@@ -32,6 +32,30 @@ const cleanupUnnecessaryCookies = () => {
 // Clean up unnecessary cookies on initialization
 cleanupUnnecessaryCookies();
 
+// Function to ensure CSRF token is available
+const ensureCsrfToken = async () => {
+    let csrfToken = getXsrfToken();
+    if (!csrfToken) {
+        try {
+            await axios.get('/sanctum/csrf-cookie', {
+                baseURL: BASE_URL,
+                withCredentials: true,
+                headers: {
+                    'Accept': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+            csrfToken = getXsrfToken();
+            if (DEBUG) {
+                console.log('CSRF token fetched:', csrfToken ? 'Success' : 'Failed');
+            }
+        } catch (error) {
+            console.error('Failed to fetch CSRF token:', error);
+        }
+    }
+    return csrfToken;
+};
+
 const instance = axios.create({
     baseURL: API_URL, // Using environment config instead of process.env
     headers: {
@@ -72,27 +96,16 @@ instance.interceptors.request.use(
 
         // Handle CSRF token for state-changing operations
         if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
-            let csrfToken = getXsrfToken();
-            
-            // If no CSRF token, fetch one
-            if (!csrfToken && !config.url?.includes('sanctum/csrf-cookie')) {
-                try {
-                    await axios.get('/sanctum/csrf-cookie', {
-                        baseURL: BASE_URL, // Using environment config
-                        withCredentials: true,
-                        headers: {
-                            'Accept': 'application/json',
-                            'ngrok-skip-browser-warning': 'true' // Bypass ngrok browser warning
-                        }
-                    });
-                    csrfToken = getXsrfToken();
-                } catch (error) {
-                    console.error('CSRF token fetch failed:', error);
-                }
-            }
+            // Ensure CSRF token is available before making the request
+            const csrfToken = await ensureCsrfToken();
             
             if (csrfToken) {
                 config.headers['X-XSRF-TOKEN'] = csrfToken;
+                if (DEBUG) {
+                    console.log('Using token for request:', csrfToken.substring(0, 20) + '...');
+                }
+            } else {
+                console.warn('No CSRF token available for request:', config.url);
             }
         }
 
@@ -130,16 +143,7 @@ instance.interceptors.response.use(
             
             try {
                 // Fetch new CSRF token
-                await axios.get('/sanctum/csrf-cookie', {
-                    baseURL: BASE_URL, // Using environment config
-                    withCredentials: true,
-                    headers: {
-                        'Accept': 'application/json',
-                        'ngrok-skip-browser-warning': 'true' // Bypass ngrok browser warning
-                    }
-                });
-                
-                const newCsrfToken = getXsrfToken();
+                const newCsrfToken = await ensureCsrfToken();
                 if (newCsrfToken) {
                     originalRequest.headers['X-XSRF-TOKEN'] = newCsrfToken;
                     return instance(originalRequest);
@@ -263,5 +267,14 @@ instance.resetAuth = () => {
         }
     });
 };
+
+// Pre-fetch CSRF token on app initialization
+ensureCsrfToken().then(token => {
+    if (DEBUG) {
+        console.log('Initial CSRF token fetch:', token ? 'Success' : 'Failed');
+    }
+}).catch(error => {
+    console.error('Initial CSRF token fetch failed:', error);
+});
 
 export default instance;
