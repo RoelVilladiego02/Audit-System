@@ -37,7 +37,8 @@ const instance = axios.create({
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        'ngrok-skip-browser-warning': 'true', // Bypass ngrok browser warning
     },
     timeout: 30000,
     withCredentials: true,
@@ -80,7 +81,8 @@ instance.interceptors.request.use(
                         baseURL: BASE_URL, // Using environment config
                         withCredentials: true,
                         headers: {
-                            'Accept': 'application/json'
+                            'Accept': 'application/json',
+                            'ngrok-skip-browser-warning': 'true' // Bypass ngrok browser warning
                         }
                     });
                     csrfToken = getXsrfToken();
@@ -132,7 +134,8 @@ instance.interceptors.response.use(
                     baseURL: BASE_URL, // Using environment config
                     withCredentials: true,
                     headers: {
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'ngrok-skip-browser-warning': 'true' // Bypass ngrok browser warning
                     }
                 });
                 
