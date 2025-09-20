@@ -35,9 +35,18 @@ cleanupUnnecessaryCookies();
 // Function to ensure CSRF token is available
 const ensureCsrfToken = async () => {
     let csrfToken = getXsrfToken();
+    if (DEBUG) {
+        console.log('Current CSRF token:', csrfToken ? 'Found' : 'Not found');
+        console.log('Current cookies:', document.cookie);
+    }
+    
     if (!csrfToken) {
         try {
-            await axios.get('/sanctum/csrf-cookie', {
+            if (DEBUG) {
+                console.log('Fetching CSRF token from:', BASE_URL + '/sanctum/csrf-cookie');
+            }
+            
+            const response = await axios.get('/sanctum/csrf-cookie', {
                 baseURL: BASE_URL,
                 withCredentials: true,
                 headers: {
@@ -45,12 +54,22 @@ const ensureCsrfToken = async () => {
                     'ngrok-skip-browser-warning': 'true'
                 }
             });
+            
+            if (DEBUG) {
+                console.log('CSRF response status:', response.status);
+                console.log('CSRF response headers:', response.headers);
+            }
+            
             csrfToken = getXsrfToken();
             if (DEBUG) {
-                console.log('CSRF token fetched:', csrfToken ? 'Success' : 'Failed');
+                console.log('CSRF token after fetch:', csrfToken ? 'Success' : 'Failed');
+                console.log('Cookies after fetch:', document.cookie);
             }
         } catch (error) {
             console.error('Failed to fetch CSRF token:', error);
+            if (DEBUG) {
+                console.error('CSRF fetch error details:', error.response?.data);
+            }
         }
     }
     return csrfToken;
@@ -106,6 +125,27 @@ instance.interceptors.request.use(
                 }
             } else {
                 console.warn('No CSRF token available for request:', config.url);
+                // Try to fetch CSRF token one more time with a direct request
+                try {
+                    const directResponse = await fetch(BASE_URL + '/sanctum/csrf-cookie', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        }
+                    });
+                    
+                    if (directResponse.ok) {
+                        const newToken = getXsrfToken();
+                        if (newToken) {
+                            config.headers['X-XSRF-TOKEN'] = newToken;
+                            console.log('CSRF token fetched via direct request');
+                        }
+                    }
+                } catch (directError) {
+                    console.error('Direct CSRF fetch also failed:', directError);
+                }
             }
         }
 
