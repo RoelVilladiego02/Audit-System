@@ -338,7 +338,7 @@ const Login = () => {
                                         )}
                                     </div>
 
-                                    {/* Remember Me & Forgot Password */}
+                                    {/* Remember Me & Forgot Password
                                     <div className="mb-4">
                                         <div className="d-flex justify-content-between align-items-center flex-wrap">
                                             <div className="form-check">
@@ -364,7 +364,7 @@ const Login = () => {
                                                 </Link>
                                             </div>
                                         </div>
-                                    </div>
+                                    </div> */}
 
                                     {/* Submit Button */}
                                     <div className="d-grid mb-4">
