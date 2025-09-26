@@ -12,7 +12,7 @@ const config = {
   production: {
     // Updated with your actual ngrok URL
     API_URL: 'https://dc630ea5ff0b.ngrok-free.app/api',
-    BASE_URL: 'https://f58deeaacf82.ngrok-free.app',
+    BASE_URL: 'https://dc630ea5ff0b.ngrok-free.app',
     // Updated with your actual Vercel domain
     CORS_ORIGIN: 'https://audit-system-orpin.vercel.app',
     DEBUG: false,
