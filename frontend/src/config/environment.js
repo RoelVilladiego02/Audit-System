@@ -3,19 +3,17 @@
 
 const config = {
   development: {
-    API_URL: 'https://your-ngrok-url.ngrok.io/api',
-    BASE_URL: 'https://your-ngrok-url.ngrok.io',
-    CORS_ORIGIN: 'https://your-app-name.vercel.app',
+    API_URL: 'http://localhost:8000/api', // Default for local development
+    BASE_URL: 'http://localhost:8000',
+    CORS_ORIGIN: 'http://localhost:3000', // Default for local frontend
     DEBUG: true,
-    ENV: 'production'
+    ENV: 'development'
   },
   production: {
-    // Updated with your actual ngrok URL
-    API_URL: 'https://dc630ea5ff0b.ngrok-free.app/api',
-    BASE_URL: 'https://dc630ea5ff0b.ngrok-free.app',
-    // Updated with your actual Vercel domain
-    CORS_ORIGIN: 'https://audit-system-orpin.vercel.app',
-    DEBUG: false,
+    API_URL: process.env.REACT_APP_API_URL || 'https://dc630ea5ff0b.ngrok-free.app/api',
+    BASE_URL: process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace('/api', '') : 'https://dc630ea5ff0b.ngrok-free.app',
+    CORS_ORIGIN: process.env.REACT_APP_CORS_ORIGIN || 'https://audit-system-orpin.vercel.app',
+    DEBUG: process.env.REACT_APP_DEBUG === 'true' || false,
     ENV: 'production'
   }
 };
@@ -55,7 +53,7 @@ export const isDevelopment = () => ENV === 'development';
 // Helper function to check if we're in production
 export const isProduction = () => ENV === 'production';
 
-// Log current configuration (only in development)
+// Log current configuration (only in development or if DEBUG is true)
 if (DEBUG) {
   console.log('🔧 Environment Configuration:', {
     environment: ENV,
