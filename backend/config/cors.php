@@ -21,7 +21,7 @@ return [
 
     'allowed_origins' => [
         'http://localhost:3000',                    // Development
-        'https://f58deeaacf82.ngrok-free.app',      // Your ngrok URL
+        'https://7df64bc8d36c.ngrok-free.app',      // Your ngrok URL
         'https://audit-system-orpin.vercel.app',    // Your actual Vercel domain
     ],
 
