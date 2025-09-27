@@ -46,12 +46,13 @@ const ensureCsrfToken = async () => {
                 console.log('Fetching CSRF token from:', BASE_URL + '/sanctum/csrf-cookie');
             }
             
-            const response = await axios.get('/sanctum/csrf-cookie', {
-                baseURL: BASE_URL,
+            // Use explicit BASE_URL to avoid unexpected ngrok or tunnel URLs.
+            // Some environments may set API_URL to include '/api' - prefer BASE_URL which should be the host root.
+            const csrfBase = BASE_URL || API_URL || window.location.origin;
+            const response = await axios.get(csrfBase.replace(/\/\/$/, '') + '/sanctum/csrf-cookie', {
                 withCredentials: true,
                 headers: {
-                    'Accept': 'application/json',
-                    'ngrok-skip-browser-warning': 'true'
+                    'Accept': 'application/json'
                 }
             });
             
@@ -80,8 +81,7 @@ const instance = axios.create({
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'ngrok-skip-browser-warning': 'true', // Bypass ngrok browser warning
+        'X-Requested-With': 'XMLHttpRequest'
     },
     timeout: 30000,
     withCredentials: true,
@@ -131,8 +131,7 @@ instance.interceptors.request.use(
                         method: 'GET',
                         credentials: 'include',
                         headers: {
-                            'Accept': 'application/json',
-                            'ngrok-skip-browser-warning': 'true'
+                            'Accept': 'application/json'
                         }
                     });
                     

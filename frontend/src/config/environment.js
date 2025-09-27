@@ -10,8 +10,8 @@ const config = {
     ENV: 'development'
   },
   production: {
-    API_URL: process.env.REACT_APP_API_URL || 'https://dc630ea5ff0b.ngrok-free.app/api',
-    BASE_URL: process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace('/api', '') : 'https://dc630ea5ff0b.ngrok-free.app',
+    API_URL: process.env.REACT_APP_API_URL || 'https://audit-system-laravel-production.up.railway.app',
+    BASE_URL: process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace('/api', '') : 'https://audit-system-laravel-production.up.railway.app',
     CORS_ORIGIN: process.env.REACT_APP_CORS_ORIGIN || 'https://audit-system-orpin.vercel.app',
     DEBUG: process.env.REACT_APP_DEBUG === 'true' || false,
     ENV: 'production'
