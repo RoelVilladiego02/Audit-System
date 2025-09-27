@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 <?php return array (
   'laravel/sail' => 
   array (
