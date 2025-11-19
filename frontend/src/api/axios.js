@@ -32,6 +32,19 @@ const cleanupUnnecessaryCookies = () => {
 // Clean up unnecessary cookies on initialization
 cleanupUnnecessaryCookies();
 
+const getHostBaseUrl = () => {
+    if (BASE_URL) {
+        return BASE_URL.replace(/\/+$/, '');
+    }
+
+    if (API_URL) {
+        // Remove trailing /api or /api/ to hit Sanctum route (it lives outside /api prefix)
+        return API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+    }
+
+    return window.location.origin.replace(/\/+$/, '');
+};
+
 // Function to ensure CSRF token is available
 const ensureCsrfToken = async () => {
     let csrfToken = getXsrfToken();
@@ -42,14 +55,12 @@ const ensureCsrfToken = async () => {
     
     if (!csrfToken) {
         try {
+            const csrfBase = getHostBaseUrl();
             if (DEBUG) {
-                console.log('Fetching CSRF token from:', BASE_URL + '/sanctum/csrf-cookie');
+                console.log('Fetching CSRF token from:', `${csrfBase}/sanctum/csrf-cookie`);
             }
             
-            // Use explicit BASE_URL to avoid unexpected ngrok or tunnel URLs.
-            // Some environments may set API_URL to include '/api' - prefer BASE_URL which should be the host root.
-            const csrfBase = BASE_URL || API_URL || window.location.origin;
-            const response = await axios.get(csrfBase.replace(/\/\/$/, '') + '/sanctum/csrf-cookie', {
+            const response = await axios.get(`${csrfBase}/sanctum/csrf-cookie`, {
                 withCredentials: true,
                 headers: {
                     'Accept': 'application/json'
@@ -127,7 +138,8 @@ instance.interceptors.request.use(
                 console.warn('No CSRF token available for request:', config.url);
                 // Try to fetch CSRF token one more time with a direct request
                 try {
-                    const directResponse = await fetch(BASE_URL + '/sanctum/csrf-cookie', {
+                    const csrfBase = getHostBaseUrl();
+                    const directResponse = await fetch(`${csrfBase}/sanctum/csrf-cookie`, {
                         method: 'GET',
                         credentials: 'include',
                         headers: {
