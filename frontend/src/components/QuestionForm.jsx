@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 
 const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess, title }) => {
   const [formData, setFormData] = useState({
@@ -123,11 +123,6 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
     }
   };
 
-  function getXsrfToken() {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -161,24 +156,13 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
         throw new Error('Authentication token not found');
       }
 
-      await axios.get('sanctum/csrf-cookie', {
-        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-        withCredentials: true,
-      });
-      const csrfToken = getXsrfToken();
-      if (!csrfToken) {
-        throw new Error('Failed to retrieve CSRF token');
-      }
-
-      const url = `http://localhost:8000/api/audit-questions${isEdit ? `/${questionData.id}` : ''}`;
+      const url = `/audit-questions${isEdit ? `/${questionData.id}` : ''}`;
       const method = isEdit ? 'put' : 'post';
 
-      await axios[method](url, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'X-XSRF-TOKEN': csrfToken,
-        },
-        withCredentials: true,
+      await api({
+        url,
+        method,
+        data: formData,
       });
 
       onSuccess();
@@ -195,7 +179,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
         const errorMessages = Object.values(errors).flat().join(' ');
         setError(errorMessages || 'Validation failed. Please check your inputs.');
       } else if (err.response?.status === 404) {
-        setError('The API server could not be reached. Please ensure the backend is running at http://localhost:8000/api and try again.');
+        setError('The API endpoint could not be reached. Please verify the backend API_URL configuration and try again.');
       } else if (err.response?.status === 409) {
         setError(err.response.data.message || 'Cannot modify question structure due to existing answers.');
       } else {
