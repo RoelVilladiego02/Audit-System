@@ -11,7 +11,7 @@ const Home = () => {
             <section className="py-5 py-md-7 bg-white">
                 <div className="container">
                     <div className="text-center">
-                        <h1 className="display-3 fw-bold mb-3">Security Audit System</h1>
+                        <h1 className="display-3 fw-bold mb-3">IT Security Audit System</h1>
                         <p className="lead text-muted mb-5 col-md-8 mx-auto">
                             A comprehensive platform to assess and enhance your organization's cybersecurity posture with industry-leading tools and insights.
                         </p>

@@ -43,7 +43,7 @@ const Navbar = () => {
         {/* Brand */}
         <Link className="navbar-brand fw-bold d-flex align-items-center" to={getBrandPath()}>
           <i className="bi bi-shield-check me-2 text-primary" style={{ fontSize: '1.5rem' }}></i>
-          <span className="d-none d-sm-inline">Audit System</span>
+          <span className="d-none d-sm-inline">IT SECURITY AUDIT SYSTEM</span>
           <span className="d-sm-none">Audit</span>
         </Link>
 
