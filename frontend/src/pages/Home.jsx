@@ -83,41 +83,17 @@ const Home = () => {
                 </div>
             </section>
 
-            {/* Stats Section */}
-            <section className="py-4 bg-primary text-white">
-                <div className="container">
-                    <div className="row text-center g-4">
-                        <div className="col-md-4">
-                            <div className="p-3">
-                                <h3 className="display-5 fw-bold mb-1">500+</h3>
-                                <p className="mb-0 opacity-90">Security Assessments</p>
-                            </div>
-                        </div>
-                        <div className="col-md-4">
-                            <div className="p-3 border-start border-end border-white border-opacity-25">
-                                <h3 className="display-5 fw-bold mb-1">99.9%</h3>
-                                <p className="mb-0 opacity-90">Uptime Guarantee</p>
-                            </div>
-                        </div>
-                        <div className="col-md-4">
-                            <div className="p-3">
-                                <h3 className="display-5 fw-bold mb-1">24/7</h3>
-                                <p className="mb-0 opacity-90">Support Available</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+
 
             {/* Features Section */}
             <section className="py-5">
                 <div className="container py-4">
                     <div className="text-center mb-5">
                         <h2 className="display-6 fw-bold text-dark mb-3">
-                            Comprehensive Security Solutions
+                            Key Features
                         </h2>
                         <p className="lead text-muted col-lg-8 mx-auto">
-                            Everything you need to assess, monitor, and improve your organization's security posture
+                            Tools to help you assess and manage your security
                         </p>
                     </div>
 
@@ -130,9 +106,9 @@ const Home = () => {
                                             <i className="bi bi-shield-check" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Comprehensive Assessment</h5>
+                                            <h5 className="card-title fw-bold mb-2">Security Assessment</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Conduct thorough security evaluations aligned with industry standards and best practices.
+                                                Evaluate your organization's security posture.
                                             </p>
                                         </div>
                                     </div>
@@ -148,9 +124,9 @@ const Home = () => {
                                             <i className="bi bi-bar-chart-line" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Detailed Analytics</h5>
+                                            <h5 className="card-title fw-bold mb-2">Analytics</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Gain visual insights and track security trends over time for informed decision-making.
+                                                Track and visualize your security assessment data.
                                             </p>
                                         </div>
                                     </div>
@@ -166,9 +142,9 @@ const Home = () => {
                                             <i className="bi bi-lightbulb" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Actionable Insights</h5>
+                                            <h5 className="card-title fw-bold mb-2">Recommendations</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Receive clear, prioritized recommendations to strengthen your security measures.
+                                                Get suggestions based on your assessment results.
                                             </p>
                                         </div>
                                     </div>
@@ -184,9 +160,9 @@ const Home = () => {
                                             <i className="bi bi-file-earmark-lock" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Compliance Ready</h5>
+                                            <h5 className="card-title fw-bold mb-2">Compliance Tracking</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Meet regulatory requirements with automated compliance tracking and reporting.
+                                                Document and track compliance requirements.
                                             </p>
                                         </div>
                                     </div>
@@ -202,9 +178,9 @@ const Home = () => {
                                             <i className="bi bi-exclamation-triangle" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Risk Management</h5>
+                                            <h5 className="card-title fw-bold mb-2">Risk Identification</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Identify, assess, and mitigate potential security risks before they become threats.
+                                                Identify potential security gaps in your organization.
                                             </p>
                                         </div>
                                     </div>
@@ -220,9 +196,9 @@ const Home = () => {
                                             <i className="bi bi-people" style={{ fontSize: '1.75rem' }}></i>
                                         </div>
                                         <div className="flex-grow-1">
-                                            <h5 className="card-title fw-bold mb-2">Team Collaboration</h5>
+                                            <h5 className="card-title fw-bold mb-2">Team Access</h5>
                                             <p className="card-text text-muted mb-0">
-                                                Work together seamlessly with role-based access and real-time updates.
+                                                Manage user roles and access permissions.
                                             </p>
                                         </div>
                                     </div>
