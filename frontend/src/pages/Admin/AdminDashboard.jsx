@@ -7,6 +7,8 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [stats, setStats] = useState({
     pending_reviews: 0,
     under_review: 0,
@@ -61,6 +63,24 @@ const AdminDashboard = () => {
         return 'bg-success';
       default:
         return 'bg-secondary';
+    }
+  };
+
+  const handleDeleteSubmission = async (submissionId, submissionTitle) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`/audit-submissions/${submissionId}`);
+      
+      // Remove from stats
+      setStats(prev => ({
+        ...prev,
+        recent_submissions: prev.recent_submissions.filter(s => s.id !== submissionId)
+      }));
+      setDeleteConfirm(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete submission');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -276,6 +296,17 @@ const AdminDashboard = () => {
                         <td className="text-muted">
                           {new Date(submission.created_at).toLocaleDateString()}
                         </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-danger p-0"
+                            onClick={() => setDeleteConfirm(submission)}
+                            aria-label={`Delete submission ${submission.title}`}
+                            title="Delete this submission"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -340,6 +371,65 @@ const AdminDashboard = () => {
             )}
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="modal d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header border-danger bg-light">
+                  <h5 className="modal-title text-danger fw-bold">
+                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                    Delete Submission
+                  </h5>
+                  <button 
+                    type="button" 
+                    className="btn-close" 
+                    onClick={() => setDeleteConfirm(null)}
+                    disabled={deleting}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <p className="mb-3">
+                    Are you sure you want to delete <strong>"{deleteConfirm.title}"</strong>?
+                  </p>
+                  <p className="text-muted small mb-0">
+                    <i className="bi bi-info-circle me-1"></i>
+                    This action cannot be undone.
+                  </p>
+                </div>
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setDeleteConfirm(null)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-danger" 
+                    onClick={() => handleDeleteSubmission(deleteConfirm.id, deleteConfirm.title)}
+                    disabled={deleting}
+                  >
+                    {deleting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-trash me-2"></i>
+                        Delete Submission
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

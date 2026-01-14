@@ -70,6 +70,8 @@ const SubmissionsList = () => {
     const [error, setError] = useState(null);
     const [sortBy, setSortBy] = useState('newest');
     const [filterBy, setFilterBy] = useState('all');
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     
     // Chart refs
     const riskDistributionChartRef = useRef(null);
@@ -226,6 +228,39 @@ const SubmissionsList = () => {
         if (diffInHours < 24) return `${diffInHours}h ago`;
         if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
         return date.toLocaleDateString();
+    };
+
+    const handleDeleteSubmission = async (submissionId, submissionTitle) => {
+        try {
+            setDeleting(true);
+            await api.delete(`/audit-submissions/${submissionId}`);
+            
+            // Remove submission from list
+            setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+            setDeleteConfirm(null);
+            
+            // Show success message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <i className="bi bi-check-circle-fill me-2"></i>
+                <strong>Success!</strong> "${submissionTitle}" has been deleted.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || 'Failed to delete submission';
+            setError(errorMessage);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const canDeleteSubmission = (submission) => {
+        // Users can delete their own submissions, admins can delete any
+        return user?.id === submission.user_id || user?.role === 'admin';
     };
 
     const createRiskDistributionChart = (stats) => {
@@ -618,13 +653,26 @@ const SubmissionsList = () => {
                                                     )}
                                                 </td>
                                                 <td className="py-3">
-                                                    <Link 
-                                                        to={`/submissions/${submission.id}`}
-                                                        className="text-muted"
-                                                        aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
-                                                    >
-                                                        <i className="bi bi-chevron-right" aria-hidden="true"></i>
-                                                    </Link>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <Link 
+                                                            to={`/submissions/${submission.id}`}
+                                                            className="text-muted"
+                                                            aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                        >
+                                                            <i className="bi bi-chevron-right" aria-hidden="true"></i>
+                                                        </Link>
+                                                        {canDeleteSubmission(submission) && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-link text-danger p-0"
+                                                                onClick={() => setDeleteConfirm(submission)}
+                                                                aria-label={`Delete submission ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                                title="Delete this submission"
+                                                            >
+                                                                <i className="bi bi-trash" aria-hidden="true"></i>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -650,6 +698,65 @@ const SubmissionsList = () => {
                                     <div className="col-md-4">
                                         <i className="bi bi-graph-up me-2" aria-hidden="true"></i>
                                         Track your security progress over time
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Delete Confirmation Modal */}
+                    {deleteConfirm && (
+                        <div className="modal d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                            <div className="modal-dialog modal-dialog-centered">
+                                <div className="modal-content">
+                                    <div className="modal-header border-danger bg-light">
+                                        <h5 className="modal-title text-danger fw-bold">
+                                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                            Delete Submission
+                                        </h5>
+                                        <button 
+                                            type="button" 
+                                            className="btn-close" 
+                                            onClick={() => setDeleteConfirm(null)}
+                                            disabled={deleting}
+                                        ></button>
+                                    </div>
+                                    <div className="modal-body">
+                                        <p className="mb-3">
+                                            Are you sure you want to delete <strong>"{deleteConfirm.title || `Security Assessment #${deleteConfirm.id}`}"</strong>?
+                                        </p>
+                                        <p className="text-muted small mb-0">
+                                            <i className="bi bi-info-circle me-1"></i>
+                                            This action cannot be undone.
+                                        </p>
+                                    </div>
+                                    <div className="modal-footer">
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-secondary" 
+                                            onClick={() => setDeleteConfirm(null)}
+                                            disabled={deleting}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-danger" 
+                                            onClick={() => handleDeleteSubmission(deleteConfirm.id, deleteConfirm.title)}
+                                            disabled={deleting}
+                                        >
+                                            {deleting ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="bi bi-trash me-2"></i>
+                                                    Delete Submission
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
