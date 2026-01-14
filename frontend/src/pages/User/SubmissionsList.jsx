@@ -541,6 +541,7 @@ const SubmissionsList = () => {
                                             <th scope="col" className="py-3 fw-semibold text-muted">Progress</th>
                                             <th scope="col" className="py-3 fw-semibold text-muted">Submitted</th>
                                             <th scope="col" className="py-3 fw-semibold text-muted">By</th>
+                                            <th scope="col" className="py-3 fw-semibold text-muted">Company</th>
                                             <th scope="col" className="py-3" style={{ width: '5%' }}></th>
                                         </tr>
                                     </thead>
@@ -606,6 +607,16 @@ const SubmissionsList = () => {
                                                     <span className="ms-1">({getTimeAgo(submission.created_at)})</span>
                                                 </td>
                                                 <td className="py-3 text-muted small">{submission.user?.name || 'Unknown'}</td>
+                                                <td className="py-3 text-muted small">
+                                                    {submission.user?.company ? (
+                                                        <span title={submission.user.company} className="text-truncate d-block" style={{ maxWidth: '150px' }}>
+                                                            <i className="bi bi-building me-1"></i>
+                                                            {submission.user.company}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-muted fst-italic">—</span>
+                                                    )}
+                                                </td>
                                                 <td className="py-3">
                                                     <Link 
                                                         to={`/submissions/${submission.id}`}

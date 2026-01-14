@@ -221,6 +221,7 @@ const AdminDashboard = () => {
                     <tr>
                       <th className="border-0 ps-4">Submission</th>
                       <th className="border-0">User</th>
+                      <th className="border-0">Company</th>
                       <th className="border-0">Status</th>
                       <th className="border-0">Risk Level</th>
                       <th className="border-0">Progress</th>
@@ -240,6 +241,16 @@ const AdminDashboard = () => {
                           </span>
                         </td>
                         <td className="text-muted">{submission.user}</td>
+                        <td className="text-muted">
+                          {submission.company ? (
+                            <span title={submission.company} className="text-truncate d-block" style={{ maxWidth: '150px' }}>
+                              <i className="bi bi-building me-1"></i>
+                              {submission.company}
+                            </span>
+                          ) : (
+                            <span className="text-muted fst-italic">—</span>
+                          )}
+                        </td>
                         <td>
                           <span className={`badge ${getStatusBadgeClass(submission.status)}`}>
                             {submission.status.replace('_', ' ').toUpperCase()}
