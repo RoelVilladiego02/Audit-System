@@ -8,7 +8,8 @@ const Register = () => {
         name: '',
         email: '',
         password: '',
-        password_confirmation: ''
+        password_confirmation: '',
+        company: ''
     });
     const [error, setError] = useState('');
     const [fieldErrors, setFieldErrors] = useState({});
@@ -190,6 +191,12 @@ const Register = () => {
                 }
                 break;
 
+            case 'company':
+                if (value && value.length > 255) {
+                    error = 'Company name cannot exceed 255 characters';
+                }
+                break;
+
             default:
                 break;
         }
@@ -225,7 +232,8 @@ const Register = () => {
             name: true,
             email: true,
             password: true,
-            password_confirmation: true
+            password_confirmation: true,
+            company: true
         });
 
         return isValid;
@@ -260,7 +268,8 @@ const Register = () => {
                 formData.name.trim(),
                 formData.email.toLowerCase().trim(),
                 formData.password,
-                formData.password_confirmation
+                formData.password_confirmation,
+                formData.company.trim()
             );
             
             if (userData) {
@@ -552,6 +561,42 @@ const Register = () => {
                                             <div id="password-error" className="invalid-feedback d-block">
                                                 <i className="bi bi-exclamation-circle me-1"></i>
                                                 {fieldErrors.password}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Company Field */}
+                                    <div className="mb-3">
+                                        <label htmlFor="company" className="form-label fw-semibold small">
+                                            Company <span className="text-muted">(Optional)</span>
+                                        </label>
+                                        <div className="input-group">
+                                            <span className="input-group-text bg-light border-end-0">
+                                                <i className="bi bi-building text-muted"></i>
+                                            </span>
+                                            <input
+                                                id="company"
+                                                name="company"
+                                                type="text"
+                                                className={`form-control border-start-0 ps-0 ${getFieldValidationClass('company')}`}
+                                                placeholder="Enter your company name (optional)"
+                                                value={formData.company}
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                disabled={isLoading}
+                                                autoComplete="organization"
+                                                aria-describedby={fieldErrors.company ? 'company-error' : undefined}
+                                            />
+                                            {formData.company && !fieldErrors.company && touchedFields.company && (
+                                                <span className="input-group-text bg-light border-start-0 text-success">
+                                                    <i className="bi bi-check"></i>
+                                                </span>
+                                            )}
+                                        </div>
+                                        {fieldErrors.company && (
+                                            <div id="company-error" className="invalid-feedback d-block">
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {fieldErrors.company}
                                             </div>
                                         )}
                                     </div>

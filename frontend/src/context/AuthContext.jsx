@@ -205,7 +205,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const register = async (name, email, password, password_confirmation) => {
+    const register = async (name, email, password, password_confirmation, company = '') => {
         setLoading(true);
         setError('');
         
@@ -220,7 +220,8 @@ export const AuthProvider = ({ children }) => {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
                 password,
-                password_confirmation
+                password_confirmation,
+                company: company.trim() || null
             });
 
             console.log('Registration response:', {

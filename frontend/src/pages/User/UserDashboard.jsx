@@ -12,6 +12,12 @@ const UserDashboard = () => {
                 <div className="container">
                     <div className="text-center">
                         <h1 className="display-4 fw-bold mb-3">Welcome, {user?.name}</h1>
+                        {user?.company && (
+                            <p className="lead text-primary mb-3">
+                                <i className="bi bi-building me-2"></i>
+                                {user.company}
+                            </p>
+                        )}
                         <p className="lead text-muted col-md-8 mx-auto">
                             Manage your security audits, review submissions, and gain insights to strengthen your organization's security posture.
                         </p>
