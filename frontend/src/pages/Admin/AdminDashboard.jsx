@@ -260,12 +260,12 @@ const AdminDashboard = () => {
                             {submission.title}
                           </span>
                         </td>
-                        <td className="text-muted">{submission.user}</td>
+                        <td className="text-muted">{submission.user?.name || 'Unknown'}</td>
                         <td className="text-muted">
-                          {submission.company ? (
-                            <span title={submission.company} className="text-truncate d-block" style={{ maxWidth: '150px' }}>
+                          {submission.user?.company ? (
+                            <span title={submission.user.company} className="text-truncate d-block" style={{ maxWidth: '150px' }}>
                               <i className="bi bi-building me-1"></i>
-                              {submission.company}
+                              {submission.user.company}
                             </span>
                           ) : (
                             <span className="text-muted fst-italic">—</span>
