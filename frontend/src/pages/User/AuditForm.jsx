@@ -65,14 +65,31 @@ const AuditForm = () => {
             console.log('All submissions response:', response.data);
             
             // Filter for all draft submissions (regardless of answer count)
-            const drafts = response.data.filter(submission => {
+            let drafts = response.data.filter(submission => {
                 const isDraft = submission.status === 'draft';
                 console.log(`Submission ${submission.id}: status=${submission.status}, answers=${submission.answers?.length || 0}, isDraft=${isDraft}`);
                 return isDraft;
             });
-            console.log('Filtered drafts:', drafts);
             
-            setExistingDrafts(drafts);
+            // Fetch full details for each draft to get accurate answer count
+            const draftsWithAnswers = await Promise.all(
+                drafts.map(async (draft) => {
+                    try {
+                        const detailResponse = await draftAPI.getSubmission(draft.id);
+                        const detailSubmission = detailResponse.data.submission || detailResponse.data;
+                        return {
+                            ...draft,
+                            answers: detailSubmission.answers || []
+                        };
+                    } catch (err) {
+                        console.error(`Failed to fetch details for draft ${draft.id}:`, err);
+                        return draft;
+                    }
+                })
+            );
+            
+            console.log('Drafts with answers:', draftsWithAnswers);
+            setExistingDrafts(draftsWithAnswers);
         } catch (err) {
             console.error('Failed to load drafts:', err);
             if (err.response?.status === 401) {
