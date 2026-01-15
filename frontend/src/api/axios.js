@@ -111,16 +111,9 @@ instance.interceptors.request.use(
         config.headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            ...(token ? {} : { 'X-Requested-With': 'XMLHttpRequest' }), // Only add X-Requested-With for non-token requests
+            'X-Requested-With': 'XMLHttpRequest',
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
-        
-        // If using Bearer token, disable credentials (no need for cookies/CSRF)
-        if (token) {
-            config.withCredentials = false;
-        } else {
-            config.withCredentials = true;
-        }
         
         // Log token usage for debugging (only in development)
         if (DEBUG) {
@@ -331,42 +324,4 @@ ensureCsrfToken().then(token => {
     console.error('Initial CSRF token fetch failed:', error);
 });
 
-// Create a clean axios instance for Bearer token authenticated requests
-// This bypasses any CSRF-related configuration that might conflict
-const apiInstance = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    },
-    timeout: 30000,
-    withCredentials: false,
-});
-
-// Add auth token to Bearer token instance
-apiInstance.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => Promise.reject(error)
-);
-
-// Handle 401/403 errors
-apiInstance.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        if ([401, 403].includes(error.response?.status)) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-        }
-        return Promise.reject(error);
-    }
-);
-
 export default instance;
-export { apiInstance };

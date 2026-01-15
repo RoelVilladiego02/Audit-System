@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
-import { apiInstance } from '../../api/axios';
+import axios from '../../api/axios';
 
 const ProfilePage = () => {
     const { user, updateUser } = useAuth();
@@ -81,7 +81,7 @@ const ProfilePage = () => {
         setSuccess(false);
 
         try {
-            const response = await apiInstance.patch('/user/profile', {
+            const response = await axios.patch('/user/profile', {
                 name: formData.name.trim(),
                 email: formData.email.trim(),
                 company: formData.company.trim() || null
@@ -161,7 +161,7 @@ const ProfilePage = () => {
         setPasswordSuccess(false);
 
         try {
-            await apiInstance.put('/user/password', {
+            await axios.put('/user/password', {
                 current_password: passwordData.current_password,
                 new_password: passwordData.new_password,
                 new_password_confirmation: passwordData.new_password_confirmation
