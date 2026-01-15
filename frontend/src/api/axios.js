@@ -126,36 +126,23 @@ instance.interceptors.request.use(
 
         // Handle CSRF token for state-changing operations
         if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
-            // Ensure CSRF token is available before making the request
-            const csrfToken = await ensureCsrfToken();
-            
-            if (csrfToken) {
-                config.headers['X-XSRF-TOKEN'] = csrfToken;
+            // If using Bearer token authentication, skip CSRF token requirement
+            if (token) {
+                // Bearer token provides sufficient security, no CSRF needed
                 if (DEBUG) {
-                    console.log('Using token for request:', csrfToken.substring(0, 20) + '...');
+                    console.log('Using Bearer token authentication, skipping CSRF requirement');
                 }
             } else {
-                console.warn('No CSRF token available for request:', config.url);
-                // Try to fetch CSRF token one more time with a direct request
-                try {
-                    const csrfBase = getHostBaseUrl();
-                    const directResponse = await fetch(`${csrfBase}/sanctum/csrf-cookie`, {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    });
-                    
-                    if (directResponse.ok) {
-                        const newToken = getXsrfToken();
-                        if (newToken) {
-                            config.headers['X-XSRF-TOKEN'] = newToken;
-                            console.log('CSRF token fetched via direct request');
-                        }
+                // Only use CSRF token if not using Bearer authentication
+                const csrfToken = await ensureCsrfToken();
+                
+                if (csrfToken) {
+                    config.headers['X-XSRF-TOKEN'] = csrfToken;
+                    if (DEBUG) {
+                        console.log('Using CSRF token for request:', csrfToken.substring(0, 20) + '...');
                     }
-                } catch (directError) {
-                    console.error('Direct CSRF fetch also failed:', directError);
+                } else {
+                    console.warn('No CSRF token available for request:', config.url);
                 }
             }
         }
@@ -188,19 +175,28 @@ instance.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Handle CSRF token expiry (419)
+        // Handle CSRF token expiry (419) - only retry if using session-based auth (not Bearer token)
         if (error.response?.status === 419 && !originalRequest._csrfRetry) {
-            originalRequest._csrfRetry = true;
-            
-            try {
-                // Fetch new CSRF token
-                const newCsrfToken = await ensureCsrfToken();
-                if (newCsrfToken) {
-                    originalRequest.headers['X-XSRF-TOKEN'] = newCsrfToken;
-                    return instance(originalRequest);
+            const token = localStorage.getItem('token');
+            // If using Bearer token authentication, don't retry CSRF errors
+            // Bearer tokens don't need CSRF protection
+            if (!token && !originalRequest._csrfRetry) {
+                originalRequest._csrfRetry = true;
+                
+                try {
+                    // Fetch new CSRF token
+                    const newCsrfToken = await ensureCsrfToken();
+                    if (newCsrfToken) {
+                        originalRequest.headers['X-XSRF-TOKEN'] = newCsrfToken;
+                        return instance(originalRequest);
+                    }
+                } catch (retryError) {
+                    console.error('CSRF retry failed:', retryError);
                 }
-            } catch (retryError) {
-                console.error('CSRF retry failed:', retryError);
+            } else if (token) {
+                // If using Bearer token and getting 419, it's a backend configuration issue
+                // The backend should not require CSRF for Bearer token requests
+                console.warn('Received 419 error with Bearer token authentication. Backend CSRF configuration may be incorrect.');
             }
         }
 
