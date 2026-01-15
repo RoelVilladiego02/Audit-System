@@ -60,6 +60,10 @@ export const AuthProvider = ({ children }) => {
         // Clear user state immediately
         setUser(null);
         
+        // Clear draft-related data
+        localStorage.removeItem('currentDraftId');
+        sessionStorage.removeItem('currentDraftId');
+        
         // Clear localStorage completely
         localStorage.clear();
         

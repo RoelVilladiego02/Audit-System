@@ -37,15 +37,22 @@ const AuditForm = () => {
                 initialCustomAnswers[q.id] = '';
             });
             
-            // If a draftId is provided in URL, load the draft data
-            if (draftId) {
+            // Determine draft ID: from URL param or localStorage
+            let draftIdToLoad = draftId || localStorage.getItem('currentDraftId');
+            
+            // If a draftId is provided, load the draft data
+            if (draftIdToLoad) {
                 try {
-                    const draftResponse = await draftAPI.getSubmission(draftId);
+                    console.log('Loading draft with ID:', draftIdToLoad);
+                    const draftResponse = await draftAPI.getSubmission(draftIdToLoad);
                     const draftSubmission = draftResponse.data.submission || draftResponse.data;
+                    
+                    console.log('Draft data received:', draftSubmission);
                     
                     // Verify the draft belongs to the current user
                     if (draftSubmission.user_id !== user?.id) {
                         setError('You do not have permission to access this draft.');
+                        localStorage.removeItem('currentDraftId');
                         setQuestions([]);
                         return;
                     }
@@ -60,10 +67,17 @@ const AuditForm = () => {
                         });
                     }
                     
-                    setCurrentDraftId(draftId);
+                    setCurrentDraftId(draftIdToLoad);
+                    localStorage.setItem('currentDraftId', draftIdToLoad.toString());
                     setDraftSaveSuccess(`Draft loaded successfully. Continue editing or save your progress.`);
+                    
+                    // Auto-dismiss load message
+                    setTimeout(() => {
+                        setDraftSaveSuccess(null);
+                    }, 4000);
                 } catch (draftErr) {
                     console.error('Failed to load draft:', draftErr);
+                    localStorage.removeItem('currentDraftId');
                     setError('Failed to load draft. Starting with a new submission.');
                 }
             }
@@ -304,16 +318,26 @@ const AuditForm = () => {
                 return;
             }
 
+            console.log('Saving draft with answers:', draftAnswers);
+
             let response;
             if (currentDraftId) {
                 // Update existing draft
+                console.log('Updating existing draft:', currentDraftId);
                 response = await draftAPI.updateDraft(currentDraftId, draftAnswers);
             } else {
                 // Create new draft
+                console.log('Creating new draft');
                 response = await draftAPI.saveDraft(draftAnswers);
                 const newDraftId = response.data.submission?.id || response.data.id;
+                console.log('New draft created with ID:', newDraftId);
+                
                 if (newDraftId) {
                     setCurrentDraftId(newDraftId);
+                    // Store in localStorage as backup
+                    localStorage.setItem('currentDraftId', newDraftId.toString());
+                    // Update URL with draft ID
+                    window.history.replaceState({}, '', `/audit-form?draftId=${newDraftId}`);
                 }
             }
 
@@ -380,7 +404,9 @@ const AuditForm = () => {
             await draftAPI.updateDraft(currentDraftId, draftAnswers);
 
             // Now submit the draft
+            console.log('Submitting draft:', currentDraftId);
             const response = await draftAPI.submitDraft(currentDraftId);
+            console.log('Draft submitted successfully:', response.data);
 
             setSuccess('Form submitted successfully!');
             const resetAnswers = {};
@@ -392,6 +418,7 @@ const AuditForm = () => {
             setAnswers(resetAnswers);
             setCustomAnswers(resetCustomAnswers);
             setCurrentDraftId(null);
+            localStorage.removeItem('currentDraftId');
             
             // Redirect to submissions page after a delay
             setTimeout(() => {
