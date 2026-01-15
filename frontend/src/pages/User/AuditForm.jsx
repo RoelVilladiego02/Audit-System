@@ -764,12 +764,6 @@ const AuditForm = () => {
                             <div className="text-center mb-4">
                                 <i className="bi bi-clipboard-check text-primary" style={{ fontSize: '2.5rem' }} aria-hidden="true"></i>
                                 <p className="text-muted mt-2">Please answer all questions to complete the form.</p>
-                                {user && (
-                                    <div className="alert alert-info border-0 mt-3" style={{ fontSize: '0.9rem' }}>
-                                        <i className="bi bi-person-circle me-2"></i>
-                                        <strong>Logged in as:</strong> {user.name} (ID: {user.id})
-                                    </div>
-                                )}
                             </div>
 
                             {/* Existing Drafts Section */}
