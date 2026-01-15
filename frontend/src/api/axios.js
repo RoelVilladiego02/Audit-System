@@ -115,6 +115,13 @@ instance.interceptors.request.use(
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
         
+        // If using Bearer token, disable credentials (no need for cookies/CSRF)
+        if (token) {
+            config.withCredentials = false;
+        } else {
+            config.withCredentials = true;
+        }
+        
         // Log token usage for debugging (only in development)
         if (DEBUG) {
             if (token) {
