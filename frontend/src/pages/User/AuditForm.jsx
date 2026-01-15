@@ -222,10 +222,10 @@ const AuditForm = () => {
     // Load draft from URL if draftId parameter exists
     useEffect(() => {
         if (draftId && questions.length > 0 && !currentDraftId && !loading) {
-            console.log('Draft ID detected in URL, redirecting to audit page');
-            navigate('/audit');
+            console.log('Loading draft from URL parameter:', draftId);
+            loadDraftIntoForm(parseInt(draftId));
         }
-    }, [draftId, questions.length, currentDraftId, loading, navigate]);
+    }, [draftId, questions.length, currentDraftId, loading]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {
