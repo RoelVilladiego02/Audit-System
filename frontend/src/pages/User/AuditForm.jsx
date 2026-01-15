@@ -64,14 +64,13 @@ const AuditForm = () => {
             const response = await api.get('audit-submissions');
             console.log('All submissions response:', response.data);
             
-            // Filter for drafts that have at least 1 answer
+            // Filter for all draft submissions (regardless of answer count)
             const drafts = response.data.filter(submission => {
-                const hasAnswers = submission.answers && submission.answers.length > 0;
                 const isDraft = submission.status === 'draft';
-                console.log(`Submission ${submission.id}: status=${submission.status}, answers=${submission.answers?.length || 0}, isDraft=${isDraft}, hasAnswers=${hasAnswers}`);
-                return isDraft && hasAnswers;
+                console.log(`Submission ${submission.id}: status=${submission.status}, answers=${submission.answers?.length || 0}, isDraft=${isDraft}`);
+                return isDraft;
             });
-            console.log('Filtered drafts with answers:', drafts);
+            console.log('Filtered drafts:', drafts);
             
             setExistingDrafts(drafts);
         } catch (err) {
