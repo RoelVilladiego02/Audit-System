@@ -970,10 +970,26 @@ const AuditForm = () => {
                         </div>
                     )}
 
-                    {/* Floating Action Button for Quick Navigation */}
+                    {/* Floating Action Button for Quick Navigation and Draft Save */}
                     {questions.length > 0 && (
                         <div className="position-fixed" style={{ bottom: '20px', right: '20px', zIndex: 1000 }}>
                             <div className="btn-group-vertical" role="group">
+                                {hasAnsweredQuestions() && (
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveDraft}
+                                        disabled={savingDraft || submitting}
+                                        className="btn btn-success btn-sm rounded-circle mb-2"
+                                        style={{ width: '50px', height: '50px' }}
+                                        title="Save draft"
+                                    >
+                                        {savingDraft ? (
+                                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        ) : (
+                                            <i className="bi bi-download" aria-hidden="true"></i>
+                                        )}
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => scrollToQuestion(currentQuestionIndex - 1)}
