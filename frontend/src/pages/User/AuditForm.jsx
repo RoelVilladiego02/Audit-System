@@ -733,7 +733,7 @@ const AuditForm = () => {
                                     </h6>
                                     <div className="row g-3">
                                         {existingDrafts.map((draft) => {
-                                            const answerCount = draft.answers?.length || 0;
+                                            const answerCount = draft.answers?.filter(answer => answer.answer && answer.answer.trim() !== '').length || 0;
                                             return (
                                                 <div key={draft.id} className="col-md-6">
                                                     <div 
