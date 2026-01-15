@@ -171,6 +171,13 @@ const Navbar = () => {
                 </li>
                 <li><hr className="dropdown-divider" /></li>
                 <li>
+                  <Link className="dropdown-item" to="/profile" aria-label="Edit Profile">
+                    <i className="bi bi-person-check me-2"></i>
+                    Edit Profile
+                  </Link>
+                </li>
+                <li><hr className="dropdown-divider" /></li>
+                <li>
                   <button
                     className="dropdown-item text-danger d-flex align-items-center"
                     onClick={handleLogout}

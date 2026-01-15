@@ -10,6 +10,7 @@ import UserDashboard from './pages/User/UserDashboard';
 import AuditForm from './pages/User/AuditForm';
 import SubmissionsList from './pages/User/SubmissionsList';
 import SubmissionDetails from './pages/User/SubmissionDetails';
+import ProfilePage from './pages/User/ProfilePage';
 import ManageQuestions from './pages/Admin/ManageQuestions';
 import ManageSubmissions from './pages/Admin/ManageSubmissions';
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -48,6 +49,10 @@ const router = createBrowserRouter([
             {
                 path: 'submissions/:id',
                 element: <RoleRoute requiredRoles={['user']}><SubmissionDetails /></RoleRoute>
+            },
+            {
+                path: 'profile',
+                element: <RoleRoute requiredRoles={['user']}><ProfilePage /></RoleRoute>
             },
             {
                 path: 'admin',
