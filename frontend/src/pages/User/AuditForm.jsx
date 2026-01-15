@@ -64,8 +64,14 @@ const AuditForm = () => {
             const response = await api.get('audit-submissions');
             console.log('All submissions response:', response.data);
             
-            const drafts = response.data.filter(submission => submission.status === 'draft');
-            console.log('Filtered drafts:', drafts);
+            // Filter for drafts that have at least 1 answer
+            const drafts = response.data.filter(submission => {
+                const hasAnswers = submission.answers && submission.answers.length > 0;
+                const isDraft = submission.status === 'draft';
+                console.log(`Submission ${submission.id}: status=${submission.status}, answers=${submission.answers?.length || 0}, isDraft=${isDraft}, hasAnswers=${hasAnswers}`);
+                return isDraft && hasAnswers;
+            });
+            console.log('Filtered drafts with answers:', drafts);
             
             setExistingDrafts(drafts);
         } catch (err) {
@@ -681,6 +687,26 @@ const AuditForm = () => {
 
     return (
         <div className="container-fluid min-vh-100 bg-light py-4">
+            {/* Toast Notification */}
+            {draftSaveSuccess && (
+                <div className="position-fixed" style={{ top: '20px', left: '20px', zIndex: 1050 }}>
+                    <div className="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div className="toast-header bg-success text-white border-0">
+                            <i className="bi bi-check-circle-fill me-2"></i>
+                            <strong className="me-auto">Success</strong>
+                            <button 
+                                type="button" 
+                                className="btn-close btn-close-white" 
+                                onClick={() => setDraftSaveSuccess(null)}
+                                aria-label="Close"
+                            ></button>
+                        </div>
+                        <div className="toast-body">
+                            {draftSaveSuccess}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="row justify-content-center">
                 <div className="col-lg-10 col-xl-9">
                     <div className="card border-0 shadow-sm mb-4">
@@ -707,54 +733,73 @@ const AuditForm = () => {
                                         Your Drafts ({existingDrafts.length})
                                     </h6>
                                     <div className="row g-3">
-                                        {existingDrafts.map((draft) => (
-                                            <div key={draft.id} className="col-md-6">
-                                                <div 
-                                                    className={`card border-0 shadow-sm cursor-pointer transition-all ${currentDraftId === draft.id ? 'border-primary border-2' : ''}`}
-                                                    style={{ cursor: 'pointer' }}
-                                                    onClick={() => loadDraftIntoForm(draft.id)}
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    onKeyPress={(e) => {
-                                                        if (e.key === 'Enter' || e.key === ' ') {
-                                                            loadDraftIntoForm(draft.id);
-                                                        }
-                                                    }}
-                                                >
-                                                    <div className="card-body">
-                                                        <div className="d-flex justify-content-between align-items-start mb-2">
-                                                            <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
-                                                            {currentDraftId === draft.id && (
-                                                                <span className="badge bg-primary">
-                                                                    <i className="bi bi-check-circle me-1"></i>
-                                                                    Active
+                                        {existingDrafts.map((draft) => {
+                                            const answerCount = draft.answers?.length || 0;
+                                            return (
+                                                <div key={draft.id} className="col-md-6">
+                                                    <div 
+                                                        className={`card border-0 shadow-sm cursor-pointer transition-all ${currentDraftId === draft.id ? 'border-primary border-2' : ''}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                            if (currentDraftId === draft.id) {
+                                                                setCurrentDraftId(null);
+                                                                setAnswers({});
+                                                                setCustomAnswers({});
+                                                                questions.forEach(q => {
+                                                                    setAnswers(prev => ({ ...prev, [q.id]: '' }));
+                                                                    setCustomAnswers(prev => ({ ...prev, [q.id]: '' }));
+                                                                });
+                                                            } else {
+                                                                loadDraftIntoForm(draft.id);
+                                                            }
+                                                        }}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyPress={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                if (currentDraftId === draft.id) {
+                                                                    setCurrentDraftId(null);
+                                                                    setAnswers({});
+                                                                    setCustomAnswers({});
+                                                                    questions.forEach(q => {
+                                                                        setAnswers(prev => ({ ...prev, [q.id]: '' }));
+                                                                        setCustomAnswers(prev => ({ ...prev, [q.id]: '' }));
+                                                                    });
+                                                                } else {
+                                                                    loadDraftIntoForm(draft.id);
+                                                                }
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="card-body">
+                                                            <div className="d-flex justify-content-between align-items-start mb-2">
+                                                                <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
+                                                                {currentDraftId === draft.id && (
+                                                                    <span className="badge bg-primary">
+                                                                        <i className="bi bi-check-circle me-1"></i>
+                                                                        Active
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="card-text text-muted small mb-2">
+                                                                <i className="bi bi-calendar me-1"></i>
+                                                                {new Date(draft.created_at).toLocaleDateString('en-US', {
+                                                                    year: 'numeric',
+                                                                    month: 'short',
+                                                                    day: 'numeric'
+                                                                })}
+                                                            </p>
+                                                            <div className="d-flex gap-2">
+                                                                <span className={`badge ${answerCount > 0 ? 'bg-secondary bg-opacity-50' : 'bg-danger bg-opacity-50'}`}>
+                                                                    <i className="bi bi-file-earmark-text me-1"></i>
+                                                                    {answerCount} {answerCount === 1 ? 'Answer' : 'Answers'}
                                                                 </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="card-text text-muted small mb-2">
-                                                            <i className="bi bi-calendar me-1"></i>
-                                                            {new Date(draft.created_at).toLocaleDateString('en-US', {
-                                                                year: 'numeric',
-                                                                month: 'short',
-                                                                day: 'numeric'
-                                                            })}
-                                                        </p>
-                                                        <div className="d-flex gap-2">
-                                                            <span className="badge bg-secondary bg-opacity-50">
-                                                                <i className="bi bi-file-earmark-text me-1"></i>
-                                                                {draft.answers?.length || 0} Answers
-                                                            </span>
-                                                            {draft.system_overall_risk && (
-                                                                <span className={`badge ${draft.system_overall_risk === 'high' ? 'bg-danger' : draft.system_overall_risk === 'medium' ? 'bg-warning text-dark' : 'bg-success'}`}>
-                                                                    <i className="bi bi-circle-fill me-1"></i>
-                                                                    {draft.system_overall_risk.toUpperCase()}
-                                                                </span>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                     <hr className="my-4" />
                                 </div>
@@ -1026,14 +1071,6 @@ const AuditForm = () => {
                             })}
                             <div className="card border-0 shadow-sm bg-light">
                                 <div className="card-body py-3">
-                                    {draftSaveSuccess && (
-                                        <div className="alert alert-success border-0 mb-3" role="alert">
-                                            <div className="d-flex align-items-center">
-                                                <i className="bi bi-check-circle-fill me-2" aria-hidden="true"></i>
-                                                <p className="mb-0">{draftSaveSuccess}</p>
-                                            </div>
-                                        </div>
-                                    )}
                                     <div className="row align-items-center">
                                         <div className="col-md-8">
                                             <h6 className="fw-bold mb-2">
