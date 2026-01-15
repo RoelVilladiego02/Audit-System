@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../../api/axios';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import api, { draftAPI } from '../../api/axios';
 import { useAuth } from '../../auth/useAuth';
 
 const AuditForm = () => {
     const { user, loading: authLoading, updateUser } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const draftId = searchParams.get('draftId');
+    
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
     const [customAnswers, setCustomAnswers] = useState({});
@@ -15,6 +18,13 @@ const AuditForm = () => {
     const [success, setSuccess] = useState(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const questionRefs = useRef({});
+    
+    // Draft-related state
+    const [currentDraftId, setCurrentDraftId] = useState(draftId || null);
+    const [savingDraft, setSavingDraft] = useState(false);
+    const [draftSaveSuccess, setDraftSaveSuccess] = useState(null);
+    const [autosaveEnabled] = useState(true);
+    const [lastAutoSave, setLastAutoSave] = useState(null);
 
     const fetchQuestions = React.useCallback(async () => {
         try {
@@ -26,6 +36,38 @@ const AuditForm = () => {
                 initialAnswers[q.id] = '';
                 initialCustomAnswers[q.id] = '';
             });
+            
+            // If a draftId is provided in URL, load the draft data
+            if (draftId) {
+                try {
+                    const draftResponse = await draftAPI.getSubmission(draftId);
+                    const draftSubmission = draftResponse.data.submission || draftResponse.data;
+                    
+                    // Verify the draft belongs to the current user
+                    if (draftSubmission.user_id !== user?.id) {
+                        setError('You do not have permission to access this draft.');
+                        setQuestions([]);
+                        return;
+                    }
+                    
+                    // Load draft answers
+                    if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
+                        draftSubmission.answers.forEach(answer => {
+                            initialAnswers[answer.audit_question_id] = answer.answer;
+                            if (answer.is_custom_answer) {
+                                initialCustomAnswers[answer.audit_question_id] = answer.answer;
+                            }
+                        });
+                    }
+                    
+                    setCurrentDraftId(draftId);
+                    setDraftSaveSuccess(`Draft loaded successfully. Continue editing or save your progress.`);
+                } catch (draftErr) {
+                    console.error('Failed to load draft:', draftErr);
+                    setError('Failed to load draft. Starting with a new submission.');
+                }
+            }
+            
             setAnswers(initialAnswers);
             setCustomAnswers(initialCustomAnswers);
         } catch (err) {
@@ -42,7 +84,7 @@ const AuditForm = () => {
         } finally {
             setLoading(false);
         }
-    }, [navigate]);
+    }, [navigate, draftId, user?.id]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -61,6 +103,27 @@ const AuditForm = () => {
         }
         fetchQuestions();
     }, [user, authLoading, navigate, fetchQuestions]);
+
+    // Autosave effect - saves draft every 30 seconds if there are answers
+    useEffect(() => {
+        if (!autosaveEnabled || !questions.length || savingDraft || submitting || !user) {
+            return;
+        }
+
+        const autosaveInterval = setInterval(() => {
+            const draftAnswers = prepareDraftAnswers();
+            
+            // Only autosave if there are answers and enough time has passed since last save
+            if (draftAnswers.length > 0) {
+                const now = new Date();
+                if (!lastAutoSave || (now - lastAutoSave) > 30000) { // 30 seconds
+                    handleSaveDraft();
+                }
+            }
+        }, 30000); // Check every 30 seconds
+
+        return () => clearInterval(autosaveInterval);
+    }, [autosaveEnabled, questions, answers, customAnswers, savingDraft, submitting, user, lastAutoSave]);
 
     // Intersection Observer to track which question is currently in view
     useEffect(() => {
@@ -199,6 +262,126 @@ const AuditForm = () => {
             return customAnswers[questionId].trim();
         }
         return answer;
+    };
+
+    const prepareDraftAnswers = () => {
+        return Object.entries(answers)
+            .map(([questionId, answer]) => {
+                const questionIdInt = parseInt(questionId);
+                const finalAnswer = getFinalAnswer(questionIdInt);
+                return {
+                    audit_question_id: questionIdInt,
+                    answer: answer === 'Others' ? customAnswers[questionIdInt]?.trim() : answer,
+                    is_custom_answer: answer === 'Others'
+                };
+            })
+            .filter(item => item.answer && item.answer.trim() !== '');
+    };
+
+    const handleSaveDraft = async () => {
+        setSavingDraft(true);
+        setError(null);
+        setDraftSaveSuccess(null);
+
+        try {
+            const draftAnswers = prepareDraftAnswers();
+
+            let response;
+            if (currentDraftId) {
+                // Update existing draft
+                response = await draftAPI.updateDraft(currentDraftId, draftAnswers);
+            } else {
+                // Create new draft
+                response = await draftAPI.saveDraft(draftAnswers);
+                const newDraftId = response.data.submission?.id || response.data.id;
+                if (newDraftId) {
+                    setCurrentDraftId(newDraftId);
+                }
+            }
+
+            setLastAutoSave(new Date());
+            setDraftSaveSuccess(
+                currentDraftId 
+                    ? 'Draft updated successfully!' 
+                    : 'Draft saved successfully! You can continue editing anytime.'
+            );
+
+            // Clear success message after 5 seconds
+            setTimeout(() => {
+                setDraftSaveSuccess(null);
+            }, 5000);
+        } catch (err) {
+            console.error('Draft save error:', err);
+            if (err.response?.status === 401) {
+                navigate('/login', { 
+                    state: { 
+                        from: '/audit-form',
+                        message: 'Your session has expired. Please log in again.'
+                    }
+                });
+            } else {
+                setError(err.response?.data?.message || 'Failed to save draft. Please try again.');
+            }
+        } finally {
+            setSavingDraft(false);
+        }
+    };
+
+    const handleSubmitDraft = async () => {
+        if (!currentDraftId) {
+            setError('Please save your draft first before submitting.');
+            return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            // First, make sure all changes are saved
+            const draftAnswers = prepareDraftAnswers();
+            
+            if (draftAnswers.length === 0) {
+                setError('Please answer at least one question before submitting.');
+                setSubmitting(false);
+                return;
+            }
+
+            // Update draft with final answers if needed
+            await draftAPI.updateDraft(currentDraftId, draftAnswers);
+
+            // Now submit the draft
+            const response = await draftAPI.submitDraft(currentDraftId);
+
+            setSuccess('Form submitted successfully!');
+            const resetAnswers = {};
+            const resetCustomAnswers = {};
+            questions.forEach(q => {
+                resetAnswers[q.id] = '';
+                resetCustomAnswers[q.id] = '';
+            });
+            setAnswers(resetAnswers);
+            setCustomAnswers(resetCustomAnswers);
+            setCurrentDraftId(null);
+            
+            // Redirect to submissions page after a delay
+            setTimeout(() => {
+                navigate('/submissions');
+            }, 2000);
+        } catch (err) {
+            console.error('Draft submit error:', err);
+            if (err.response?.status === 401) {
+                navigate('/login', { 
+                    state: { 
+                        from: '/audit-form',
+                        message: 'Your session has expired. Please log in again.'
+                    }
+                });
+            } else {
+                setError(err.response?.data?.message || 'Failed to submit form. Please try again.');
+            }
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -546,7 +729,7 @@ const AuditForm = () => {
                     )}
 
                     {questions.length > 0 && (
-                        <form onSubmit={handleSubmit}>
+                        <div className="audit-form-container">
                             {questions.map((question, index) => {
                                 const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
                                 const isCurrent = index === currentQuestionIndex;
@@ -670,39 +853,83 @@ const AuditForm = () => {
                             })}
                             <div className="card border-0 shadow-sm bg-light">
                                 <div className="card-body py-3">
+                                    {draftSaveSuccess && (
+                                        <div className="alert alert-success border-0 mb-3" role="alert">
+                                            <div className="d-flex align-items-center">
+                                                <i className="bi bi-check-circle-fill me-2" aria-hidden="true"></i>
+                                                <p className="mb-0">{draftSaveSuccess}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="row align-items-center">
                                         <div className="col-md-8">
-                                            <h6 className="fw-bold mb-2">Ready to Submit?</h6>
+                                            <h6 className="fw-bold mb-2">
+                                                {currentDraftId ? (
+                                                    <>
+                                                        <i className="bi bi-file-earmark-text me-2 text-warning" aria-hidden="true"></i>
+                                                        Draft #{currentDraftId}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="bi bi-pencil-square me-2" aria-hidden="true"></i>
+                                                        New Submission
+                                                    </>
+                                                )}
+                                            </h6>
                                             <p className="text-muted small mb-2">
                                                 <i className="bi bi-info-circle me-1" aria-hidden="true"></i>
-                                                Ensure all questions are answered.
+                                                {getProgressPercentage() === 100 
+                                                    ? 'All questions answered. Ready to submit!'
+                                                    : 'Save your progress anytime. You can continue later.'}
                                             </p>
                                             <span className="badge bg-primary me-2">{getProgressPercentage()}% Complete</span>
                                         </div>
                                         <div className="col-md-4 text-md-end mt-3 mt-md-0">
-                                            <button
-                                                type="submit"
-                                                disabled={submitting || !isFormValid()}
-                                                className={`btn btn-sm ${isFormValid() ? 'btn-primary' : 'btn-outline-secondary'} px-4`}
-                                                aria-label="Submit form"
-                                            >
-                                                {submitting ? (
-                                                    <>
-                                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                                        Submitting...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <i className="bi bi-send-fill me-2" aria-hidden="true"></i>
-                                                        Submit Form
-                                                    </>
-                                                )}
-                                            </button>
+                                            <div className="d-grid gap-2 d-md-flex justify-content-md-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveDraft}
+                                                    disabled={savingDraft || submitting}
+                                                    className="btn btn-sm btn-outline-primary"
+                                                    aria-label="Save draft"
+                                                >
+                                                    {savingDraft ? (
+                                                        <>
+                                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                            Saving...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <i className="bi bi-download me-1" aria-hidden="true"></i>
+                                                            Save Draft
+                                                        </>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSubmitDraft}
+                                                    disabled={submitting || savingDraft || getProgressPercentage() < 100}
+                                                    className={`btn btn-sm ${getProgressPercentage() === 100 ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                                    aria-label="Submit form"
+                                                >
+                                                    {submitting ? (
+                                                        <>
+                                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                            Submitting...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <i className="bi bi-send-fill me-1" aria-hidden="true"></i>
+                                                            {currentDraftId ? 'Submit Draft' : 'Submit Form'}
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </form>
+                        </div>
                     )}
 
                     {/* Floating Action Button for Quick Navigation */}

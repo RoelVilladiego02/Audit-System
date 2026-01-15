@@ -44,6 +44,7 @@ const getRiskIcon = (level) => {
 
 const getStatusBadge = (status) => {
     const badges = {
+        draft: 'bg-secondary bg-opacity-50',
         submitted: 'bg-info',
         under_review: 'bg-warning text-dark',
         completed: 'bg-success',
@@ -54,6 +55,7 @@ const getStatusBadge = (status) => {
 
 const getStatusIcon = (status) => {
     const icons = {
+        draft: 'bi-file-earmark-text',
         submitted: 'bi-clock-history',
         under_review: 'bi-eye',
         completed: 'bi-check-circle-fill',
@@ -654,13 +656,25 @@ const SubmissionsList = () => {
                                                 </td>
                                                 <td className="py-3">
                                                     <div className="d-flex align-items-center gap-2">
-                                                        <Link 
-                                                            to={`/submissions/${submission.id}`}
-                                                            className="text-muted"
-                                                            aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
-                                                        >
-                                                            <i className="bi bi-chevron-right" aria-hidden="true"></i>
-                                                        </Link>
+                                                        {submission.status === 'draft' ? (
+                                                            <Link 
+                                                                to={`/audit-form?draftId=${submission.id}`}
+                                                                className="btn btn-sm btn-outline-warning"
+                                                                aria-label={`Continue editing draft ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                                title="Continue editing this draft"
+                                                            >
+                                                                <i className="bi bi-pencil-square me-1" aria-hidden="true"></i>
+                                                                Continue
+                                                            </Link>
+                                                        ) : (
+                                                            <Link 
+                                                                to={`/submissions/${submission.id}`}
+                                                                className="text-muted"
+                                                                aria-label={`View submission ${submission.title || `Security Assessment #${submission.id}`}`}
+                                                            >
+                                                                <i className="bi bi-chevron-right" aria-hidden="true"></i>
+                                                            </Link>
+                                                        )}
                                                         {canDeleteSubmission(submission) && (
                                                             <button
                                                                 type="button"

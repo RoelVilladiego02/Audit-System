@@ -315,6 +315,62 @@ instance.resetAuth = () => {
     });
 };
 
+// Draft API methods
+export const draftAPI = {
+    // Save a new draft submission
+    saveDraft: async (answers) => {
+        const validAnswers = Object.entries(answers)
+            .filter(([, answerData]) => {
+                const answer = answerData?.answer || answerData;
+                return answer && answer.trim() !== '';
+            })
+            .map(([questionId, answerData]) => {
+                const isAnswerData = answerData && typeof answerData === 'object' && 'answer' in answerData;
+                return {
+                    audit_question_id: parseInt(questionId),
+                    answer: isAnswerData ? answerData.answer : answerData,
+                    is_custom_answer: isAnswerData ? answerData.is_custom_answer : false
+                };
+            });
+
+        return instance.post('audit-submissions/save-draft', {
+            title: `Audit Draft - ${new Date().toLocaleDateString()}`,
+            answers: validAnswers
+        });
+    },
+
+    // Update an existing draft
+    updateDraft: async (submissionId, answers) => {
+        const validAnswers = Object.entries(answers)
+            .filter(([, answerData]) => {
+                const answer = answerData?.answer || answerData;
+                return answer && answer.trim() !== '';
+            })
+            .map(([questionId, answerData]) => {
+                const isAnswerData = answerData && typeof answerData === 'object' && 'answer' in answerData;
+                return {
+                    audit_question_id: parseInt(questionId),
+                    answer: isAnswerData ? answerData.answer : answerData,
+                    is_custom_answer: isAnswerData ? answerData.is_custom_answer : false
+                };
+            });
+
+        return instance.patch(`audit-submissions/${submissionId}/draft`, {
+            answers: validAnswers
+        });
+    },
+
+    // Submit a draft (change status to submitted)
+    submitDraft: async (submissionId) => {
+        return instance.patch(`audit-submissions/${submissionId}/submit`);
+    },
+
+    // Get a specific submission (including drafts)
+    getSubmission: async (submissionId) => {
+        return instance.get(`audit-submissions/${submissionId}`);
+    }
+};
+
 // Pre-fetch CSRF token on app initialization
 ensureCsrfToken().then(token => {
     if (DEBUG) {
