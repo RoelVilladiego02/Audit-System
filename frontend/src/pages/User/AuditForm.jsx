@@ -19,6 +19,7 @@ const AuditForm = () => {
     const [success, setSuccess] = useState(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const questionRefs = useRef({});
+    const draftLoadedFromStateRef = useRef(false);
     
     // Draft-related state
     const [currentDraftId, setCurrentDraftId] = useState(null);
@@ -230,15 +231,16 @@ const AuditForm = () => {
         fetchExistingDrafts();
     }, [user, authLoading, navigate, fetchQuestions, fetchExistingDrafts]);
 
-    // Load draft from navigation state if draftId is passed
+    // Load draft from navigation state if draftId is passed (only once)
     useEffect(() => {
-        if (draftIdFromState && questions.length > 0 && !currentDraftId && !loading) {
+        if (draftIdFromState && questions.length > 0 && !draftLoadedFromStateRef.current && !loading) {
             console.log('Loading draft from navigation state:', draftIdFromState);
+            draftLoadedFromStateRef.current = true;
             loadDraftIntoForm(draftIdFromState);
             // Clear the state so it doesn't persist on refresh
             window.history.replaceState({}, '', '/audit');
         }
-    }, [draftIdFromState, questions.length, currentDraftId, loading]);
+    }, [draftIdFromState, questions.length, loading]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {
