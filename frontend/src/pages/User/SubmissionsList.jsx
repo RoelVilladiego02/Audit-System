@@ -659,6 +659,7 @@ const SubmissionsList = () => {
                                                         {submission.status === 'draft' ? (
                                                             <Link 
                                                                 to="/audit"
+                                                                state={{ draftId: submission.id }}
                                                                 className="btn btn-sm btn-outline-warning"
                                                                 aria-label={`Continue editing draft ${submission.title || `Security Assessment #${submission.id}`}`}
                                                                 title="Continue editing this draft"

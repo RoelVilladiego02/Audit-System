@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import api, { draftAPI } from '../../api/axios';
 import { useAuth } from '../../auth/useAuth';
 
 const AuditForm = () => {
     const { user, loading: authLoading, updateUser } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
+    const draftIdFromState = location.state?.draftId;
     
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
@@ -217,6 +219,16 @@ const AuditForm = () => {
         fetchQuestions();
         fetchExistingDrafts();
     }, [user, authLoading, navigate, fetchQuestions, fetchExistingDrafts]);
+
+    // Load draft from navigation state if draftId is passed
+    useEffect(() => {
+        if (draftIdFromState && questions.length > 0 && !currentDraftId && !loading) {
+            console.log('Loading draft from navigation state:', draftIdFromState);
+            loadDraftIntoForm(draftIdFromState);
+            // Clear the state so it doesn't persist on refresh
+            window.history.replaceState({}, '', '/audit');
+        }
+    }, [draftIdFromState, questions.length, currentDraftId, loading]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {
