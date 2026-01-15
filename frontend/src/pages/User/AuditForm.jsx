@@ -52,6 +52,9 @@ const AuditForm = () => {
                     // Get current user ID from localStorage or context
                     const currentUserId = user?.id || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).id : null);
                     
+                    // Get draft owner ID - could be user_id or user.id depending on backend response
+                    const draftUserId = draftSubmission.user_id || draftSubmission.user?.id;
+                    
                     // Verify the draft belongs to the current user
                     if (!currentUserId) {
                         setError('Please log in to access this draft.');
@@ -60,9 +63,9 @@ const AuditForm = () => {
                         return;
                     }
                     
-                    if (draftSubmission.user_id !== currentUserId) {
+                    if (draftUserId !== currentUserId) {
                         console.error('User ID mismatch:', {
-                            draftUserId: draftSubmission.user_id,
+                            draftUserId: draftUserId,
                             currentUserId: currentUserId
                         });
                         setError('You do not have permission to access this draft.');
