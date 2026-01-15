@@ -170,6 +170,18 @@ const AuditForm = () => {
         }
     };
 
+    const handleUnselectDraft = () => {
+        setCurrentDraftId(null);
+        const resetAnswers = {};
+        const resetCustomAnswers = {};
+        questions.forEach(q => {
+            resetAnswers[q.id] = '';
+            resetCustomAnswers[q.id] = '';
+        });
+        setAnswers(resetAnswers);
+        setCustomAnswers(resetCustomAnswers);
+    };
+
     const handleDeleteDraft = async (draftId, e) => {
         e.stopPropagation();
         
@@ -181,11 +193,9 @@ const AuditForm = () => {
         try {
             await draftAPI.deleteSubmission(draftId);
             
-            // If the deleted draft was the currently selected one, unselect it
+            // If the deleted draft was the currently selected one, unselect it and reset all answers
             if (currentDraftId === draftId) {
-                setCurrentDraftId(null);
-                setAnswers({});
-                setCustomAnswers({});
+                handleUnselectDraft();
             }
 
             // Remove the draft from the list
@@ -793,13 +803,7 @@ const AuditForm = () => {
                                                         style={{ cursor: 'pointer' }}
                                                         onClick={() => {
                                                             if (currentDraftId === draft.id) {
-                                                                setCurrentDraftId(null);
-                                                                setAnswers({});
-                                                                setCustomAnswers({});
-                                                                questions.forEach(q => {
-                                                                    setAnswers(prev => ({ ...prev, [q.id]: '' }));
-                                                                    setCustomAnswers(prev => ({ ...prev, [q.id]: '' }));
-                                                                });
+                                                                handleUnselectDraft();
                                                             } else {
                                                                 loadDraftIntoForm(draft.id);
                                                             }
@@ -809,13 +813,7 @@ const AuditForm = () => {
                                                         onKeyPress={(e) => {
                                                             if (e.key === 'Enter' || e.key === ' ') {
                                                                 if (currentDraftId === draft.id) {
-                                                                    setCurrentDraftId(null);
-                                                                    setAnswers({});
-                                                                    setCustomAnswers({});
-                                                                    questions.forEach(q => {
-                                                                        setAnswers(prev => ({ ...prev, [q.id]: '' }));
-                                                                        setCustomAnswers(prev => ({ ...prev, [q.id]: '' }));
-                                                                    });
+                                                                    handleUnselectDraft();
                                                                 } else {
                                                                     loadDraftIntoForm(draft.id);
                                                                 }
