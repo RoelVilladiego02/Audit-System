@@ -265,17 +265,28 @@ const AuditForm = () => {
     };
 
     const prepareDraftAnswers = () => {
-        return Object.entries(answers)
+        const draftAnswers = Object.entries(answers)
+            .filter(([questionId, answer]) => {
+                // Filter out empty answers and invalid question IDs
+                const questionIdInt = parseInt(questionId);
+                if (!questionIdInt || questionIdInt <= 0 || isNaN(questionIdInt)) {
+                    console.warn(`Skipping invalid question ID: ${questionId}`);
+                    return false;
+                }
+                const finalAnswer = getFinalAnswer(questionIdInt);
+                return finalAnswer && finalAnswer.trim() !== '';
+            })
             .map(([questionId, answer]) => {
                 const questionIdInt = parseInt(questionId);
-                const finalAnswer = getFinalAnswer(questionIdInt);
                 return {
                     audit_question_id: questionIdInt,
                     answer: answer === 'Others' ? customAnswers[questionIdInt]?.trim() : answer,
                     is_custom_answer: answer === 'Others'
                 };
-            })
-            .filter(item => item.answer && item.answer.trim() !== '');
+            });
+        
+        console.log('Prepared draft answers:', draftAnswers);
+        return draftAnswers;
     };
 
     const handleSaveDraft = async () => {
@@ -320,7 +331,19 @@ const AuditForm = () => {
                     }
                 });
             } else {
-                setError(err.response?.data?.message || 'Failed to save draft. Please try again.');
+                // Extract validation errors from backend response
+                let errorMessage = err.response?.data?.message || 'Failed to save draft. Please try again.';
+                
+                if (err.response?.data?.errors) {
+                    const errors = err.response.data.errors;
+                    const errorDetails = Object.entries(errors)
+                        .map(([field, messages]) => messages[0])
+                        .join('; ');
+                    errorMessage = `Validation error: ${errorDetails}`;
+                }
+                
+                setError(errorMessage);
+                console.error('Full error response:', err.response?.data);
             }
         } finally {
             setSavingDraft(false);
