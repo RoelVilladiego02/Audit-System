@@ -81,7 +81,7 @@ const ProfilePage = () => {
         setSuccess(false);
 
         try {
-            const response = await axios.put('/user/profile', {
+            const response = await axios.patch('/user/profile', {
                 name: formData.name.trim(),
                 email: formData.email.trim(),
                 company: formData.company.trim() || null
@@ -202,10 +202,8 @@ const ProfilePage = () => {
     };
 
     return (
-        <div className="min-vh-100 bg-light py-5">
-            <div className="container">
-                <div className="row justify-content-center">
-                    <div className="col-lg-8">
+        <div className="row justify-content-center">
+            <div className="col-lg-8">
                         {/* Profile Section */}
                         <div className="card border-0 shadow-sm mb-4">
                             <div className="card-header bg-primary text-white py-3">
@@ -227,6 +225,12 @@ const ProfilePage = () => {
                                     <div className="alert alert-danger alert-dismissible fade show" role="alert">
                                         <i className="bi bi-exclamation-circle me-2"></i>
                                         {errors.general}
+                                        {errors.general.includes('404') && (
+                                            <div className="mt-2 small">
+                                                <p className="mb-1"><strong>Backend Setup Required:</strong></p>
+                                                <p className="mb-0">The backend needs to implement a PATCH/PUT endpoint for <code>/user/profile</code>. Contact your backend developer to add this endpoint.</p>
+                                            </div>
+                                        )}
                                         <button type="button" className="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                     </div>
                                 )}
@@ -495,8 +499,6 @@ const ProfilePage = () => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
     );
 };
 
