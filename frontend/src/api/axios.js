@@ -340,6 +340,11 @@ export const draftAPI = {
     // Get a specific submission (including drafts)
     getSubmission: async (submissionId) => {
         return instance.get(`audit-submissions/${submissionId}`);
+    },
+
+    // Delete a submission (draft or submitted)
+    deleteSubmission: async (submissionId) => {
+        return instance.delete(`audit-submissions/${submissionId}`);
     }
 };
 

@@ -169,6 +169,37 @@ const AuditForm = () => {
         }
     };
 
+    const handleDeleteDraft = async (draftId, e) => {
+        e.stopPropagation();
+        
+        // Confirm deletion
+        if (!window.confirm('Are you sure you want to delete this draft? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await draftAPI.deleteSubmission(draftId);
+            
+            // If the deleted draft was the currently selected one, unselect it
+            if (currentDraftId === draftId) {
+                setCurrentDraftId(null);
+                setAnswers({});
+                setCustomAnswers({});
+            }
+
+            // Remove the draft from the list
+            setExistingDrafts(prevDrafts => prevDrafts.filter(draft => draft.id !== draftId));
+            
+            setDraftSaveSuccess('Draft deleted successfully.');
+            setTimeout(() => {
+                setDraftSaveSuccess(null);
+            }, 3000);
+        } catch (err) {
+            console.error('Failed to delete draft:', err);
+            setError(err.response?.data?.message || 'Failed to delete draft. Please try again.');
+        }
+    };
+
     useEffect(() => {
         if (authLoading) return;
         if (!user) {
@@ -790,12 +821,24 @@ const AuditForm = () => {
                                                         <div className="card-body">
                                                             <div className="d-flex justify-content-between align-items-start mb-2">
                                                                 <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
-                                                                {currentDraftId === draft.id && (
-                                                                    <span className="badge bg-primary">
-                                                                        <i className="bi bi-check-circle me-1"></i>
-                                                                        Active
-                                                                    </span>
-                                                                )}
+                                                                <div className="d-flex gap-2 align-items-center">
+                                                                    {currentDraftId === draft.id && (
+                                                                        <span className="badge bg-primary">
+                                                                            <i className="bi bi-check-circle me-1"></i>
+                                                                            Active
+                                                                        </span>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-danger"
+                                                                        onClick={(e) => handleDeleteDraft(draft.id, e)}
+                                                                        title="Delete this draft"
+                                                                        aria-label="Delete draft"
+                                                                    >
+                                                                        <i className="bi bi-trash me-1"></i>
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             <p className="card-text text-muted small mb-2">
                                                                 <i className="bi bi-calendar me-1"></i>
