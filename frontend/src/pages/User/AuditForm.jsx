@@ -445,8 +445,6 @@ const AuditForm = () => {
                     setCurrentDraftId(newDraftId);
                     // Store in localStorage as backup
                     localStorage.setItem('currentDraftId', newDraftId.toString());
-                    // Update URL with draft ID
-                    window.history.replaceState({}, '', `/audit-form?draftId=${newDraftId}`);
                 }
             }
 
