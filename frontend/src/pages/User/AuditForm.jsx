@@ -222,10 +222,10 @@ const AuditForm = () => {
     // Load draft from URL if draftId parameter exists
     useEffect(() => {
         if (draftId && questions.length > 0 && !currentDraftId && !loading) {
-            console.log('Loading draft from URL parameter:', draftId);
-            loadDraftIntoForm(parseInt(draftId));
+            console.log('Draft ID detected in URL, redirecting to audit page');
+            navigate('/audit');
         }
-    }, [draftId, questions.length, currentDraftId, loading]);
+    }, [draftId, questions.length, currentDraftId, loading, navigate]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {
@@ -782,8 +782,9 @@ const AuditForm = () => {
                                         Your Drafts ({existingDrafts.length})
                                     </h6>
                                     <div className="row g-3">
-                                        {existingDrafts.map((draft) => {
+                                        {existingDrafts.map((draft, index) => {
                                             const answerCount = draft.answers?.filter(answer => answer.answer && answer.answer.trim() !== '').length || 0;
+                                            const isMostRecent = index === 0; // First draft is most recent
                                             return (
                                                 <div key={draft.id} className="col-md-6">
                                                     <div 
@@ -822,7 +823,15 @@ const AuditForm = () => {
                                                     >
                                                         <div className="card-body">
                                                             <div className="d-flex justify-content-between align-items-start mb-2">
-                                                                <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
+                                                                <div>
+                                                                    <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
+                                                                    {isMostRecent && (
+                                                                        <span className="badge bg-info text-dark mt-1">
+                                                                            <i className="bi bi-star-fill me-1"></i>
+                                                                            Most Recent
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <div className="d-flex gap-2 align-items-center">
                                                                     {currentDraftId === draft.id && (
                                                                         <span className="badge bg-primary">
