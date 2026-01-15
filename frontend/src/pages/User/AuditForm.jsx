@@ -297,6 +297,13 @@ const AuditForm = () => {
         try {
             const draftAnswers = prepareDraftAnswers();
 
+            // Validate that there is at least one answer
+            if (draftAnswers.length === 0) {
+                setError('Please answer at least one question before saving a draft.');
+                setSavingDraft(false);
+                return;
+            }
+
             let response;
             if (currentDraftId) {
                 // Update existing draft
@@ -566,6 +573,13 @@ const AuditForm = () => {
             return finalAnswer && finalAnswer.trim() !== '';
         }).length;
         return totalQuestions > 0 && answeredQuestions === totalQuestions;
+    };
+
+    const hasAnsweredQuestions = () => {
+        return Object.entries(answers).some(([questionId, answer]) => {
+            const finalAnswer = getFinalAnswer(parseInt(questionId));
+            return finalAnswer && finalAnswer.trim() !== '';
+        });
     };
 
     const getProgressPercentage = () => {
@@ -912,9 +926,10 @@ const AuditForm = () => {
                                                 <button
                                                     type="button"
                                                     onClick={handleSaveDraft}
-                                                    disabled={savingDraft || submitting}
-                                                    className="btn btn-sm btn-outline-primary"
+                                                    disabled={savingDraft || submitting || !hasAnsweredQuestions()}
+                                                    className={`btn btn-sm ${hasAnsweredQuestions() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
                                                     aria-label="Save draft"
+                                                    title={!hasAnsweredQuestions() ? 'Answer at least one question to save draft' : 'Save your progress'}
                                                 >
                                                     {savingDraft ? (
                                                         <>
