@@ -20,11 +20,13 @@ const AuditForm = () => {
     const questionRefs = useRef({});
     
     // Draft-related state
-    const [currentDraftId, setCurrentDraftId] = useState(draftId || null);
+    const [currentDraftId, setCurrentDraftId] = useState(null);
     const [savingDraft, setSavingDraft] = useState(false);
     const [draftSaveSuccess, setDraftSaveSuccess] = useState(null);
     const [autosaveEnabled] = useState(true);
     const [lastAutoSave, setLastAutoSave] = useState(null);
+    const [existingDrafts, setExistingDrafts] = useState([]);
+    const [loadingDrafts, setLoadingDrafts] = useState(false);
 
     const fetchQuestions = React.useCallback(async () => {
         try {
@@ -36,68 +38,6 @@ const AuditForm = () => {
                 initialAnswers[q.id] = '';
                 initialCustomAnswers[q.id] = '';
             });
-            
-            // Determine draft ID: from URL param or localStorage
-            let draftIdToLoad = draftId || localStorage.getItem('currentDraftId');
-            
-            // If a draftId is provided, load the draft data
-            if (draftIdToLoad) {
-                try {
-                    console.log('Loading draft with ID:', draftIdToLoad);
-                    const draftResponse = await draftAPI.getSubmission(draftIdToLoad);
-                    const draftSubmission = draftResponse.data.submission || draftResponse.data;
-                    
-                    console.log('Draft data received:', draftSubmission);
-                    
-                    // Get current user ID from localStorage or context
-                    const currentUserId = user?.id || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).id : null);
-                    
-                    // Get draft owner ID - could be user_id or user.id depending on backend response
-                    const draftUserId = draftSubmission.user_id || draftSubmission.user?.id;
-                    
-                    // Verify the draft belongs to the current user
-                    if (!currentUserId) {
-                        setError('Please log in to access this draft.');
-                        localStorage.removeItem('currentDraftId');
-                        setQuestions([]);
-                        return;
-                    }
-                    
-                    if (draftUserId !== currentUserId) {
-                        console.error('User ID mismatch:', {
-                            draftUserId: draftUserId,
-                            currentUserId: currentUserId
-                        });
-                        setError('You do not have permission to access this draft.');
-                        localStorage.removeItem('currentDraftId');
-                        setQuestions([]);
-                        return;
-                    }
-                    
-                    // Load draft answers
-                    if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
-                        draftSubmission.answers.forEach(answer => {
-                            initialAnswers[answer.audit_question_id] = answer.answer;
-                            if (answer.is_custom_answer) {
-                                initialCustomAnswers[answer.audit_question_id] = answer.answer;
-                            }
-                        });
-                    }
-                    
-                    setCurrentDraftId(draftIdToLoad);
-                    localStorage.setItem('currentDraftId', draftIdToLoad.toString());
-                    setDraftSaveSuccess(`Draft loaded successfully. Continue editing or save your progress.`);
-                    
-                    // Auto-dismiss load message
-                    setTimeout(() => {
-                        setDraftSaveSuccess(null);
-                    }, 4000);
-                } catch (draftErr) {
-                    console.error('Failed to load draft:', draftErr);
-                    localStorage.removeItem('currentDraftId');
-                    setError('Failed to load draft. Starting with a new submission.');
-                }
-            }
             
             setAnswers(initialAnswers);
             setCustomAnswers(initialCustomAnswers);
@@ -115,7 +55,97 @@ const AuditForm = () => {
         } finally {
             setLoading(false);
         }
-    }, [navigate, draftId, user?.id]);
+    }, [navigate]);
+
+    const fetchExistingDrafts = React.useCallback(async () => {
+        setLoadingDrafts(true);
+        try {
+            console.log('Fetching existing drafts...');
+            const response = await api.get('audit-submissions');
+            console.log('All submissions response:', response.data);
+            
+            const drafts = response.data.filter(submission => submission.status === 'draft');
+            console.log('Filtered drafts:', drafts);
+            
+            setExistingDrafts(drafts);
+        } catch (err) {
+            console.error('Failed to load drafts:', err);
+            if (err.response?.status === 401) {
+                console.warn('Unauthorized to fetch drafts - user may not be fully authenticated');
+            } else {
+                setError(`Error loading drafts: ${err.response?.data?.message || err.message}`);
+            }
+        } finally {
+            setLoadingDrafts(false);
+        }
+    }, []);
+
+    const loadDraftIntoForm = async (draftId) => {
+        try {
+            console.log('Loading draft:', draftId);
+            const draftResponse = await draftAPI.getSubmission(draftId);
+            const draftSubmission = draftResponse.data.submission || draftResponse.data;
+            
+            console.log('Draft data received:', draftSubmission);
+            
+            // Get current user ID from localStorage or context
+            const currentUserId = user?.id || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).id : null);
+            
+            // Get draft owner ID - could be user_id or user.id depending on backend response
+            const draftUserId = draftSubmission.user_id || draftSubmission.user?.id;
+            
+            // Verify the draft belongs to the current user
+            if (!currentUserId) {
+                setError('Please log in to access this draft.');
+                return;
+            }
+            
+            if (draftUserId !== currentUserId) {
+                console.error('User ID mismatch:', {
+                    draftUserId: draftUserId,
+                    currentUserId: currentUserId
+                });
+                setError('You do not have permission to access this draft.');
+                return;
+            }
+            
+            // Load draft answers into form
+            const initialAnswers = {};
+            const initialCustomAnswers = {};
+            
+            questions.forEach(q => {
+                initialAnswers[q.id] = '';
+                initialCustomAnswers[q.id] = '';
+            });
+            
+            if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
+                draftSubmission.answers.forEach(answer => {
+                    initialAnswers[answer.audit_question_id] = answer.answer;
+                    if (answer.is_custom_answer) {
+                        initialCustomAnswers[answer.audit_question_id] = answer.answer;
+                    }
+                });
+            }
+            
+            setAnswers(initialAnswers);
+            setCustomAnswers(initialCustomAnswers);
+            setCurrentDraftId(draftId);
+            localStorage.setItem('currentDraftId', draftId.toString());
+            
+            setDraftSaveSuccess(`Draft loaded successfully. Continue editing or save your progress.`);
+            setTimeout(() => {
+                setDraftSaveSuccess(null);
+            }, 4000);
+            
+            setError(null);
+            
+            // Scroll to top of form
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (err) {
+            console.error('Failed to load draft:', err);
+            setError('Failed to load draft. Please try again.');
+        }
+    };
 
     useEffect(() => {
         if (authLoading) return;
@@ -133,7 +163,8 @@ const AuditForm = () => {
             return;
         }
         fetchQuestions();
-    }, [user, authLoading, navigate, fetchQuestions]);
+        fetchExistingDrafts();
+    }, [user, authLoading, navigate, fetchQuestions, fetchExistingDrafts]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {
@@ -667,6 +698,67 @@ const AuditForm = () => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Existing Drafts Section */}
+                            {existingDrafts.length > 0 && (
+                                <div className="mb-4">
+                                    <h6 className="fw-bold text-primary mb-3">
+                                        <i className="bi bi-file-earmark-text me-2" aria-hidden="true"></i>
+                                        Your Drafts ({existingDrafts.length})
+                                    </h6>
+                                    <div className="row g-3">
+                                        {existingDrafts.map((draft) => (
+                                            <div key={draft.id} className="col-md-6">
+                                                <div 
+                                                    className={`card border-0 shadow-sm cursor-pointer transition-all ${currentDraftId === draft.id ? 'border-primary border-2' : ''}`}
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => loadDraftIntoForm(draft.id)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            loadDraftIntoForm(draft.id);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="card-body">
+                                                        <div className="d-flex justify-content-between align-items-start mb-2">
+                                                            <h6 className="card-title fw-bold mb-0">{draft.title}</h6>
+                                                            {currentDraftId === draft.id && (
+                                                                <span className="badge bg-primary">
+                                                                    <i className="bi bi-check-circle me-1"></i>
+                                                                    Active
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="card-text text-muted small mb-2">
+                                                            <i className="bi bi-calendar me-1"></i>
+                                                            {new Date(draft.created_at).toLocaleDateString('en-US', {
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric'
+                                                            })}
+                                                        </p>
+                                                        <div className="d-flex gap-2">
+                                                            <span className="badge bg-secondary bg-opacity-50">
+                                                                <i className="bi bi-file-earmark-text me-1"></i>
+                                                                {draft.answers?.length || 0} Answers
+                                                            </span>
+                                                            {draft.system_overall_risk && (
+                                                                <span className={`badge ${draft.system_overall_risk === 'high' ? 'bg-danger' : draft.system_overall_risk === 'medium' ? 'bg-warning text-dark' : 'bg-success'}`}>
+                                                                    <i className="bi bi-circle-fill me-1"></i>
+                                                                    {draft.system_overall_risk.toUpperCase()}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <hr className="my-4" />
+                                </div>
+                            )}
                             {questions.length > 0 && (
                                 <div className="mb-3">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
