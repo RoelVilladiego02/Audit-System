@@ -7,7 +7,6 @@ const AuditForm = () => {
     const { user, loading: authLoading, updateUser } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const draftId = searchParams.get('draftId');
     
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
@@ -218,14 +217,6 @@ const AuditForm = () => {
         fetchQuestions();
         fetchExistingDrafts();
     }, [user, authLoading, navigate, fetchQuestions, fetchExistingDrafts]);
-
-    // Load draft from URL if draftId parameter exists
-    useEffect(() => {
-        if (draftId && questions.length > 0 && !currentDraftId && !loading) {
-            console.log('Loading draft from URL parameter:', draftId);
-            loadDraftIntoForm(parseInt(draftId));
-        }
-    }, [draftId, questions.length, currentDraftId, loading]);
 
     // Autosave effect - saves draft every 30 seconds if there are answers
     useEffect(() => {

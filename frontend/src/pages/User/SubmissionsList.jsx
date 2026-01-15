@@ -658,7 +658,7 @@ const SubmissionsList = () => {
                                                     <div className="d-flex align-items-center gap-2">
                                                         {submission.status === 'draft' ? (
                                                             <Link 
-                                                                to={`/audit-form?draftId=${submission.id}`}
+                                                                to="/audit"
                                                                 className="btn btn-sm btn-outline-warning"
                                                                 aria-label={`Continue editing draft ${submission.title || `Security Assessment #${submission.id}`}`}
                                                                 title="Continue editing this draft"
