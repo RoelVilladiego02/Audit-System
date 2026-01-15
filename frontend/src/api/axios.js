@@ -111,7 +111,7 @@ instance.interceptors.request.use(
         config.headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? {} : { 'X-Requested-With': 'XMLHttpRequest' }), // Only add X-Requested-With for non-token requests
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
         
