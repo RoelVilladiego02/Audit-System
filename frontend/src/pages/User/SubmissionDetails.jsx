@@ -517,7 +517,7 @@ const SubmissionDetails = () => {
                                         {(user?.id === submission.user_id || user?.role === 'admin') && (
                                             <button
                                                 type="button"
-                                                className="btn btn-sm btn-link text-secondary p-0"
+                                                className="btn btn-outline-warning btn-sm"
                                                 onClick={() => {
                                                     setEditingTitle(true);
                                                     setNewTitle(submission.title);
@@ -525,7 +525,7 @@ const SubmissionDetails = () => {
                                                 title="Edit submission title"
                                                 aria-label="Edit submission title"
                                             >
-                                                <i className="bi bi-pencil-sm"></i>
+                                                <i className="bi bi-pencil"></i>
                                             </button>
                                         )}
                                     </div>
