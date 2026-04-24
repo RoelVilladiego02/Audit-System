@@ -1289,7 +1289,7 @@ const SubmissionDetails = () => {
                                         onChange={(e) => setNewTitle(e.target.value)}
                                         placeholder="Enter new title"
                                         disabled={renamingId !== null}
-                                        maxLength="255"
+                                        maxLength="100"
                                         autoFocus
                                         onKeyPress={(e) => {
                                             if (e.key === 'Enter' && !renamingId) {
@@ -1298,7 +1298,7 @@ const SubmissionDetails = () => {
                                         }}
                                     />
                                     <small className="text-muted d-block mt-2">
-                                        {255 - newTitle.length} characters remaining
+                                        {100 - newTitle.length} characters remaining
                                     </small>
                                 </div>
                             </div>

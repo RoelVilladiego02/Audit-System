@@ -286,7 +286,7 @@ class AuditSubmissionController extends Controller
             }
 
             $validated = $request->validate([
-                'title' => 'required|string|max:255|min:1',
+                'title' => 'required|string|max:100|min:1',
             ]);
 
             $submission->update([

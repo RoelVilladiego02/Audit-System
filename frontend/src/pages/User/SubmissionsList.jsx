@@ -863,7 +863,7 @@ const SubmissionsList = () => {
                                                 onChange={(e) => setNewTitle(e.target.value)}
                                                 placeholder="Enter new title"
                                                 disabled={renamingId !== null}
-                                                maxLength="255"
+                                                maxLength="100"
                                                 onKeyPress={(e) => {
                                                     if (e.key === 'Enter' && !renamingId) {
                                                         handleRenameSubmission(editingTitle.id);
@@ -871,7 +871,7 @@ const SubmissionsList = () => {
                                                 }}
                                             />
                                             <small className="text-muted d-block mt-2">
-                                                {255 - newTitle.length} characters remaining
+                                                {100 - newTitle.length} characters remaining
                                             </small>
                                         </div>
                                     </div>

@@ -28,6 +28,9 @@ const ManageSubmissions = () => {
     const [selectedRiskLevel, setSelectedRiskLevel] = useState('');
     const [summaryText, setSummaryText] = useState('');
     const [isLoadingAnswer, setIsLoadingAnswer] = useState(false); // New state for answer-level loading
+    const [editingTitle, setEditingTitle] = useState(null);
+    const [newTitle, setNewTitle] = useState('');
+    const [renamingId, setRenamingId] = useState(null);
 
     const fetchSubmissions = useCallback(async () => {
         try {
@@ -176,6 +179,47 @@ const ManageSubmissions = () => {
             answer.reviewed_by && answer.admin_risk_level
         ).length;
         return (reviewedCount / answers.length) * 100;
+    };
+
+    const handleRenameSubmission = async (submissionId) => {
+        try {
+            setRenamingId(submissionId);
+            if (!newTitle.trim()) {
+                setError('Title cannot be empty');
+                setRenamingId(null);
+                return;
+            }
+
+            const response = await api.patch(
+                `/audit-submissions/${submissionId}/title`,
+                { title: newTitle.trim() }
+            );
+
+            if (response.data) {
+                // Update the submissions list
+                setSubmissions(submissions.map(sub => 
+                    sub.id === submissionId ? { ...sub, title: newTitle.trim() } : sub
+                ));
+                
+                // Update selected submission if it's the one being renamed
+                if (selectedSubmission?.id === submissionId) {
+                    setSelectedSubmission({ ...selectedSubmission, title: newTitle.trim() });
+                }
+
+                setEditingTitle(null);
+                setNewTitle('');
+                setError(null);
+            }
+        } catch (err) {
+            console.error('Error renaming submission:', err);
+            setError(
+                err.response?.status === 422
+                    ? err.response.data.message || 'Title validation failed (max 100 characters)'
+                    : err.response?.data?.message || 'Failed to rename submission'
+            );
+        } finally {
+            setRenamingId(null);
+        }
     };
 
     const handleAnswerReview = async (answerId, adminRiskLevel, adminNotes, recommendation) => {
@@ -533,7 +577,22 @@ const ManageSubmissions = () => {
                                                 <td className="p-3">
                                                     <div className="d-flex justify-content-between align-items-start">
                                                         <div className="flex-grow-1 min-w-0">
-                                                            <h6 className="mb-1 text-truncate fw-bold">{submission.title}</h6>
+                                                            <div className="d-flex align-items-center gap-2 mb-1">
+                                                                <h6 className="mb-0 text-truncate fw-bold">{submission.title}</h6>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-outline-warning btn-sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEditingTitle(submission);
+                                                                        setNewTitle(submission.title);
+                                                                    }}
+                                                                    title="Edit submission title"
+                                                                    aria-label="Edit submission title"
+                                                                >
+                                                                    <i className="bi bi-pencil"></i>
+                                                                </button>
+                                                            </div>
                                                             <div className="small text-muted mb-2">
                                                                 <div className="d-flex align-items-center mb-1">
                                                                     <i className="bi bi-person me-1"></i>
@@ -601,6 +660,12 @@ const ManageSubmissions = () => {
                             calculateOverallRisk={calculateOverallRisk}
                             fetchSubmissionDetails={fetchSubmissionDetails}
                             isLoadingAnswer={isLoadingAnswer}
+                            editingTitle={editingTitle}
+                            newTitle={newTitle}
+                            setEditingTitle={setEditingTitle}
+                            setNewTitle={setNewTitle}
+                            handleRenameSubmission={handleRenameSubmission}
+                            renamingId={renamingId}
                         />
                     ) : (
                         <div className="card border-0 shadow-sm">
@@ -613,6 +678,80 @@ const ManageSubmissions = () => {
                     )}
                 </div>
             </div>
+
+            {/* Rename Modal */}
+            {editingTitle && (
+                <div className="modal d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header border-primary bg-light">
+                                <h5 className="modal-title text-primary fw-bold">
+                                    <i className="bi bi-pencil-square me-2"></i>
+                                    Rename Submission
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close" 
+                                    onClick={() => setEditingTitle(null)}
+                                    disabled={renamingId !== null}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <label htmlFor="renameInput" className="form-label">New Title</label>
+                                    <input 
+                                        id="renameInput"
+                                        type="text" 
+                                        className="form-control" 
+                                        value={newTitle}
+                                        onChange={(e) => setNewTitle(e.target.value)}
+                                        placeholder="Enter new title"
+                                        disabled={renamingId !== null}
+                                        maxLength="100"
+                                        autoFocus
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter' && !renamingId) {
+                                                handleRenameSubmission(editingTitle.id);
+                                            }
+                                        }}
+                                    />
+                                    <small className="text-muted d-block mt-2">
+                                        {100 - newTitle.length} characters remaining
+                                    </small>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-secondary" 
+                                    onClick={() => setEditingTitle(null)}
+                                    disabled={renamingId !== null}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-primary" 
+                                    onClick={() => handleRenameSubmission(editingTitle.id)}
+                                    disabled={renamingId !== null || !newTitle.trim()}
+                                >
+                                    {renamingId ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Renaming...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-check-lg me-2"></i>
+                                            Rename
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1050,7 +1189,13 @@ const SubmissionDetails = ({
     formatDate,
     calculateOverallRisk,
     fetchSubmissionDetails,
-    isLoadingAnswer
+    isLoadingAnswer,
+    editingTitle,
+    newTitle,
+    setEditingTitle,
+    setNewTitle,
+    handleRenameSubmission,
+    renamingId
 }) => {
     const [finalReviewMode, setFinalReviewMode] = useState(false);
     const [adminOverallRisk, setAdminOverallRisk] = useState('');
@@ -1213,7 +1358,21 @@ const SubmissionDetails = ({
             <div className="card-header bg-white">
                 <div className="d-flex justify-content-between align-items-start">
                     <div>
-                        <h4 className="mb-2 fw-bold">{submission.title}</h4>
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                            <h4 className="mb-0 fw-bold">{submission.title}</h4>
+                            <button
+                                type="button"
+                                className="btn btn-outline-warning btn-sm"
+                                onClick={() => {
+                                    setEditingTitle(submission);
+                                    setNewTitle(submission.title);
+                                }}
+                                title="Edit submission title"
+                                aria-label="Edit submission title"
+                            >
+                                <i className="bi bi-pencil"></i>
+                            </button>
+                        </div>
                         <div className="d-flex align-items-center text-muted small">
                             <div className="me-4">
                                 <i className="bi bi-person me-1"></i>
