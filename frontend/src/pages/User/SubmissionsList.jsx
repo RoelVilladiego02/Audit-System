@@ -306,11 +306,6 @@ const SubmissionsList = () => {
         }
     };
 
-    const canDeleteSubmission = (submission) => {
-        // Users can delete their own submissions, admins can delete any
-        return user?.id === submission.user_id || user?.role === 'admin';
-    };
-
     const createRiskDistributionChart = (stats) => {
         if (!riskDistributionChartRef.current || !stats) return;
 
