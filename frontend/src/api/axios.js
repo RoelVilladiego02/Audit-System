@@ -320,7 +320,7 @@ export const draftAPI = {
     // Save a new draft submission
     saveDraft: async (answers) => {
         return instance.post('audit-submissions/save-draft', {
-            title: `Audit Draft - ${new Date().toLocaleDateString()}`,
+            title: `Audit Report - ${new Date().toLocaleDateString()}`,
             answers: answers
         });
     },
