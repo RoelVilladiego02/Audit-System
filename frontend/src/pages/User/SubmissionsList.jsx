@@ -907,4 +907,10 @@ const SubmissionsList = () => {
                             </div>
                         </div>
                     )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default SubmissionsList;
