@@ -88,6 +88,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('audit-submissions')->name('audit-submissions.')->group(function () {
         Route::get('/', [AuditSubmissionController::class, 'index'])->name('index');
         Route::get('/{submission}', [AuditSubmissionController::class, 'show'])->name('show');
+        Route::patch('/{submission}/title', [AuditSubmissionController::class, 'updateTitle'])
+            ->where('submission', '[0-9]+')
+            ->name('update-title');
     });
 
     Route::prefix('vulnerability-submissions')->name('vulnerability-submissions.')->group(function () {

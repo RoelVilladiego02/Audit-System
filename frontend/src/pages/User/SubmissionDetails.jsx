@@ -71,6 +71,9 @@ const SubmissionDetails = () => {
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
     const [expandedAnswers, setExpandedAnswers] = useState({});
+    const [editingTitle, setEditingTitle] = useState(false);
+    const [newTitle, setNewTitle] = useState('');
+    const [renamingId, setRenamingId] = useState(null);
     
     // Chart refs
     const riskDistributionChartRef = useRef(null);
@@ -187,6 +190,47 @@ const SubmissionDetails = () => {
             ...prev,
             [answerId]: !prev[answerId]
         }));
+    };
+
+    const handleRenameSubmission = async () => {
+        try {
+            if (!newTitle.trim()) {
+                setError('Title cannot be empty');
+                return;
+            }
+
+            setRenamingId(id);
+            const { draftAPI } = await import('../../api/axios');
+            await draftAPI.updateTitle(id, newTitle.trim());
+            
+            // Update the submission
+            setSubmission(prev => ({
+                ...prev,
+                title: newTitle.trim()
+            }));
+            
+            setEditingTitle(false);
+            setNewTitle('');
+            
+            // Show success message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+            alertDiv.innerHTML = `
+                <i className="bi bi-check-circle-fill me-2"></i>
+                <strong>Success!</strong> Submission title updated.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            const container = document.querySelector('.container-fluid');
+            if (container) {
+                container.insertBefore(alertDiv, container.firstChild);
+                setTimeout(() => alertDiv.remove(), 5000);
+            }
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || 'Failed to rename submission';
+            setError(errorMessage);
+        } finally {
+            setRenamingId(null);
+        }
     };
 
     const getRiskStats = () => {
@@ -465,10 +509,26 @@ const SubmissionDetails = () => {
                         <div className={`card-header ${getRiskLevelClass(effectiveOverallRisk)} py-3`}>
                             <div className="row align-items-center">
                                 <div className="col-md-8 text-md-start">
-                                    <h3 className="fw-bold mb-2">
-                                        <i className="bi bi-shield-fill-check me-2" aria-hidden="true"></i>
-                                        {submission.title || `Security Assessment #${submission.id}`}
-                                    </h3>
+                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                        <h3 className="fw-bold mb-0">
+                                            <i className="bi bi-shield-fill-check me-2" aria-hidden="true"></i>
+                                            {submission.title || `Security Assessment #${submission.id}`}
+                                        </h3>
+                                        {(user?.id === submission.user_id || user?.role === 'admin') && (
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-link text-secondary p-0"
+                                                onClick={() => {
+                                                    setEditingTitle(true);
+                                                    setNewTitle(submission.title);
+                                                }}
+                                                title="Edit submission title"
+                                                aria-label="Edit submission title"
+                                            >
+                                                <i className="bi bi-pencil-sm"></i>
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="d-flex flex-wrap align-items-center gap-3">
                                         <div className="d-flex align-items-center">
                                             <i className="bi bi-calendar3 me-2" aria-hidden="true"></i>
@@ -1200,6 +1260,80 @@ const SubmissionDetails = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Rename Modal */}
+            {editingTitle && (
+                <div className="modal d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header border-primary bg-light">
+                                <h5 className="modal-title text-primary fw-bold">
+                                    <i className="bi bi-pencil-square me-2"></i>
+                                    Rename Submission
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close" 
+                                    onClick={() => setEditingTitle(false)}
+                                    disabled={renamingId !== null}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <label htmlFor="renameInput" className="form-label">New Title</label>
+                                    <input 
+                                        id="renameInput"
+                                        type="text" 
+                                        className="form-control" 
+                                        value={newTitle}
+                                        onChange={(e) => setNewTitle(e.target.value)}
+                                        placeholder="Enter new title"
+                                        disabled={renamingId !== null}
+                                        maxLength="255"
+                                        autoFocus
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter' && !renamingId) {
+                                                handleRenameSubmission();
+                                            }
+                                        }}
+                                    />
+                                    <small className="text-muted d-block mt-2">
+                                        {255 - newTitle.length} characters remaining
+                                    </small>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-secondary" 
+                                    onClick={() => setEditingTitle(false)}
+                                    disabled={renamingId !== null}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-primary" 
+                                    onClick={handleRenameSubmission}
+                                    disabled={renamingId !== null || !newTitle.trim()}
+                                >
+                                    {renamingId ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Renaming...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-check-lg me-2"></i>
+                                            Rename
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

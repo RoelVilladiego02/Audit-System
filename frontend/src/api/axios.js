@@ -345,6 +345,13 @@ export const draftAPI = {
     // Delete a submission (draft or submitted)
     deleteSubmission: async (submissionId) => {
         return instance.delete(`audit-submissions/${submissionId}`);
+    },
+
+    // Update submission title
+    updateTitle: async (submissionId, title) => {
+        return instance.patch(`audit-submissions/${submissionId}/title`, {
+            title: title
+        });
     }
 };
 
