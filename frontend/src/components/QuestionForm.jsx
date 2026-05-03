@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 
-const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess, title }) => {
+const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess, title, questionnaireSetId = null }) => {
   const [formData, setFormData] = useState({
     question: '',
     description: '',
@@ -14,9 +14,36 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [newAnswer, setNewAnswer] = useState('');
+  const [selectedSetId, setSelectedSetId] = useState(questionnaireSetId || null);
+  const [questionnaireSets, setQuestionnaireSets] = useState([]);
+  const [loadingSets, setLoadingSets] = useState(!questionnaireSetId);
+
+  useEffect(() => {
+    // Fetch questionnaire sets for selection when creating a new question
+    if (!isEdit && !questionnaireSetId) {
+      const fetchSets = async () => {
+        try {
+          const response = await api.get('/questionnaire-sets');
+          setQuestionnaireSets(response.data || []);
+        } catch (err) {
+          console.error('Error fetching questionnaire sets:', err);
+          setError('Failed to load questionnaire sets. Please refresh and try again.');
+        } finally {
+          setLoadingSets(false);
+        }
+      };
+      fetchSets();
+    } else {
+      setLoadingSets(false);
+    }
+  }, [isEdit, questionnaireSetId]);
 
   useEffect(() => {
     if (isEdit && questionData) {
+      // Set the questionnaire set ID from questionData if available
+      if (questionData.questionnaire_set_id) {
+        setSelectedSetId(questionData.questionnaire_set_id);
+      }
       const hasOthers = questionData.possible_answers?.includes('Others') || false;
       setFormData({
         question: questionData.question || '',
@@ -140,6 +167,13 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
       return;
     }
 
+    // For create operation, check if questionnaire set is selected
+    if (!isEdit && !selectedSetId) {
+      setError('Please select a questionnaire set.');
+      setSubmitting(false);
+      return;
+    }
+
     for (const level of ['high', 'medium', 'low']) {
       for (const answer of formData.risk_criteria[level]) {
         if (!formData.possible_answers.includes(answer)) {
@@ -156,8 +190,19 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
         throw new Error('Authentication token not found');
       }
 
-      const url = `/audit-questions${isEdit ? `/${questionData.id}` : ''}`;
-      const method = isEdit ? 'put' : 'post';
+      // Use nested endpoints for create and update
+      const setId = isEdit ? questionData.questionnaire_set_id : selectedSetId;
+      let url, method;
+
+      if (isEdit) {
+        // PUT /questionnaire-sets/{set}/questions/{auditQuestion}
+        url = `/questionnaire-sets/${setId}/questions/${questionData.id}`;
+        method = 'put';
+      } else {
+        // POST /questionnaire-sets/{set}/questions
+        url = `/questionnaire-sets/${setId}/questions`;
+        method = 'post';
+      }
 
       await api({
         url,
@@ -210,7 +255,46 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                 {error}
               </div>
             )}
+            {loadingSets && (
+              <div className="alert alert-info d-flex align-items-center" role="alert">
+                <i className="bi bi-info-circle-fill me-2"></i>
+                Loading questionnaire sets...
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
+              {!isEdit && !questionnaireSetId && (
+                <div className="mb-3">
+                  <label htmlFor="questionnaireSet" className="form-label fw-semibold text-muted">
+                    Questionnaire Set <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    id="questionnaireSet"
+                    className="form-select"
+                    value={selectedSetId || ''}
+                    onChange={(e) => setSelectedSetId(Number(e.target.value) || null)}
+                    required
+                    disabled={loadingSets}
+                    aria-describedby="setHelp"
+                  >
+                    <option value="">-- Select a questionnaire set --</option>
+                    {questionnaireSets.map((set) => (
+                      <option key={set.id} value={set.id}>
+                        {set.name} {set.status && `(${set.status})`}
+                      </option>
+                    ))}
+                  </select>
+                  <small id="setHelp" className="form-text text-muted">
+                    Select which questionnaire set this question will belong to
+                  </small>
+                </div>
+              )}
+              {isEdit && questionData?.questionnaire_set_id && (
+                <div className="mb-3 p-2 bg-light rounded">
+                  <small className="text-muted">
+                    <strong>Questionnaire Set ID:</strong> {questionData.questionnaire_set_id}
+                  </small>
+                </div>
+              )}
               <div className="mb-3">
                 <label htmlFor="question" className="form-label fw-semibold text-muted">
                   Question Text <span className="text-danger">*</span>

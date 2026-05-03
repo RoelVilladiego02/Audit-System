@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\AuditQuestionController;
 use App\Http\Controllers\AuditSubmissionController;
+use App\Http\Controllers\QuestionnaireSetController;
 use App\Http\Controllers\VulnerabilitySubmissionController;
 use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\UserController;
@@ -27,9 +28,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
 
+    // User profile routes - accessible to authenticated users
+    Route::patch('/user/profile', [UserController::class, 'updateProfile']);
+    Route::put('/user/password', [UserController::class, 'updatePassword']);
+
     // Routes accessible by both admin and users
     Route::get('/audit-questions', [AuditQuestionController::class, 'index']);
     Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
+    
+    // Questionnaire set routes - accessible to authenticated users
+    Route::get('/questionnaire-sets/active', [QuestionnaireSetController::class, 'activeOnly']);
+    Route::get('/questionnaire-sets/{set}', [QuestionnaireSetController::class, 'show']);
 
     // Admin routes with optimized middleware
     Route::middleware(['role:admin'])->group(function () {
@@ -38,9 +47,25 @@ Route::middleware('auth:sanctum')->group(function () {
         // Analytics route with query parameter validation
         Route::get('/analytics', [AnalyticsController::class, 'index']);
 
-        // Admin-only audit question operations
-        Route::post('/audit-questions', [AuditQuestionController::class, 'store']);
-        Route::put('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'update']);
+        // Questionnaire Set Management (Admin only)
+        Route::prefix('questionnaire-sets')->name('questionnaire-sets.')->group(function () {
+            Route::get('/', [QuestionnaireSetController::class, 'index'])->name('index');
+            Route::post('/', [QuestionnaireSetController::class, 'store'])->name('store');
+            Route::put('/{set}', [QuestionnaireSetController::class, 'update'])->name('update');
+            Route::delete('/{set}', [QuestionnaireSetController::class, 'destroy'])->name('destroy');
+            Route::get('/{set}/statistics', [QuestionnaireSetController::class, 'statistics'])->name('statistics');
+            Route::post('/{set}/duplicate', [QuestionnaireSetController::class, 'duplicate'])->name('duplicate');
+            Route::post('/{set}/add-questions', [QuestionnaireSetController::class, 'addQuestions'])->name('add-questions');
+            Route::post('/{set}/remove-questions', [QuestionnaireSetController::class, 'removeQuestions'])->name('remove-questions');
+            Route::patch('/{set}/archive', [QuestionnaireSetController::class, 'archive'])->name('archive');
+            Route::patch('/{set}/restore', [QuestionnaireSetController::class, 'restore'])->name('restore');
+            
+            // Nested: Questions within a questionnaire set
+            Route::post('/{set}/questions', [AuditQuestionController::class, 'store'])->name('questions.store');
+            Route::put('/{set}/questions/{auditQuestion}', [AuditQuestionController::class, 'update'])->name('questions.update');
+        });
+
+        // Admin-only audit question operations (backward compatibility & utilities)
         Route::delete('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'destroy']);
         Route::get('/audit-questions-statistics', [AuditQuestionController::class, 'statistics']);
         Route::get('/audit-questions/archived', [AuditQuestionController::class, 'archived']);
@@ -88,9 +113,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('audit-submissions')->name('audit-submissions.')->group(function () {
         Route::get('/', [AuditSubmissionController::class, 'index'])->name('index');
         Route::get('/{submission}', [AuditSubmissionController::class, 'show'])->name('show');
+        Route::delete('/{submission}', [AuditSubmissionController::class, 'destroy'])->name('destroy');
         Route::patch('/{submission}/title', [AuditSubmissionController::class, 'updateTitle'])
             ->where('submission', '[0-9]+')
             ->name('update-title');
+        
+        // Draft functionality routes
+        Route::post('/save-draft', [AuditSubmissionController::class, 'saveDraft'])->name('save-draft');
+        Route::patch('/{submission}/draft', [AuditSubmissionController::class, 'updateDraft'])->name('update-draft');
+        Route::patch('/{submission}/submit', [AuditSubmissionController::class, 'submitDraft'])->name('submit-draft');
     });
 
     Route::prefix('vulnerability-submissions')->name('vulnerability-submissions.')->group(function () {

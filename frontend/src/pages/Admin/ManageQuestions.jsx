@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 const ManageQuestions = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [questions, setQuestions] = useState([]);
+  const [questionnaireSets, setQuestionnaireSets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -13,6 +14,7 @@ const ManageQuestions = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [selectedSetForCreate, setSelectedSetForCreate] = useState(null);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -48,14 +50,34 @@ const ManageQuestions = () => {
     }
   }, []);
 
+  const fetchQuestionnaireSets = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await api.get('/questionnaire-sets');
+      if (response.data) {
+        setQuestionnaireSets(response.data);
+      } else {
+        setQuestionnaireSets([]);
+      }
+    } catch (err) {
+      console.error('Error fetching questionnaire sets:', err);
+      setQuestionnaireSets([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!authLoading && user && isAdmin) {
       fetchQuestions();
+      fetchQuestionnaireSets();
     } else if (!authLoading && user && !isAdmin) {
       setError('You do not have permission to access this page.');
       setLoading(false);
     }
-  }, [user, isAdmin, authLoading, fetchQuestions]);
+  }, [user, isAdmin, authLoading, fetchQuestions, fetchQuestionnaireSets]);
 
   const handleDelete = async (questionId) => {
     try {
@@ -145,19 +167,45 @@ const ManageQuestions = () => {
           <div className="row align-items-center">
             <div className="col-md-6">
               <h1 className="h3 fw-bold mb-1">Manage Audit Questions</h1>
-              <p className="text-muted mb-0">Add, edit, or remove security audit questions</p>
+              <p className="text-muted mb-0">Add, edit, or remove security audit questions within questionnaire sets</p>
               <small className="text-info">
                 User: {user?.email} | Role: {user?.role}
               </small>
             </div>
             <div className="col-md-6 text-end">
-              <button
-                className="btn btn-primary"
-                onClick={() => setCreateModalOpen(true)}
-                aria-label="Add new audit question"
-              >
-                <i className="bi bi-plus-circle me-2"></i>Add New Question
-              </button>
+              <div className="dropdown d-inline-block">
+                <button
+                  className="btn btn-primary"
+                  id="createQuestionDropdown"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  aria-label="Add new audit question to a set"
+                >
+                  <i className="bi bi-plus-circle me-2"></i>Add New Question
+                </button>
+                <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="createQuestionDropdown">
+                  {questionnaireSets.length === 0 ? (
+                    <li><span className="dropdown-item disabled">No questionnaire sets available</span></li>
+                  ) : (
+                    questionnaireSets.map((set) => (
+                      <li key={set.id}>
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            setSelectedSetForCreate(set.id);
+                            setCreateModalOpen(true);
+                          }}
+                          aria-label={`Create question in ${set.name}`}
+                        >
+                          <i className="bi bi-folder-plus me-2"></i>
+                          {set.name}
+                          <small className="d-block text-muted">{set.status || 'active'}</small>
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -192,6 +240,7 @@ const ManageQuestions = () => {
                   <thead>
                     <tr>
                       <th scope="col">Question</th>
+                      <th scope="col">Set</th>
                       <th scope="col">Category</th>
                       <th scope="col">Possible Answers</th>
                       <th scope="col">Risk Criteria</th>
@@ -212,6 +261,15 @@ const ManageQuestions = () => {
                             )}
                             <small className="text-info">ID: {question.id}</small>
                           </div>
+                        </td>
+                        <td>
+                          {question.questionnaire_set_id ? (
+                            <span className="badge bg-secondary">
+                              Set {question.questionnaire_set_id}
+                            </span>
+                          ) : (
+                            <span className="text-muted fst-italic">Not assigned</span>
+                          )}
                         </td>
                         <td>
                           <span className="badge bg-info text-white">{question.category}</span>
@@ -345,10 +403,15 @@ const ManageQuestions = () => {
         {createModalOpen && (
           <QuestionForm
             title="Create New Question"
-            onClose={() => setCreateModalOpen(false)}
+            questionnaireSetId={selectedSetForCreate}
+            onClose={() => {
+              setCreateModalOpen(false);
+              setSelectedSetForCreate(null);
+            }}
             onSuccess={() => {
               fetchQuestions();
               setCreateModalOpen(false);
+              setSelectedSetForCreate(null);
             }}
           />
         )}
@@ -359,6 +422,7 @@ const ManageQuestions = () => {
             isEdit
             title="Edit Question"
             questionData={selectedQuestion}
+            questionnaireSetId={selectedQuestion.questionnaire_set_id}
             onClose={() => {
               setEditModalOpen(false);
               setSelectedQuestion(null);
