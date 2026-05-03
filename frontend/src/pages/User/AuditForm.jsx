@@ -10,6 +10,8 @@ const AuditForm = () => {
     const [searchParams] = useSearchParams();
     const draftIdFromState = location.state?.draftId;
     
+    const [questionnaireSets, setQuestionnaireSets] = useState([]);
+    const [selectedSetId, setSelectedSetId] = useState(null);
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
     const [customAnswers, setCustomAnswers] = useState({});
@@ -30,13 +32,39 @@ const AuditForm = () => {
     const [existingDrafts, setExistingDrafts] = useState([]);
     const [loadingDrafts, setLoadingDrafts] = useState(false);
 
-    const fetchQuestions = React.useCallback(async () => {
+    const fetchQuestionnaireSets = React.useCallback(async () => {
         try {
-            const response = await api.get('audit-questions');
-            setQuestions(response.data);
+            const response = await api.get('questionnaire-sets/active');
+            if (response.data && response.data.length > 0) {
+                setQuestionnaireSets(response.data);
+                // Auto-select first active set
+                setSelectedSetId(response.data[0].id);
+            } else {
+                setQuestionnaireSets([]);
+                setSelectedSetId(null);
+            }
+        } catch (err) {
+            console.error('Error fetching questionnaire sets:', err);
+            setQuestionnaireSets([]);
+            setSelectedSetId(null);
+            setError('Failed to load questionnaire sets. Please try again later.');
+        }
+    }, []);
+
+    const fetchQuestions = React.useCallback(async () => {
+        if (!selectedSetId) {
+            setQuestions([]);
+            return;
+        }
+        try {
+            const response = await api.get(`questionnaire-sets/${selectedSetId}`);
+            const setData = response.data;
+            const questionsData = setData.questions || [];
+            
+            setQuestions(questionsData);
             const initialAnswers = {};
             const initialCustomAnswers = {};
-            response.data.forEach(q => {
+            questionsData.forEach(q => {
                 initialAnswers[q.id] = '';
                 initialCustomAnswers[q.id] = '';
             });
@@ -57,7 +85,7 @@ const AuditForm = () => {
         } finally {
             setLoading(false);
         }
-    }, [navigate]);
+    }, [selectedSetId, navigate]);
 
     const fetchExistingDrafts = React.useCallback(async () => {
         setLoadingDrafts(true);
@@ -227,9 +255,16 @@ const AuditForm = () => {
             setError('You do not have permission to submit audits.');
             return;
         }
-        fetchQuestions();
+        fetchQuestionnaireSets();
         fetchExistingDrafts();
-    }, [user, authLoading, navigate, fetchQuestions, fetchExistingDrafts]);
+    }, [user, authLoading, navigate, fetchQuestionnaireSets, fetchExistingDrafts]);
+
+    // Fetch questions when selected set changes
+    useEffect(() => {
+        if (selectedSetId) {
+            fetchQuestions();
+        }
+    }, [selectedSetId, fetchQuestions]);
 
     // Load draft from navigation state if draftId is passed (only once)
     useEffect(() => {
@@ -451,8 +486,12 @@ const AuditForm = () => {
                 response = await draftAPI.updateDraft(currentDraftId, draftAnswers);
             } else {
                 // Create new draft
-                console.log('Creating new draft');
-                response = await draftAPI.saveDraft(draftAnswers);
+                console.log('Creating new draft with set:', selectedSetId);
+                const draftPayload = {
+                    questionnaire_set_id: selectedSetId,
+                    answers: draftAnswers
+                };
+                response = await draftAPI.saveDraft(draftPayload);
                 const newDraftId = response.data.submission?.id || response.data.id;
                 console.log('New draft created with ID:', newDraftId);
                 
@@ -651,6 +690,7 @@ const AuditForm = () => {
             }
 
             const submissionData = {
+                questionnaire_set_id: selectedSetId,
                 title: `Audit - ${new Date().toLocaleDateString()}`,
                 answers: validAnswers
             };
@@ -740,7 +780,7 @@ const AuditForm = () => {
         return Math.round((answeredQuestions / questions.length) * 100);
     };
 
-    if (authLoading || loading) {
+    if (authLoading || (loading && selectedSetId)) {
         return (
             <div className="container-fluid min-vh-100 bg-light d-flex justify-content-center align-items-center">
                 <div className="text-center">
@@ -784,10 +824,58 @@ const AuditForm = () => {
                         <div className="card-body py-4">
                             <div className="text-center mb-4">
                                 <i className="bi bi-clipboard-check text-primary" style={{ fontSize: '2.5rem' }} aria-hidden="true"></i>
-                                <p className="text-muted mt-2">Please answer all questions to complete the form.</p>
+                                <p className="text-muted mt-2">Please select a questionnaire set and answer all questions to complete the form.</p>
                             </div>
 
-                            {/* Existing Drafts Section */}
+                            {/* Questionnaire Set Selector */}
+                            {questionnaireSets.length > 0 && (
+                                <div className="mb-4 p-3 bg-light rounded border">
+                                    <label htmlFor="setSelector" className="form-label fw-semibold text-muted mb-2">
+                                        <i className="bi bi-folder me-2"></i>Select Questionnaire Set <span className="text-danger">*</span>
+                                    </label>
+                                    <select
+                                        id="setSelector"
+                                        className="form-select"
+                                        value={selectedSetId || ''}
+                                        onChange={(e) => setSelectedSetId(Number(e.target.value) || null)}
+                                        disabled={loading}
+                                    >
+                                        <option value="">-- Choose a questionnaire set --</option>
+                                        {questionnaireSets.map((set) => (
+                                            <option key={set.id} value={set.id}>
+                                                {set.name} • {set.questions_count || 0} questions
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {selectedSetId && (
+                                        <div className="mt-2 p-2 bg-white rounded">
+                                            <small className="text-muted">
+                                                {questionnaireSets.find(s => s.id === selectedSetId)?.description}
+                                            </small>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Show message if no set selected */}
+                            {!selectedSetId && questionnaireSets.length > 0 && (
+                                <div className="alert alert-info d-flex align-items-center mt-3" role="alert">
+                                    <i className="bi bi-info-circle-fill me-2"></i>
+                                    <div>
+                                        <strong>Select a Questionnaire Set:</strong> Choose a questionnaire set from above to begin answering questions.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Only show questions if a set is selected */}
+                            {selectedSetId && questions.length === 0 && !loading && (
+                                <div className="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                                    <i className="bi bi-exclamation-circle-fill me-2"></i>
+                                    <div>
+                                        <strong>No Questions:</strong> The selected questionnaire set has no questions yet.
+                                    </div>
+                                </div>
+                            )}
                             {existingDrafts.length > 0 && (
                                 <div className="mb-4">
                                     <h6 className="fw-bold text-primary mb-3">

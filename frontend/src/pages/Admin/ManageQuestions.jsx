@@ -7,6 +7,7 @@ const ManageQuestions = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [questions, setQuestions] = useState([]);
   const [questionnaireSets, setQuestionnaireSets] = useState([]);
+  const [activeSetId, setActiveSetId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -58,14 +59,18 @@ const ManageQuestions = () => {
       }
 
       const response = await api.get('/questionnaire-sets');
-      if (response.data) {
+      if (response.data && response.data.length > 0) {
         setQuestionnaireSets(response.data);
+        // Set the first active set as default
+        setActiveSetId(response.data[0].id);
       } else {
         setQuestionnaireSets([]);
+        setActiveSetId(null);
       }
     } catch (err) {
       console.error('Error fetching questionnaire sets:', err);
       setQuestionnaireSets([]);
+      setActiveSetId(null);
     }
   }, []);
 
@@ -99,6 +104,13 @@ const ManageQuestions = () => {
     setQuestionToDelete(question);
     setDeleteModalOpen(true);
   };
+
+  // Filter questions by active set
+  const filteredQuestions = activeSetId
+    ? questions.filter((q) => q.questionnaire_set_id === activeSetId)
+    : [];
+
+  const activeSet = questionnaireSets.find((set) => set.id === activeSetId);
 
   if (authLoading || loading) {
     return (
@@ -167,63 +179,89 @@ const ManageQuestions = () => {
           <div className="row align-items-center">
             <div className="col-md-6">
               <h1 className="h3 fw-bold mb-1">Manage Audit Questions</h1>
-              <p className="text-muted mb-0">Add, edit, or remove security audit questions within questionnaire sets</p>
+              <p className="text-muted mb-0">Manage questions within the selected questionnaire set</p>
               <small className="text-info">
                 User: {user?.email} | Role: {user?.role}
               </small>
             </div>
             <div className="col-md-6 text-end">
-              <div className="dropdown d-inline-block">
-                <button
-                  className="btn btn-primary"
-                  id="createQuestionDropdown"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
-                  aria-label="Add new audit question to a set"
-                >
-                  <i className="bi bi-plus-circle me-2"></i>Add New Question
-                </button>
-                <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="createQuestionDropdown">
-                  {questionnaireSets.length === 0 ? (
-                    <li><span className="dropdown-item disabled">No questionnaire sets available</span></li>
-                  ) : (
-                    questionnaireSets.map((set) => (
-                      <li key={set.id}>
-                        <button
-                          className="dropdown-item"
-                          onClick={() => {
-                            setSelectedSetForCreate(set.id);
-                            setCreateModalOpen(true);
-                          }}
-                          aria-label={`Create question in ${set.name}`}
-                        >
-                          <i className="bi bi-folder-plus me-2"></i>
-                          {set.name}
-                          <small className="d-block text-muted">{set.status || 'active'}</small>
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setSelectedSetForCreate(activeSetId);
+                  setCreateModalOpen(true);
+                }}
+                disabled={!activeSetId}
+                aria-label="Add new audit question to active set"
+              >
+                <i className="bi bi-plus-circle me-2"></i>Add Question to Set
+              </button>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Set Selection Navigation */}
+      {questionnaireSets.length > 0 && (
+        <div className="container-fluid mb-4">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body">
+              <div className="d-flex align-items-center gap-3">
+                <label htmlFor="setSelector" className="fw-semibold text-muted mb-0">
+                  <i className="bi bi-folder me-2"></i>Select Questionnaire Set:
+                </label>
+                <select
+                  id="setSelector"
+                  className="form-select form-select-sm"
+                  style={{ maxWidth: '350px' }}
+                  value={activeSetId || ''}
+                  onChange={(e) => setActiveSetId(Number(e.target.value) || null)}
+                >
+                  <option value="">-- Choose a set --</option>
+                  {questionnaireSets.map((set) => (
+                    <option key={set.id} value={set.id}>
+                      {set.name} ({set.status || 'active'}) • {set.questions_count || 0} questions
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {activeSet && (
+                <div className="mt-2 p-2 bg-light rounded">
+                  <small className="text-muted">
+                    <strong>{activeSet.name}</strong>
+                    {activeSet.description && ` — ${activeSet.description}`}
+                  </small>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container-fluid">
-        {questions.length === 0 ? (
+        {!activeSetId ? (
+          <div className="card border-0 shadow-sm">
+            <div className="card-body text-center py-5">
+              <i className="bi bi-inbox text-muted display-4 mb-3"></i>
+              <h5 className="card-title fw-bold">No Set Selected</h5>
+              <p className="text-muted mb-4">Select a questionnaire set from above to view and manage its questions.</p>
+            </div>
+          </div>
+        ) : filteredQuestions.length === 0 ? (
           <div className="card border-0 shadow-sm">
             <div className="card-body text-center py-5">
               <i className="bi bi-question-circle-fill text-muted display-4 mb-3"></i>
-              <h5 className="card-title fw-bold">No Questions Found</h5>
-              <p className="text-muted mb-4">There are no audit questions available. Create your first question to get started.</p>
+              <h5 className="card-title fw-bold">No Questions in This Set</h5>
+              <p className="text-muted mb-4">The selected questionnaire set has no questions yet. Click "Add Question to Set" to create your first question.</p>
               <button
                 className="btn btn-primary"
-                onClick={() => setCreateModalOpen(true)}
-                aria-label="Create first audit question"
+                onClick={() => {
+                  setSelectedSetForCreate(activeSetId);
+                  setCreateModalOpen(true);
+                }}
+                aria-label="Create first question in this set"
               >
-                <i className="bi bi-plus-circle me-2"></i>Create First Question
+                <i className="bi bi-plus-circle me-2"></i>Add First Question
               </button>
             </div>
           </div>
@@ -231,7 +269,8 @@ const ManageQuestions = () => {
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white">
               <h6 className="fw-bold mb-0">
-                <i className="bi bi-list-ul text-primary me-2"></i>Audit Questions
+                <i className="bi bi-list-ul text-primary me-2"></i>Questions in {activeSet?.name}
+                <span className="badge bg-info ms-2">{filteredQuestions.length}</span>
               </h6>
             </div>
             <div className="card-body">
@@ -240,7 +279,6 @@ const ManageQuestions = () => {
                   <thead>
                     <tr>
                       <th scope="col">Question</th>
-                      <th scope="col">Set</th>
                       <th scope="col">Category</th>
                       <th scope="col">Possible Answers</th>
                       <th scope="col">Risk Criteria</th>
@@ -249,7 +287,7 @@ const ManageQuestions = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {questions.map((question) => (
+                    {filteredQuestions.map((question) => (
                       <tr key={question.id}>
                         <td>
                           <div>
@@ -261,15 +299,6 @@ const ManageQuestions = () => {
                             )}
                             <small className="text-info">ID: {question.id}</small>
                           </div>
-                        </td>
-                        <td>
-                          {question.questionnaire_set_id ? (
-                            <span className="badge bg-secondary">
-                              Set {question.questionnaire_set_id}
-                            </span>
-                          ) : (
-                            <span className="text-muted fst-italic">Not assigned</span>
-                          )}
                         </td>
                         <td>
                           <span className="badge bg-info text-white">{question.category}</span>
