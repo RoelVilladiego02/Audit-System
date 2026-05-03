@@ -274,6 +274,241 @@ class AuditSubmissionController extends Controller
     }
 
     /**
+     * Save a new draft submission.
+     */
+    public function saveDraft(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'answers' => 'required|array|min:1',
+                'answers.*.audit_question_id' => 'required|integer|exists:audit_questions,id',
+                'answers.*.answer' => 'required|string',
+                'answers.*.is_custom_answer' => 'nullable|boolean',
+            ]);
+
+            return DB::transaction(function () use ($validated, $request) {
+                // Create submission with draft status
+                $submission = AuditSubmission::create([
+                    'user_id' => (int) $request->user()->id,
+                    'title' => $validated['title'],
+                    'status' => 'draft',
+                ]);
+
+                // Process each answer
+                foreach ($validated['answers'] as $answerData) {
+                    $questionId = (int) $answerData['audit_question_id'];
+                    $question = AuditQuestion::find($questionId);
+                    
+                    if (!$question) {
+                        throw ValidationException::withMessages([
+                            'answers' => "Question with ID {$questionId} not found"
+                        ]);
+                    }
+
+                    $isCustomAnswer = (bool) ($answerData['is_custom_answer'] ?? false);
+
+                    // Create answer - for drafts, we don't validate against possible answers yet
+                    $answer = AuditAnswer::create([
+                        'audit_submission_id' => $submission->id,
+                        'audit_question_id' => $questionId,
+                        'answer' => $answerData['answer'],
+                        'status' => 'pending',
+                        'is_custom_answer' => $isCustomAnswer,
+                    ]);
+                }
+
+                return response()->json([
+                    'submission' => $submission->load('answers.question'),
+                    'message' => 'Draft saved successfully.',
+                    'status' => $submission->status,
+                ], 201);
+            });
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Draft save failed: ' . $e->getMessage(), [
+                'user_id' => $request->user()->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to save draft.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update an existing draft submission.
+     */
+    public function updateDraft(Request $request, AuditSubmission $submission): JsonResponse
+    {
+        try {
+            // Authorization check
+            if ($submission->user_id !== auth()->id() && !auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            // Only allow updates to draft submissions
+            if ($submission->status !== 'draft') {
+                return response()->json([
+                    'message' => 'Can only update submissions with draft status.',
+                    'current_status' => $submission->status
+                ], 409);
+            }
+
+            $validated = $request->validate([
+                'answers' => 'required|array|min:1',
+                'answers.*.audit_question_id' => 'required|integer|exists:audit_questions,id',
+                'answers.*.answer' => 'required|string',
+                'answers.*.is_custom_answer' => 'nullable|boolean',
+            ]);
+
+            return DB::transaction(function () use ($validated, $submission) {
+                // Delete existing answers for this draft
+                $submission->answers()->delete();
+
+                // Process each answer
+                foreach ($validated['answers'] as $answerData) {
+                    $questionId = (int) $answerData['audit_question_id'];
+                    $question = AuditQuestion::find($questionId);
+                    
+                    if (!$question) {
+                        throw ValidationException::withMessages([
+                            'answers' => "Question with ID {$questionId} not found"
+                        ]);
+                    }
+
+                    $isCustomAnswer = (bool) ($answerData['is_custom_answer'] ?? false);
+
+                    // Create answer
+                    AuditAnswer::create([
+                        'audit_submission_id' => $submission->id,
+                        'audit_question_id' => $questionId,
+                        'answer' => $answerData['answer'],
+                        'status' => 'pending',
+                        'is_custom_answer' => $isCustomAnswer,
+                    ]);
+                }
+
+                return response()->json([
+                    'submission' => $submission->fresh()->load('answers.question'),
+                    'message' => 'Draft updated successfully.',
+                    'status' => $submission->status,
+                ]);
+            });
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Draft update failed: ' . $e->getMessage(), [
+                'submission_id' => $submission->id,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to update draft.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Submit a draft submission for review.
+     */
+    public function submitDraft(Request $request, AuditSubmission $submission): JsonResponse
+    {
+        try {
+            // Authorization check
+            if ($submission->user_id !== auth()->id() && !auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            // Only allow submit from draft status
+            if ($submission->status !== 'draft') {
+                return response()->json([
+                    'message' => 'Can only submit submissions with draft status.',
+                    'current_status' => $submission->status
+                ], 409);
+            }
+
+            // Validate that draft has answers
+            $answerCount = $submission->answers()->count();
+            if ($answerCount === 0) {
+                return response()->json([
+                    'message' => 'Cannot submit empty draft. Please add at least one answer.'
+                ], 422);
+            }
+
+            return DB::transaction(function () use ($submission) {
+                // Update draft answers to validate against possible answers
+                foreach ($submission->answers as $answer) {
+                    $question = $answer->question;
+                    
+                    // Validate answer against possible answers
+                    $isCustomAnswer = $answer->is_custom_answer;
+                    
+                    if (!$isCustomAnswer) {
+                        // Regular answer - validate against possible answers
+                        if (!$question->isValidAnswer($answer->answer)) {
+                            throw ValidationException::withMessages([
+                                'answers' => "Invalid answer '{$answer->answer}' for question ID {$question->id}. Please select a valid option or use 'Others' for custom answers."
+                            ]);
+                        }
+                    }
+                    
+                    // Calculate and set system risk level
+                    $systemRiskLevel = $answer->calculateSystemRiskLevel();
+                    $answer->update([
+                        'system_risk_level' => $systemRiskLevel,
+                        'recommendation' => $this->generateRecommendation($systemRiskLevel, $question),
+                        'status' => 'pending',
+                    ]);
+                }
+
+                // Calculate system overall risk
+                $systemOverallRisk = $submission->calculateSystemOverallRisk();
+                
+                // Change status to submitted
+                $submission->update([
+                    'status' => 'submitted',
+                    'system_overall_risk' => $systemOverallRisk,
+                ]);
+
+                return response()->json([
+                    'submission' => $submission->fresh()->load('answers.question'),
+                    'message' => 'Draft submitted successfully. Pending admin review.',
+                    'status' => $submission->status,
+                    'system_overall_risk' => $systemOverallRisk
+                ]);
+            });
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Draft submission failed: ' . $e->getMessage(), [
+                'submission_id' => $submission->id,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to submit draft.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
      * Update submission title.
      * Users can only update their own submissions, admins can update any submission.
      */
