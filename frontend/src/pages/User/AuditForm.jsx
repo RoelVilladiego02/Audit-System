@@ -488,6 +488,7 @@ const AuditForm = () => {
                 // Create new draft
                 console.log('Creating new draft with set:', selectedSetId);
                 const draftPayload = {
+                    title: `Draft - ${new Date().toLocaleDateString()}`,
                     questionnaire_set_id: selectedSetId,
                     answers: draftAnswers
                 };
@@ -543,31 +544,39 @@ const AuditForm = () => {
     };
 
     const handleSubmitDraft = async () => {
-        if (!currentDraftId) {
-            setError('Please save your draft first before submitting.');
-            return;
-        }
-
         setSubmitting(true);
         setError(null);
 
         try {
-            // First, make sure all changes are saved
             const draftAnswers = prepareDraftAnswers();
             
-            if (draftAnswers.length === 0) {
-                setError('Please answer at least one question before submitting.');
+            // Validate that all questions are answered
+            if (draftAnswers.length === 0 || getProgressPercentage() < 100) {
+                setError('Please answer all questions before submitting.');
                 setSubmitting(false);
                 return;
             }
 
-            // Update draft with final answers if needed
-            await draftAPI.updateDraft(currentDraftId, draftAnswers);
-
-            // Now submit the draft
-            console.log('Submitting draft:', currentDraftId);
-            const response = await draftAPI.submitDraft(currentDraftId);
-            console.log('Draft submitted successfully:', response.data);
+            // If there's an existing draft, submit it
+            if (currentDraftId) {
+                console.log('Submitting existing draft:', currentDraftId);
+                // Update draft with final answers first
+                await draftAPI.updateDraft(currentDraftId, draftAnswers);
+                // Submit the draft
+                const response = await draftAPI.submitDraft(currentDraftId);
+                console.log('Draft submitted successfully:', response.data);
+            } else {
+                // No existing draft - submit directly with current answers
+                console.log('Submitting form directly (no draft)');
+                const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                const submissionData = {
+                    questionnaire_set_id: selectedSetId,
+                    title: `Audit - ${new Date().toLocaleDateString()}`,
+                    answers: draftAnswers
+                };
+                const response = await api.post('audit-submissions', submissionData);
+                console.log('Form submitted successfully:', response.data);
+            }
 
             setSuccess('Form submitted successfully!');
             const resetAnswers = {};
@@ -586,7 +595,7 @@ const AuditForm = () => {
                 navigate('/submissions');
             }, 2000);
         } catch (err) {
-            console.error('Draft submit error:', err);
+            console.error('Form submit error:', err);
             if (err.response?.status === 401) {
                 navigate('/login', { 
                     state: { 
@@ -1248,7 +1257,7 @@ const AuditForm = () => {
                                             <p className="text-muted small mb-2">
                                                 <i className="bi bi-info-circle me-1" aria-hidden="true"></i>
                                                 {getProgressPercentage() === 100 
-                                                    ? 'All questions answered. Ready to submit!'
+                                                    ? 'All questions answered. Ready to submit or save for later!'
                                                     : 'Save your progress anytime. You can continue later.'}
                                             </p>
                                             <span className="badge bg-primary me-2">{getProgressPercentage()}% Complete</span>
@@ -1281,6 +1290,7 @@ const AuditForm = () => {
                                                     disabled={submitting || savingDraft || getProgressPercentage() < 100}
                                                     className={`btn btn-sm ${getProgressPercentage() === 100 ? 'btn-primary' : 'btn-outline-secondary'}`}
                                                     aria-label="Submit form"
+                                                    title={getProgressPercentage() < 100 ? 'Answer all questions to submit' : 'Submit your audit'}
                                                 >
                                                     {submitting ? (
                                                         <>
@@ -1290,7 +1300,7 @@ const AuditForm = () => {
                                                     ) : (
                                                         <>
                                                             <i className="bi bi-send-fill me-1" aria-hidden="true"></i>
-                                                            {currentDraftId ? 'Submit Draft' : 'Submit Form'}
+                                                            Submit
                                                         </>
                                                     )}
                                                 </button>
