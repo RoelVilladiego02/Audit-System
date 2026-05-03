@@ -571,7 +571,7 @@ const AuditForm = () => {
                 const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
                 const submissionData = {
                     questionnaire_set_id: selectedSetId,
-                    title: `Audit - ${new Date().toLocaleDateString()}`,
+                    title: `Audit Report - ${new Date().toLocaleDateString()}`,
                     answers: draftAnswers
                 };
                 const response = await api.post('audit-submissions', submissionData);
@@ -700,7 +700,7 @@ const AuditForm = () => {
 
             const submissionData = {
                 questionnaire_set_id: selectedSetId,
-                title: `Audit - ${new Date().toLocaleDateString()}`,
+                title: `Audit Report - ${new Date().toLocaleDateString()}`,
                 answers: validAnswers
             };
 
