@@ -12,6 +12,9 @@ const AdminAnalyticsDashboard = () => {
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('all');
   const [dataType, setDataType] = useState('all');
+  const [selectedQuestionnaireSet, setSelectedQuestionnaireSet] = useState('all');
+  const [availableQuestionnaireSets, setAvailableQuestionnaireSets] = useState([]);
+  const [loadingQuestionnairedSets, setLoadingQuestionnaireSets] = useState(false);
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
@@ -29,6 +32,28 @@ const AdminAnalyticsDashboard = () => {
   // Refs to store Chart.js instances for cleanup
   const chartInstances = useRef({});
 
+  // Fetch available questionnaire sets on mount
+  useEffect(() => {
+    const fetchQuestionnaireSets = async () => {
+      try {
+        setLoadingQuestionnaireSets(true);
+        const response = await api.get('/questionnaire-sets');
+        if (response.data && Array.isArray(response.data)) {
+          setAvailableQuestionnaireSets(response.data);
+        }
+      } catch (err) {
+        console.error('Error fetching questionnaire sets:', err);
+        setAvailableQuestionnaireSets([]);
+      } finally {
+        setLoadingQuestionnaireSets(false);
+      }
+    };
+
+    if (!authLoading && user && isAdmin) {
+      fetchQuestionnaireSets();
+    }
+  }, [authLoading, user, isAdmin]);
+
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
       navigate('/login');
@@ -38,7 +63,7 @@ const AdminAnalyticsDashboard = () => {
     if (!authLoading && user && isAdmin) {
       fetchAnalytics();
     }
-  }, [user, isAdmin, authLoading, navigate, timeRange, dataType, customStartDate, customEndDate]);
+  }, [user, isAdmin, authLoading, navigate, timeRange, dataType, selectedQuestionnaireSet, customStartDate, customEndDate]);
 
   const fetchAnalytics = async () => {
     try {
@@ -46,6 +71,12 @@ const AdminAnalyticsDashboard = () => {
       setError(null);
 
       const params = { timeRange, type: dataType };
+      
+      // Add questionnaire set filter if not "all"
+      if (selectedQuestionnaireSet !== 'all') {
+        params.questionnaire_set_id = selectedQuestionnaireSet;
+      }
+      
       if (timeRange === 'custom' && customStartDate && customEndDate) {
         params.startDate = customStartDate;
         params.endDate = customEndDate;
@@ -1101,6 +1132,26 @@ const AdminAnalyticsDashboard = () => {
                   <option value="year">Last Year</option>
                   <option value="all">All Time</option>
                   <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label htmlFor="questionnaireSet" className="form-label fw-semibold text-muted">
+                  Questionnaire Set
+                </label>
+                <select
+                  id="questionnaireSet"
+                  className="form-select"
+                  value={selectedQuestionnaireSet}
+                  onChange={(e) => setSelectedQuestionnaireSet(e.target.value)}
+                  aria-label="Select questionnaire set"
+                  disabled={loadingQuestionnairedSets}
+                >
+                  <option value="all">All Sets Combined</option>
+                  {availableQuestionnaireSets.map((set) => (
+                    <option key={set.id} value={set.id}>
+                      {set.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               {timeRange === 'custom' && (
