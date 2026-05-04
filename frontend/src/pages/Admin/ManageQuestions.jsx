@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api/axios';
 import QuestionForm from '../../components/QuestionForm';
+import QuestionnaireSetForm from '../../components/QuestionnaireSetForm';
 import { useAuth } from '../../context/AuthContext';
 
 const ManageQuestions = () => {
@@ -16,6 +17,9 @@ const ManageQuestions = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [selectedSetForCreate, setSelectedSetForCreate] = useState(null);
+  const [createSetModalOpen, setCreateSetModalOpen] = useState(false);
+  const [editSetModalOpen, setEditSetModalOpen] = useState(false);
+  const [selectedSetForEdit, setSelectedSetForEdit] = useState(null);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -105,6 +109,27 @@ const ManageQuestions = () => {
     setDeleteModalOpen(true);
   };
 
+  const handleCreateSet = async (newSetData) => {
+    try {
+      await fetchQuestionnaireSets();
+      setCreateSetModalOpen(false);
+    } catch (err) {
+      console.error('Error creating set:', err);
+      setError('Failed to create questionnaire set');
+    }
+  };
+
+  const handleEditSet = async (updatedSetData) => {
+    try {
+      await fetchQuestionnaireSets();
+      setEditSetModalOpen(false);
+      setSelectedSetForEdit(null);
+    } catch (err) {
+      console.error('Error updating set:', err);
+      setError('Failed to update questionnaire set');
+    }
+  };
+
   // Filter questions by active set
   const filteredQuestions = activeSetId
     ? questions.filter((q) => q.questionnaire_set_id === activeSetId)
@@ -185,17 +210,26 @@ const ManageQuestions = () => {
               </small>
             </div>
             <div className="col-md-6 text-end">
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setSelectedSetForCreate(activeSetId);
-                  setCreateModalOpen(true);
-                }}
-                disabled={!activeSetId}
-                aria-label="Add new audit question to active set"
-              >
-                <i className="bi bi-plus-circle me-2"></i>Add Question to Set
-              </button>
+              <div className="btn-group gap-2">
+                <button
+                  className="btn btn-success"
+                  onClick={() => setCreateSetModalOpen(true)}
+                  aria-label="Create new questionnaire set"
+                >
+                  <i className="bi bi-folder-plus me-2"></i>Create Questionnaire Set
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedSetForCreate(activeSetId);
+                    setCreateModalOpen(true);
+                  }}
+                  disabled={!activeSetId}
+                  aria-label="Add new audit question to active set"
+                >
+                  <i className="bi bi-plus-circle me-2"></i>Add Question to Set
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -206,24 +240,38 @@ const ManageQuestions = () => {
         <div className="container-fluid mb-4">
           <div className="card border-0 shadow-sm">
             <div className="card-body">
-              <div className="d-flex align-items-center gap-3">
-                <label htmlFor="setSelector" className="fw-semibold text-muted mb-0">
-                  <i className="bi bi-folder me-2"></i>Select Questionnaire Set:
-                </label>
-                <select
-                  id="setSelector"
-                  className="form-select form-select-sm"
-                  style={{ maxWidth: '350px' }}
-                  value={activeSetId || ''}
-                  onChange={(e) => setActiveSetId(Number(e.target.value) || null)}
-                >
-                  <option value="">-- Choose a set --</option>
-                  {questionnaireSets.map((set) => (
-                    <option key={set.id} value={set.id}>
-                      {set.name} ({set.status || 'active'}) • {set.questions_count || 0} questions
-                    </option>
-                  ))}
-                </select>
+              <div className="d-flex align-items-center justify-content-between">
+                <div className="d-flex align-items-center gap-3">
+                  <label htmlFor="setSelector" className="fw-semibold text-muted mb-0">
+                    <i className="bi bi-folder me-2"></i>Select Questionnaire Set:
+                  </label>
+                  <select
+                    id="setSelector"
+                    className="form-select form-select-sm"
+                    style={{ maxWidth: '350px' }}
+                    value={activeSetId || ''}
+                    onChange={(e) => setActiveSetId(Number(e.target.value) || null)}
+                  >
+                    <option value="">-- Choose a set --</option>
+                    {questionnaireSets.map((set) => (
+                      <option key={set.id} value={set.id}>
+                        {set.name} ({set.status || 'active'}) • {set.questions_count || 0} questions
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {activeSet && (
+                  <button
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setSelectedSetForEdit(activeSet);
+                      setEditSetModalOpen(true);
+                    }}
+                    aria-label={`Edit ${activeSet.name}`}
+                  >
+                    <i className="bi bi-pencil-fill me-1"></i>Edit Set
+                  </button>
+                )}
               </div>
               {activeSet && (
                 <div className="mt-2 p-2 bg-light rounded">
@@ -461,6 +509,29 @@ const ManageQuestions = () => {
               setEditModalOpen(false);
               setSelectedQuestion(null);
             }}
+          />
+        )}
+
+        {/* Create Questionnaire Set Modal */}
+        {createSetModalOpen && (
+          <QuestionnaireSetForm
+            title="Create New Questionnaire Set"
+            onClose={() => setCreateSetModalOpen(false)}
+            onSuccess={handleCreateSet}
+          />
+        )}
+
+        {/* Edit Questionnaire Set Modal */}
+        {editSetModalOpen && selectedSetForEdit && (
+          <QuestionnaireSetForm
+            isEdit
+            title="Edit Questionnaire Set"
+            setData={selectedSetForEdit}
+            onClose={() => {
+              setEditSetModalOpen(false);
+              setSelectedSetForEdit(null);
+            }}
+            onSuccess={handleEditSet}
           />
         )}
       </div>

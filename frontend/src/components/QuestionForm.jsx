@@ -62,7 +62,7 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
   }, [isEdit, questionData]);
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     if (name === 'question' && value.length > 1000) {
       setError('Question cannot exceed 1000 characters.');
       return;
@@ -235,17 +235,46 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
     }
   };
 
+  // Get the selected set details for display
+  const selectedSetDetails = selectedSetId 
+    ? questionnaireSets.find(set => set.id === selectedSetId)
+    : null;
+
   return (
     <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content border-0 shadow-sm">
-          <div className="modal-header bg-white">
-            <h5 className="modal-title fw-bold">{title}</h5>
+          <div className="modal-header bg-white border-bottom">
+            <div className="w-100">
+              <h5 className="modal-title fw-bold mb-2">{title}</h5>
+              {(selectedSetId || (isEdit && questionData?.questionnaire_set_id)) && (
+                <div className="p-2 bg-light rounded border border-info">
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-folder-fill me-2 text-info"></i>
+                    <strong>Questionnaire Set:</strong>
+                  </small>
+                  <div className="ms-3">
+                    <strong className="text-dark">
+                      {selectedSetDetails?.name || `Set ID: ${isEdit ? questionData?.questionnaire_set_id : selectedSetId}`}
+                    </strong>
+                    {selectedSetDetails?.description && (
+                      <p className="text-muted mb-0 small mt-1">{selectedSetDetails.description}</p>
+                    )}
+                    {selectedSetDetails?.status && (
+                      <span className={`badge bg-${selectedSetDetails.status === 'active' ? 'success' : selectedSetDetails.status === 'draft' ? 'warning' : 'secondary'} mt-1`}>
+                        {selectedSetDetails.status}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="btn-close"
               onClick={onClose}
               aria-label="Close form"
+              style={{ position: 'absolute', top: '12px', right: '12px' }}
             ></button>
           </div>
           <div className="modal-body">
@@ -285,13 +314,6 @@ const QuestionForm = ({ isEdit = false, questionData = null, onClose, onSuccess,
                   </select>
                   <small id="setHelp" className="form-text text-muted">
                     Select which questionnaire set this question will belong to
-                  </small>
-                </div>
-              )}
-              {isEdit && questionData?.questionnaire_set_id && (
-                <div className="mb-3 p-2 bg-light rounded">
-                  <small className="text-muted">
-                    <strong>Questionnaire Set ID:</strong> {questionData.questionnaire_set_id}
                   </small>
                 </div>
               )}
