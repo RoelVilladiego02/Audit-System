@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AuditQuestion extends Model
@@ -18,10 +19,12 @@ class AuditQuestion extends Model
         'possible_answers',
         'risk_criteria',
         'possible_recommendation',
+        'questionnaire_set_id',
     ];
 
     protected $casts = [
         'id' => 'integer',
+        'questionnaire_set_id' => 'integer',
         'category' => 'string',
         'possible_answers' => 'array',
         'risk_criteria' => 'array',
@@ -34,6 +37,14 @@ class AuditQuestion extends Model
     protected $hidden = [
         'deleted_at',
     ];
+
+    /**
+     * Get the questionnaire set this question belongs to.
+     */
+    public function questionnaireSet(): BelongsTo
+    {
+        return $this->belongsTo(AuditQuestionnaireSet::class, 'questionnaire_set_id');
+    }
 
     public function submissions(): HasMany
     {

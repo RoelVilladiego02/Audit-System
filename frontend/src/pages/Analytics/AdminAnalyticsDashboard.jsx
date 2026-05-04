@@ -784,6 +784,259 @@ const AdminAnalyticsDashboard = () => {
     );
   };
 
+  /**
+   * Render Questionnaire Set Performance Metrics
+   */
+  const renderSetPerformanceMetrics = (data) => {
+    if (data.type !== 'combined' || !data.questionnaire_set_performance || data.questionnaire_set_performance.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white">
+          <h6 className="fw-bold mb-0">
+            <i className="bi bi-speedometer2 text-primary me-2"></i>
+            Questionnaire Set Performance Metrics
+          </h6>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr className="table-light">
+                  <th>Questionnaire Set</th>
+                  <th className="text-center">Total Submissions</th>
+                  <th className="text-center">Completed</th>
+                  <th className="text-center">Completion Rate</th>
+                  <th className="text-center">High Risk %</th>
+                  <th className="text-center">Avg Review Time (hrs)</th>
+                  <th className="text-center">Difficulty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.questionnaire_set_performance.map((set, idx) => (
+                  <tr key={idx}>
+                    <td className="fw-semibold">{set.set_name}</td>
+                    <td className="text-center">{set.total_submissions}</td>
+                    <td className="text-center">{set.completed_submissions}</td>
+                    <td className="text-center">
+                      <span className={`badge bg-${set.completion_rate >= 75 ? 'success' : set.completion_rate >= 50 ? 'warning' : 'danger'}`}>
+                        {set.completion_rate}%
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <span className={`badge bg-${set.high_risk_percentage >= 60 ? 'danger' : set.high_risk_percentage >= 30 ? 'warning' : 'success'}`}>
+                        {set.high_risk_percentage}%
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <strong>{set.average_review_time_hours}</strong>
+                    </td>
+                    <td className="text-center">
+                      <span className={`badge bg-${set.difficulty_level === 'high' ? 'danger' : set.difficulty_level === 'medium' ? 'warning' : 'success'}`}>
+                        {set.difficulty_level.charAt(0).toUpperCase() + set.difficulty_level.slice(1)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * Render Question Effectiveness Analysis
+   */
+  const renderQuestionEffectiveness = (data) => {
+    if (data.type !== 'combined' || !data.question_effectiveness) {
+      return null;
+    }
+
+    const { high_risk_questions, problematic_questions } = data.question_effectiveness;
+
+    return (
+      <div className="row mb-4">
+        {/* High-Risk Questions */}
+        {high_risk_questions && high_risk_questions.length > 0 && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0">
+                  <i className="bi bi-exclamation-circle-fill text-danger me-2"></i>
+                  Top High-Risk Questions
+                </h6>
+              </div>
+              <div className="card-body">
+                <div className="list-group list-group-flush">
+                  {high_risk_questions.slice(0, 5).map((q, idx) => (
+                    <div key={idx} className="list-group-item">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div className="flex-grow-1">
+                          <p className="mb-1 fw-semibold small text-truncate" title={q.question_text}>
+                            {idx + 1}. {q.question_text}
+                          </p>
+                          <small className="text-muted">{q.category}</small>
+                        </div>
+                        <span className="badge bg-danger ms-2">{q.high_risk_count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Problematic Questions */}
+        {problematic_questions && problematic_questions.length > 0 && (
+          <div className="col-lg-6 mb-4">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-white">
+                <h6 className="fw-bold mb-0">
+                  <i className="bi bi-question-circle-fill text-warning me-2"></i>
+                  Ambiguous Questions
+                </h6>
+              </div>
+              <div className="card-body">
+                <div className="list-group list-group-flush">
+                  {problematic_questions.slice(0, 5).map((q, idx) => (
+                    <div key={idx} className="list-group-item">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div className="flex-grow-1">
+                          <p className="mb-1 fw-semibold small text-truncate" title={q.question_text}>
+                            {idx + 1}. {q.question_text}
+                          </p>
+                          <small className="text-muted d-block">Custom answers: {q.custom_answer_count}</small>
+                          <small className="text-warning">Users providing custom answers instead of predefined options</small>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /**
+   * Render Set-to-Risk Correlation Analysis
+   */
+  const renderSetRiskCorrelation = (data) => {
+    if (data.type !== 'combined' || !data.set_risk_correlation) {
+      return null;
+    }
+
+    const { risk_heatmap, admin_override_analysis } = data.set_risk_correlation;
+
+    return (
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white">
+          <h6 className="fw-bold mb-0">
+            <i className="bi bi-fire text-danger me-2"></i>
+            Risk Distribution Heatmap by Questionnaire Set
+          </h6>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr className="table-light">
+                  <th>Questionnaire Set</th>
+                  <th className="text-center">Total</th>
+                  <th className="text-center">
+                    <span className="badge bg-danger">High Risk</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-warning">Medium Risk</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-success">Low Risk</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-secondary">Pending</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {risk_heatmap.map((set, idx) => (
+                  <tr key={idx}>
+                    <td className="fw-semibold">{set.set_name}</td>
+                    <td className="text-center">{set.total}</td>
+                    <td className="text-center">
+                      <span className="badge bg-danger">
+                        {set.high.count} ({set.high.percentage}%)
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <span className="badge bg-warning text-dark">
+                        {set.medium.count} ({set.medium.percentage}%)
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <span className="badge bg-success">
+                        {set.low.count} ({set.low.percentage}%)
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <span className="badge bg-secondary">
+                        {set.pending.count} ({set.pending.percentage}%)
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Admin Override Analysis */}
+          {admin_override_analysis && admin_override_analysis.length > 0 && (
+            <div className="mt-4">
+              <h6 className="fw-bold mb-3">
+                <i className="bi bi-arrow-left-right text-info me-2"></i>
+                Admin Risk Overrides by Set
+              </h6>
+              <div className="table-responsive">
+                <table className="table table-sm table-hover mb-0">
+                  <thead>
+                    <tr className="table-light">
+                      <th>Set Name</th>
+                      <th className="text-center">Total Submissions</th>
+                      <th className="text-center">Overrides</th>
+                      <th className="text-center">Override Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {admin_override_analysis.map((set, idx) => (
+                      <tr key={idx}>
+                        <td className="fw-semibold">{set.set_name}</td>
+                        <td className="text-center">{set.total_submissions}</td>
+                        <td className="text-center">
+                          <span className="badge bg-info">{set.override_count}</span>
+                        </td>
+                        <td className="text-center">
+                          <span className={`badge bg-${set.override_percentage > 30 ? 'warning' : set.override_percentage > 10 ? 'info' : 'success'}`}>
+                            {set.override_percentage}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-vh-100 bg-light">
       <header className="bg-white shadow-sm py-3 mb-4">
@@ -910,6 +1163,15 @@ const AdminAnalyticsDashboard = () => {
             
             {/* Advanced Analytics - Only for combined view */}
             {renderAdvancedAnalytics(analyticsData)}
+            
+            {/* NEW: Questionnaire Set Performance Metrics */}
+            {renderSetPerformanceMetrics(analyticsData)}
+            
+            {/* NEW: Question Effectiveness Analysis */}
+            {renderQuestionEffectiveness(analyticsData)}
+            
+            {/* NEW: Set-to-Risk Correlation */}
+            {renderSetRiskCorrelation(analyticsData)}
           </div>
         )}
       </div>

@@ -25,11 +25,13 @@ class AuditSubmission extends Model
         'reviewed_by',
         'reviewed_at',
         'admin_summary',
+        'questionnaire_set_id',
     ];
 
     protected $casts = [
         'id' => 'integer',
         'user_id' => 'integer',
+        'questionnaire_set_id' => 'integer',
         'reviewed_by' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -39,6 +41,11 @@ class AuditSubmission extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function questionnaireSet(): BelongsTo
+    {
+        return $this->belongsTo(AuditQuestionnaireSet::class, 'questionnaire_set_id');
     }
 
     public function answers(): HasMany
