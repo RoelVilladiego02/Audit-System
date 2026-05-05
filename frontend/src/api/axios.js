@@ -107,13 +107,24 @@ instance.interceptors.request.use(
         // Get auth token - always fetch fresh from localStorage
         const token = localStorage.getItem('token');
         
-        // Set base headers
+        // Set base headers — but do NOT override Content-Type if FormData
+        // (browser must set multipart/form-data + boundary automatically)
+        const isFormData = config.data instanceof FormData;
+        
         config.headers = {
-            'Content-Type': 'application/json',
+            // Only set Content-Type for non-FormData requests
+            ...(!isFormData && { 'Content-Type': 'application/json' }),
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
-            ...(token && { 'Authorization': `Bearer ${token}` })
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+            // Preserve any caller-provided headers EXCEPT Content-Type for FormData
+            ...(config.headers && !isFormData ? config.headers : {}),
         };
+        
+        // For FormData, explicitly delete Content-Type so browser sets it with boundary
+        if (isFormData) {
+            delete config.headers['Content-Type'];
+        }
         
         // Log token usage for debugging (only in development)
         if (DEBUG) {

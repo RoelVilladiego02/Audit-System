@@ -463,11 +463,9 @@ const AuditForm = () => {
 
             // Upload image using the correct answer ID
             // Backend will validate answer ownership and return proper error if not found
-            const response = await api.post(`audit-answers/${answerId}/proof-image`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            // Do NOT set Content-Type manually — let the browser set it with the
+            // correct boundary for multipart/form-data automatically
+            const response = await api.post(`audit-answers/${answerId}/proof-image`, formData);
 
             if (response.data.success) {
                 // Start AI analysis simulation
