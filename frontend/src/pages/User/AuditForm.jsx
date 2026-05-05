@@ -413,6 +413,25 @@ const AuditForm = () => {
         }));
     };
 
+    // Clear image error handler
+    const clearImageError = (questionId) => {
+        setImageErrors(prev => ({
+            ...prev,
+            [questionId]: null
+        }));
+    };
+
+    // Validate answer exists and belongs to current submission
+    const validateAnswerForUpload = async (questionId, answerId) => {
+        try {
+            const response = await api.get(`audit-answers/${answerId}/validate-ownership`);
+            return response.data.valid === true;
+        } catch (err) {
+            console.error('Answer validation error:', err);
+            return false;
+        }
+    };
+
     // Proof image upload handler
     const handleImageUpload = async (questionId, file) => {
         if (!file) return;
@@ -422,10 +441,15 @@ const AuditForm = () => {
 
         // If answer ID doesn't exist, we need to save the draft first to create the answer records
         if (!answerId) {
+            const errorMsg = 'Please save your draft first before uploading images.';
             setImageErrors(prev => ({
                 ...prev,
-                [questionId]: 'Please save your draft first before uploading images.'
+                [questionId]: errorMsg
             }));
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                clearImageError(questionId);
+            }, 5000);
             return;
         }
 
@@ -439,8 +463,28 @@ const AuditForm = () => {
         }));
 
         try {
+            // Validate answer exists and belongs to this submission before uploading
+            console.log('Validating answer ID:', answerId);
+            const isValid = await validateAnswerForUpload(questionId, answerId);
+            
+            if (!isValid) {
+                const errorMsg = 'The answer was not found or does not belong to your submission. Please save your draft again.';
+                setImageErrors(prev => ({
+                    ...prev,
+                    [questionId]: errorMsg
+                }));
+                // Auto-dismiss after 7 seconds
+                setTimeout(() => {
+                    clearImageError(questionId);
+                }, 7000);
+                return;
+            }
+
             const formData = new FormData();
             formData.append('proof_image', file);
+
+            // Log for debugging
+            console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
 
             // Upload image using the correct answer ID
             const response = await api.post(`audit-answers/${answerId}/proof-image`, formData, {
@@ -524,18 +568,42 @@ const AuditForm = () => {
 
                 setError(null);
             } else {
+                const errorMsg = response.data.message || 'Upload failed';
                 setImageErrors(prev => ({
                     ...prev,
-                    [questionId]: response.data.message || 'Upload failed'
+                    [questionId]: errorMsg
                 }));
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => {
+                    clearImageError(questionId);
+                }, 5000);
             }
         } catch (err) {
             console.error('Image upload error:', err);
-            const errorMessage = err.response?.data?.message || 'Failed to upload proof image. Please try again.';
+            console.error('Answer ID being used:', answerId);
+            console.error('Current submission ID:', currentDraftId);
+            console.log('Full answerIdMap:', answerIdMap);
+            
+            let errorMessage = 'Failed to upload proof image. ';
+            if (err.response?.status === 404) {
+                errorMessage += 'The answer was not found. Try saving your draft again.';
+            } else if (err.response?.status === 403) {
+                errorMessage += 'You do not have permission to upload for this answer.';
+            } else if (err.response?.data?.message) {
+                errorMessage += err.response.data.message;
+            } else {
+                errorMessage += 'Please try again.';
+            }
+            
             setImageErrors(prev => ({
                 ...prev,
                 [questionId]: errorMessage
             }));
+            
+            // Auto-dismiss after 7 seconds for error messages
+            setTimeout(() => {
+                clearImageError(questionId);
+            }, 7000);
         } finally {
             setUploadingImages(prev => ({
                 ...prev,
@@ -1449,9 +1517,16 @@ const AuditForm = () => {
 
                                                     {/* Error message for image upload */}
                                                     {imageErrors[question.id] && (
-                                                        <div className="alert alert-danger alert-sm mb-3 py-2">
+                                                        <div className="alert alert-danger alert-dismissible fade show mb-3 py-2" role="alert">
                                                             <i className="bi bi-exclamation-circle-fill me-1"></i>
                                                             {imageErrors[question.id]}
+                                                            <button 
+                                                                type="button" 
+                                                                className="btn-close" 
+                                                                onClick={() => clearImageError(question.id)}
+                                                                aria-label="Close"
+                                                                style={{ marginTop: '-8px' }}
+                                                            ></button>
                                                         </div>
                                                     )}
 
