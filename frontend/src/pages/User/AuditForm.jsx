@@ -39,6 +39,7 @@ const AuditForm = () => {
     const [analyzingImages, setAnalyzingImages] = useState({}); // { questionId: boolean }
     const [analysisProgress, setAnalysisProgress] = useState({}); // { questionId: 0-100 }
     const [analysisResults, setAnalysisResults] = useState({}); // { questionId: { confidence, status, details } }
+    const [answerIdMap, setAnswerIdMap] = useState({}); // { questionId: answerId } - map to track actual answer IDs
     const fileInputRefs = useRef({});
 
     const fetchQuestionnaireSets = React.useCallback(async () => {
@@ -173,6 +174,7 @@ const AuditForm = () => {
             // Load draft answers into form
             const initialAnswers = {};
             const initialCustomAnswers = {};
+            const questionToAnswerId = {}; // Map question IDs to answer IDs
             
             questions.forEach(q => {
                 initialAnswers[q.id] = '';
@@ -182,12 +184,15 @@ const AuditForm = () => {
             if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
                 draftSubmission.answers.forEach(answer => {
                     initialAnswers[answer.audit_question_id] = answer.answer;
+                    // Map question ID to answer ID for image uploads
+                    questionToAnswerId[answer.audit_question_id] = answer.id;
                     if (answer.is_custom_answer) {
                         initialCustomAnswers[answer.audit_question_id] = answer.answer;
                     }
                 });
             }
             
+            setAnswerIdMap(questionToAnswerId);
             setAnswers(initialAnswers);
             setCustomAnswers(initialCustomAnswers);
             setCurrentDraftId(draftId);
@@ -399,13 +404,6 @@ const AuditForm = () => {
                 [questionId]: ''
             }));
         }
-
-        // Auto-scroll to next unanswered question after a short delay
-        if (value && value.trim() !== '') {
-            setTimeout(() => {
-                scrollToNextUnansweredQuestion(questionId);
-            }, 500);
-        }
     };
 
     const handleCustomAnswerChange = (questionId, value) => {
@@ -413,22 +411,23 @@ const AuditForm = () => {
             ...prev,
             [questionId]: value
         }));
-
-        // Auto-scroll to next unanswered question when custom answer is provided
-        if (value && value.trim() !== '') {
-            setTimeout(() => {
-                scrollToNextUnansweredQuestion(questionId);
-            }, 500);
-        }
     };
 
     // Proof image upload handler
     const handleImageUpload = async (questionId, file) => {
         if (!file) return;
 
-        // Find the answer ID for this question from the audit answers
-        // We'll need to identify it from the current submission context
-        const answerId = questionId; // Using questionId as placeholder, should be mapped from actual answer ID
+        // Check if we have the actual answer ID from the map
+        let answerId = answerIdMap[questionId];
+
+        // If answer ID doesn't exist, we need to save the draft first to create the answer records
+        if (!answerId) {
+            setImageErrors(prev => ({
+                ...prev,
+                [questionId]: 'Please save your draft first before uploading images.'
+            }));
+            return;
+        }
 
         setUploadingImages(prev => ({
             ...prev,
@@ -443,7 +442,7 @@ const AuditForm = () => {
             const formData = new FormData();
             formData.append('proof_image', file);
 
-            // Upload image - assumes answer exists in submission
+            // Upload image using the correct answer ID
             const response = await api.post(`audit-answers/${answerId}/proof-image`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
@@ -531,6 +530,7 @@ const AuditForm = () => {
                 }));
             }
         } catch (err) {
+            console.error('Image upload error:', err);
             const errorMessage = err.response?.data?.message || 'Failed to upload proof image. Please try again.';
             setImageErrors(prev => ({
                 ...prev,
@@ -550,18 +550,21 @@ const AuditForm = () => {
             return;
         }
 
+        // Use the actual answer ID from the map
+        const actualAnswerId = answerIdMap[questionId] || answerId;
+
         setUploadingImages(prev => ({
             ...prev,
             [questionId]: true
         }));
 
         try {
-            const response = await api.delete(`audit-answers/${answerId}/proof-image`);
+            const response = await api.delete(`audit-answers/${actualAnswerId}/proof-image`);
             
             if (response.data.success) {
                 setProofImages(prev => {
                     const updated = { ...prev };
-                    delete updated[answerId];
+                    delete updated[actualAnswerId];
                     return updated;
                 });
                 // Clear analysis results
@@ -582,6 +585,7 @@ const AuditForm = () => {
                 }));
             }
         } catch (err) {
+            console.error('Image delete error:', err);
             setImageErrors(prev => ({
                 ...prev,
                 [questionId]: 'Failed to delete proof image'
@@ -687,6 +691,17 @@ const AuditForm = () => {
                     // Store in localStorage as backup
                     localStorage.setItem('currentDraftId', newDraftId.toString());
                 }
+            }
+
+            // Build question ID to answer ID map from response
+            const submission = response.data.submission || response.data;
+            if (submission.answers && Array.isArray(submission.answers)) {
+                const newAnswerIdMap = {};
+                submission.answers.forEach(answer => {
+                    newAnswerIdMap[answer.audit_question_id] = answer.id;
+                });
+                setAnswerIdMap(newAnswerIdMap);
+                console.log('Updated answer ID map:', newAnswerIdMap);
             }
 
             setLastAutoSave(new Date());
@@ -1617,7 +1632,7 @@ const AuditForm = () => {
                                                                 </div>
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => handleDeleteImage(question.id, question.id)}
+                                                                    onClick={() => handleDeleteImage(question.id, answerIdMap[question.id])}
                                                                     disabled={uploadingImages[question.id]}
                                                                     className="btn btn-sm btn-outline-danger ms-2"
                                                                     title="Delete this image"
