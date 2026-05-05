@@ -1016,29 +1016,38 @@ const AuditForm = () => {
         }
     };
 
+    // Check if an answer is truly complete (including image requirement for "Yes" answers)
+    const isAnswerComplete = (questionId) => {
+        const finalAnswer = getFinalAnswer(questionId);
+        
+        // Answer must have text
+        if (!finalAnswer || finalAnswer.trim() === '') {
+            return false;
+        }
+
+        // If answer is "Yes", require proof image
+        if (finalAnswer.toLowerCase() === 'yes') {
+            return !!proofImages[questionId]; // Must have proof image
+        }
+
+        // For other answers, just need the answer text
+        return true;
+    };
+
     const isFormValid = () => {
         const totalQuestions = questions.length;
-        const answeredQuestions = Object.entries(answers).filter(([questionId, answer]) => {
-            const finalAnswer = getFinalAnswer(parseInt(questionId));
-            return finalAnswer && finalAnswer.trim() !== '';
-        }).length;
-        return totalQuestions > 0 && answeredQuestions === totalQuestions;
+        const completeQuestions = questions.filter(q => isAnswerComplete(q.id)).length;
+        return totalQuestions > 0 && completeQuestions === totalQuestions;
     };
 
     const hasAnsweredQuestions = () => {
-        return Object.entries(answers).some(([questionId, answer]) => {
-            const finalAnswer = getFinalAnswer(parseInt(questionId));
-            return finalAnswer && finalAnswer.trim() !== '';
-        });
+        return questions.some(q => isAnswerComplete(q.id));
     };
 
     const getProgressPercentage = () => {
         if (questions.length === 0) return 0;
-        const answeredQuestions = Object.entries(answers).filter(([questionId, answer]) => {
-            const finalAnswer = getFinalAnswer(parseInt(questionId));
-            return finalAnswer && finalAnswer.trim() !== '';
-        }).length;
-        return Math.round((answeredQuestions / questions.length) * 100);
+        const completeQuestions = questions.filter(q => isAnswerComplete(q.id)).length;
+        return Math.round((completeQuestions / questions.length) * 100);
     };
 
     if (authLoading || (loading && selectedSetId)) {
@@ -1282,6 +1291,8 @@ const AuditForm = () => {
                                     <div className="d-flex flex-wrap gap-1">
                                         {questions.map((question, index) => {
                                             const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
+                                            const isComplete = isAnswerComplete(question.id);
+                                            const needsImage = isAnswered && getFinalAnswer(question.id)?.toLowerCase() === 'yes' && !proofImages[question.id];
                                             const isCurrent = index === currentQuestionIndex;
                                             return (
                                                 <button
@@ -1291,14 +1302,16 @@ const AuditForm = () => {
                                                     className={`btn btn-sm ${
                                                         isCurrent 
                                                             ? 'btn-primary' 
-                                                            : isAnswered 
+                                                            : isComplete
                                                                 ? 'btn-success' 
-                                                                : 'btn-outline-secondary'
+                                                                : needsImage
+                                                                    ? 'btn-warning'
+                                                                    : 'btn-outline-secondary'
                                                     }`}
                                                     style={{ minWidth: '40px' }}
-                                                    title={`Question ${index + 1}: ${question.question.substring(0, 50)}...`}
+                                                    title={`Question ${index + 1}: ${question.question.substring(0, 50)}...${needsImage ? ' - Image required' : ''}`}
                                                 >
-                                                    {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
+                                                    {isComplete ? <i className="bi bi-check" aria-hidden="true"></i> : needsImage ? <i className="bi bi-exclamation-circle-fill" aria-hidden="true"></i> : index + 1}
                                                 </button>
                                             );
                                         })}
@@ -1311,8 +1324,8 @@ const AuditForm = () => {
                                         const categories = [...new Set(questions.map(q => q.category).filter(Boolean))];
                                         return categories.map((category, index) => {
                                             const categoryQuestions = questions.filter(q => q.category === category);
-                                            const answeredInCategory = categoryQuestions.filter(q => getFinalAnswer(q.id)?.trim() !== '').length;
-                                            const progressPercentage = Math.round((answeredInCategory / categoryQuestions.length) * 100);
+                                            const completeInCategory = categoryQuestions.filter(q => isAnswerComplete(q.id)).length;
+                                            const progressPercentage = Math.round((completeInCategory / categoryQuestions.length) * 100);
                                             
                                             return (
                                                 <div key={index} className="col-md-6 col-lg-4">
@@ -1321,7 +1334,7 @@ const AuditForm = () => {
                                                             <div className="d-flex justify-content-between align-items-center mb-1">
                                                                 <span className="fw-semibold text-dark small">{category}</span>
                                                                 <span className="badge bg-primary bg-opacity-10 text-primary small">
-                                                                    {answeredInCategory}/{categoryQuestions.length}
+                                                                    {completeInCategory}/{categoryQuestions.length}
                                                                 </span>
                                                             </div>
                                                             <div className="progress" style={{ height: '4px' }}>
@@ -1370,6 +1383,8 @@ const AuditForm = () => {
                         <div className="audit-form-container">
                             {questions.map((question, index) => {
                                 const isAnswered = getFinalAnswer(question.id)?.trim() !== '';
+                                const isComplete = isAnswerComplete(question.id);
+                                const needsImage = isAnswered && getFinalAnswer(question.id)?.toLowerCase() === 'yes' && !proofImages[question.id];
                                 const isCurrent = index === currentQuestionIndex;
                                 return (
                                     <div 
@@ -1384,11 +1399,17 @@ const AuditForm = () => {
                                     >
                                         <div className="card-header bg-white border-0 py-3">
                                             <div className="d-flex align-items-center mb-2">
-                                                <span className={`badge ${isAnswered ? 'bg-success' : isCurrent ? 'bg-primary' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
-                                                    {isAnswered ? <i className="bi bi-check" aria-hidden="true"></i> : index + 1}
+                                                <span className={`badge ${isComplete ? 'bg-success' : needsImage ? 'bg-warning' : isCurrent ? 'bg-primary' : 'bg-secondary'} rounded-pill me-3`} style={{ width: '30px', height: '30px', lineHeight: 'normal' }}>
+                                                    {isComplete ? <i className="bi bi-check" aria-hidden="true"></i> : needsImage ? <i className="bi bi-exclamation-circle-fill" aria-hidden="true"></i> : index + 1}
                                                 </span>
                                                 <h6 className="fw-bold mb-0 flex-grow-1">{question.question}</h6>
-                                                {isCurrent && (
+                                                {needsImage && (
+                                                    <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1 rounded-pill me-2">
+                                                        <i className="bi bi-image me-1" aria-hidden="true"></i>
+                                                        Image Required
+                                                    </span>
+                                                )}
+                                                {isCurrent && !needsImage && (
                                                     <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1 rounded-pill">
                                                         <i className="bi bi-eye me-1" aria-hidden="true"></i>
                                                         Current
@@ -1483,6 +1504,12 @@ const AuditForm = () => {
                                                 <div className="text-warning small">
                                                     <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
                                                     Please provide an answer.
+                                                </div>
+                                            )}
+                                            {isAnswered && answers[question.id]?.toLowerCase() === 'yes' && !proofImages[question.id] && (
+                                                <div className="alert alert-warning border-0 py-2 mb-3" role="alert">
+                                                    <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+                                                    <small className="fw-semibold">Upload required - Since you answered "Yes", you must upload a proof image to complete this answer.</small>
                                                 </div>
                                             )}
                                             {/* Proof Image Upload Section - Only for "Yes" answers */}
@@ -1781,7 +1808,7 @@ const AuditForm = () => {
                                                     disabled={submitting || savingDraft || getProgressPercentage() < 100}
                                                     className={`btn btn-sm ${getProgressPercentage() === 100 ? 'btn-primary' : 'btn-outline-secondary'}`}
                                                     aria-label="Submit form"
-                                                    title={getProgressPercentage() < 100 ? 'Answer all questions to submit' : 'Submit your audit'}
+                                                    title={getProgressPercentage() < 100 ? 'Complete all questions (including proof images for "Yes" answers) to submit' : 'Submit your audit'}
                                                 >
                                                     {submitting ? (
                                                         <>
