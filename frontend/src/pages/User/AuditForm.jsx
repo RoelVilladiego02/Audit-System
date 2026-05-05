@@ -564,16 +564,35 @@ const AuditForm = () => {
                 }, 5000);
             }
         } catch (err) {
-            console.error('Image upload error:', err);
+            // 🔴 COMPREHENSIVE ERROR LOGGING
+            console.error('❌ Image upload error:', err);
             console.error('Answer ID being used:', answerId);
             console.error('Current submission ID:', currentDraftId);
+            console.error('Question ID:', questionId);
             console.log('Full answerIdMap:', answerIdMap);
+            
+            // Log response details for debugging backend issues
+            if (err.response?.status === 500) {
+                console.error('🔴 500 Internal Server Error - Backend crashed or threw exception');
+                console.error('Backend response data:', err.response?.data);
+                console.error('Backend response status:', err.response?.status);
+                console.error('Backend response headers:', err.response?.headers);
+            }
+            if (err.response?.status === 422) {
+                console.error('🟡 422 Unprocessable Entity - Validation failed');
+                console.error('Validation errors:', err.response?.data?.errors);
+                console.error('Full response:', err.response?.data);
+            }
             
             let errorMessage = 'Failed to upload proof image. ';
             if (err.response?.status === 404) {
                 errorMessage += 'The answer was not found. Try saving your draft again.';
             } else if (err.response?.status === 403) {
                 errorMessage += 'You do not have permission to upload for this answer.';
+            } else if (err.response?.status === 500) {
+                errorMessage += 'Server error. Check browser console for details.';
+            } else if (err.response?.status === 422) {
+                errorMessage += 'Validation failed. Check browser console for details.';
             } else if (err.response?.data?.message) {
                 errorMessage += err.response.data.message;
             } else {
