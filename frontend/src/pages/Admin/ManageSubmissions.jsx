@@ -1599,9 +1599,32 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
     const [adminNotes, setAdminNotes] = useState(answer.admin_notes || '');
     const [recommendation, setRecommendation] = useState(answer.recommendation || 'Review required to address potential security concerns.');
     const [error, setError] = useState('');
+    const [proofImageData, setProofImageData] = useState(null);
+    const [loadingImage, setLoadingImage] = useState(false);
 
     const effectiveRiskLevel = answer.admin_risk_level || answer.system_risk_level || 'pending';
     const isReviewed = Boolean(answer.reviewed_by && answer.admin_risk_level && answer.recommendation?.trim());
+
+    // Fetch proof image data when component mounts or answer changes
+    useEffect(() => {
+        const fetchProofImage = async () => {
+            if (answer.proof_image_path || answer.proof_image_name) {
+                setLoadingImage(true);
+                try {
+                    const response = await api.get(`audit-answers/${answer.id}/proof-image/url`);
+                    if (response.data.success) {
+                        setProofImageData(response.data);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch proof image:', err);
+                } finally {
+                    setLoadingImage(false);
+                }
+            }
+        };
+        
+        fetchProofImage();
+    }, [answer.id, answer.proof_image_path]);
 
     const handleSave = async () => {
         try {
@@ -1671,6 +1694,101 @@ const AnswerCard = ({ answer, index, isEditing, onEdit, onSave, onCancel, getRis
                             {answer.answer}
                         </div>
                     </div>
+
+                    {/* Proof Image Section */}
+                    {answer.proof_image_path && (
+                        <div className="mb-3">
+                            <h6 className="fw-bold">
+                                <i className="bi bi-image me-2"></i>
+                                Proof Image
+                            </h6>
+                            {loadingImage ? (
+                                <div className="p-3 bg-light rounded text-center">
+                                    <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span className="visually-hidden">Loading image...</span>
+                                    </div>
+                                </div>
+                            ) : proofImageData ? (
+                                <div className="border rounded p-3 bg-white">
+                                    {/* Image filename and validation status */}
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                        <div className="flex-grow-1">
+                                            <div className="d-flex align-items-center mb-2">
+                                                <i className="bi bi-file-image text-primary me-2"></i>
+                                                <span className="fw-semibold">{proofImageData.image_data?.filename || answer.proof_image_name}</span>
+                                            </div>
+                                            <div className="d-flex align-items-center gap-2">
+                                                {proofImageData.image_data?.validated ? (
+                                                    <span className="badge bg-success">
+                                                        <i className="bi bi-check-circle-fill me-1"></i>
+                                                        Validated
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge bg-warning text-dark">
+                                                        <i className="bi bi-exclamation-circle me-1"></i>
+                                                        Not Validated
+                                                    </span>
+                                                )}
+                                                {proofImageData.image_data?.validation_error && (
+                                                    <span className="badge bg-danger text-white">
+                                                        <i className="bi bi-x-circle me-1"></i>
+                                                        {proofImageData.image_data.validation_error}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {proofImageData.url && (
+                                            <a 
+                                                href={proofImageData.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="btn btn-sm btn-outline-primary ms-2"
+                                                title="View proof image in new tab"
+                                            >
+                                                <i className="bi bi-arrow-up-right me-1"></i>
+                                                View
+                                            </a>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Image preview if available */}
+                                    {proofImageData.url && (
+                                        <div className="mt-3">
+                                            <img 
+                                                src={proofImageData.url} 
+                                                alt="Proof image"
+                                                className="img-fluid rounded"
+                                                style={{ 
+                                                    maxHeight: '300px',
+                                                    maxWidth: '100%',
+                                                    objectFit: 'contain'
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Validation details */}
+                                    <div className="mt-3 pt-3 border-top">
+                                        <small className="text-muted">
+                                            <div className="mb-1">
+                                                <strong>Validation Status:</strong> {proofImageData.image_data?.validated ? 'Passed' : 'Failed'}
+                                            </div>
+                                            {proofImageData.image_data?.validation_error && (
+                                                <div>
+                                                    <strong>Error:</strong> {proofImageData.image_data.validation_error}
+                                                </div>
+                                            )}
+                                        </small>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-light rounded text-muted text-center">
+                                    <i className="bi bi-exclamation-circle me-2"></i>
+                                    Unable to load image data
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {answer.system_risk_level && (
                         <div className="mb-3">
