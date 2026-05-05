@@ -190,6 +190,7 @@ const AuditForm = () => {
                         initialCustomAnswers[answer.audit_question_id] = answer.answer;
                     }
                 });
+                console.log('Loaded draft answers into map:', questionToAnswerId);
             }
             
             setAnswerIdMap(questionToAnswerId);
@@ -422,16 +423,6 @@ const AuditForm = () => {
     };
 
     // Validate answer exists and belongs to current submission
-    const validateAnswerForUpload = async (questionId, answerId) => {
-        try {
-            const response = await api.get(`audit-answers/${answerId}/validate-ownership`);
-            return response.data.valid === true;
-        } catch (err) {
-            console.error('Answer validation error:', err);
-            return false;
-        }
-    };
-
     // Proof image upload handler
     const handleImageUpload = async (questionId, file) => {
         if (!file) return;
@@ -441,6 +432,7 @@ const AuditForm = () => {
 
         // If answer ID doesn't exist, we need to save the draft first to create the answer records
         if (!answerId) {
+            console.warn('No answer ID found for question:', questionId, 'Current map:', answerIdMap);
             const errorMsg = 'Please save your draft first before uploading images.';
             setImageErrors(prev => ({
                 ...prev,
@@ -463,23 +455,6 @@ const AuditForm = () => {
         }));
 
         try {
-            // Validate answer exists and belongs to this submission before uploading
-            console.log('Validating answer ID:', answerId);
-            const isValid = await validateAnswerForUpload(questionId, answerId);
-            
-            if (!isValid) {
-                const errorMsg = 'The answer was not found or does not belong to your submission. Please save your draft again.';
-                setImageErrors(prev => ({
-                    ...prev,
-                    [questionId]: errorMsg
-                }));
-                // Auto-dismiss after 7 seconds
-                setTimeout(() => {
-                    clearImageError(questionId);
-                }, 7000);
-                return;
-            }
-
             const formData = new FormData();
             formData.append('proof_image', file);
 
@@ -487,6 +462,7 @@ const AuditForm = () => {
             console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
 
             // Upload image using the correct answer ID
+            // Backend will validate answer ownership and return proper error if not found
             const response = await api.post(`audit-answers/${answerId}/proof-image`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
@@ -767,9 +743,16 @@ const AuditForm = () => {
                 const newAnswerIdMap = {};
                 submission.answers.forEach(answer => {
                     newAnswerIdMap[answer.audit_question_id] = answer.id;
+                    console.debug('Answer created/updated:', {
+                        questionId: answer.audit_question_id,
+                        answerId: answer.id,
+                        answer: answer.answer
+                    });
                 });
                 setAnswerIdMap(newAnswerIdMap);
-                console.log('Updated answer ID map:', newAnswerIdMap);
+                console.log('Updated answer ID map after draft save:', newAnswerIdMap);
+            } else {
+                console.warn('No answers in draft response:', submission);
             }
 
             setLastAutoSave(new Date());
