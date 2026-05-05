@@ -91,7 +91,6 @@ const instance = axios.create({
     baseURL: API_URL, // Using environment config instead of process.env
     headers: {
         // ⚠️ DO NOT set Content-Type here - it prevents FormData from working correctly!
-        // The request interceptor will set it appropriately for each request
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
     },
@@ -100,40 +99,34 @@ const instance = axios.create({
 });
 
 // ✅ CRITICAL: Custom transformRequest to prevent axios from converting FormData
-// Axios by default will convert FormData to application/x-www-form-urlencoded
-// We need to return FormData untouched and ensure Content-Type is never set
-const customTransformRequest = [
-    (data, headers) => {
+// This MUST be set BEFORE any requests are made
+const customTransformRequest = (data, headers) => {
+    if (DEBUG) {
+        console.log('🔄 transformRequest called - data type:', data?.constructor?.name);
+    }
+    
+    if (data instanceof FormData) {
+        // ✅ CRITICAL: For FormData, do NOT set any Content-Type
+        // Browser MUST set multipart/form-data with boundary automatically
         if (DEBUG) {
-            console.log('🔄 CUSTOM transformRequest called');
-            console.log('   Data type:', data?.constructor?.name);
-            console.log('   Headers before:', JSON.stringify(headers || {}));
+            console.log('✅ FormData detected in transformRequest - returning unchanged');
         }
-        
-        // If data is FormData, return it completely untouched
-        // Do NOT let axios modify it or set any Content-Type
-        if (data instanceof FormData) {
-            if (DEBUG) {
-                console.log('   ✅ FormData detected in transformRequest');
-                console.log('   ✅ Returning FormData as-is WITHOUT modification');
-                console.log('   ✅ Browser will auto-set multipart/form-data with boundary');
-            }
-            // CRITICAL: Ensure no Content-Type in headers for FormData
+        // Make sure headers is an object we can modify
+        if (headers && typeof headers === 'object') {
             delete headers['Content-Type'];
-            return data;
-        }
-        
-        // For everything else, stringify as JSON
-        if (data && typeof data === 'object') {
-            headers['Content-Type'] = 'application/json';
-            return JSON.stringify(data);
         }
         return data;
     }
-];
+    
+    if (data && typeof data === 'object') {
+        return JSON.stringify(data);
+    }
+    return data;
+};
 
-// Override axios default transformRequest
-instance.defaults.transformRequest = customTransformRequest;
+// Override BOTH default and instance transformRequest
+axios.defaults.transformRequest = [customTransformRequest];
+instance.defaults.transformRequest = [customTransformRequest];
 
 // Single request interceptor to handle all authentication and CSRF
 instance.interceptors.request.use(
@@ -144,73 +137,58 @@ instance.interceptors.request.use(
         // Get auth token - always fetch fresh from localStorage
         const token = localStorage.getItem('token');
         
-        // CRITICAL: Check if data is FormData VERY EARLY
+        // CRITICAL: Check if data is FormData
         const isFormData = config.data instanceof FormData;
         
         if (DEBUG) {
-            console.log('📤 REQUEST INTERCEPTOR RUNNING');
-            console.log('   URL:', config.url);
-            console.log('   Method:', config.method);
-            console.log('   Data type:', config.data?.constructor?.name || typeof config.data);
+            console.log('📤 REQUEST INTERCEPTOR');
+            console.log('   URL:', config.url, '| Method:', config.method);
             console.log('   Is FormData:', isFormData);
         }
         
         if (isFormData) {
-            // ✅ FOR FORMDATA: Set ONLY the headers that don't break multipart
+            // ✅ FOR FORMDATA: Modify headers in-place WITHOUT replacing the object
             if (DEBUG) {
-                console.log('   🎯 FORMDATA PATH: Setting minimal headers without Content-Type');
-                console.log('   FormData entries:', Array.from(config.data.entries()).map(([k, v]) => [k, v instanceof File ? `File(${v.name}, ${v.type}, ${v.size}b)` : v]));
+                console.log('   🎯 FormData path - updating headers in-place');
             }
             
-            // Set minimal headers - NO Content-Type!
-            config.headers = {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(token && { 'Authorization': `Bearer ${token}` }),
-            };
+            // Add auth headers without touching Content-Type
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
             
-            // ✅ TRIPLE-CHECK: Ensure Content-Type is NOT set
+            // Ensure Content-Type is NOT set (browser will auto-set multipart/form-data)
             delete config.headers['Content-Type'];
             
             if (DEBUG) {
-                console.log('   ✅ Final headers for FormData:', config.headers);
-                console.log('   ✅ Content-Type will be set by browser as: multipart/form-data; boundary=...');
-                console.log('   ✅ Headers object after delete:', Object.keys(config.headers).join(', '));
-                console.log('   ✅ Content-Type in headers:', 'Content-Type' in config.headers);
+                console.log('   ✅ Content-Type deleted for FormData');
+                console.log('   ✅ Browser will auto-set: multipart/form-data; boundary=...');
             }
         } else {
-            // ✅ FOR JSON/Regular Requests: Set Content-Type to JSON
+            // ✅ FOR JSON: Set Content-Type and other headers
             if (DEBUG) {
-                console.log('   🎯 JSON PATH: Setting JSON headers');
+                console.log('   🎯 JSON path - setting Content-Type');
             }
             
-            config.headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(token && { 'Authorization': `Bearer ${token}` }),
-                ...config.headers,  // Spread any custom headers
-            };
-            
-            if (DEBUG) {
-                console.log('   ✅ Final headers for JSON:', config.headers);
+            config.headers['Content-Type'] = 'application/json';
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`;
             }
         }
         
+        // Set common headers for both FormData and JSON
+        config.headers['Accept'] = 'application/json';
+        config.headers['X-Requested-With'] = 'XMLHttpRequest';
+        
         // Log token usage for debugging (only in development)
-        if (DEBUG) {
-            if (token) {
-                console.log('Auth: Using token:', token.substring(0, 20) + '...');
-            } else {
-                console.log('Auth: No token found');
-            }
+        if (DEBUG && token) {
+            console.log('Auth: Using token:', token.substring(0, 20) + '...');
         }
 
         // Handle CSRF token for state-changing operations
         if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
             // If using Bearer token authentication, skip CSRF token requirement
             if (token) {
-                // Bearer token provides sufficient security, no CSRF needed
                 if (DEBUG) {
                     console.log('CSRF: Skipped (using Bearer token)');
                 }
@@ -221,7 +199,7 @@ instance.interceptors.request.use(
                 if (csrfToken) {
                     config.headers['X-XSRF-TOKEN'] = csrfToken;
                     if (DEBUG) {
-                        console.log('CSRF: Using CSRF token:', csrfToken.substring(0, 20) + '...');
+                        console.log('CSRF: Using CSRF token');
                     }
                 } else {
                     console.warn('No CSRF token available for request:', config.url);
@@ -235,12 +213,9 @@ instance.interceptors.request.use(
         }
 
         if (DEBUG) {
-            const headerSize = JSON.stringify(config.headers).length;
-            const cookieSize = document.cookie.length;
-            console.log(`📊 Request Summary for ${config.url}:`);
-            console.log(`   Headers=${headerSize}b, Cookies=${cookieSize}b, Total≈${headerSize + cookieSize}b`);
+            console.log('✅ Final headers:', Object.keys(config.headers).join(', '));
             if (isFormData) {
-                console.log(`   ✅ FormData request - Content-Type in final headers: ${'Content-Type' in config.headers}`);
+                console.log(`✅ FormData: Content-Type present = ${'Content-Type' in config.headers}`);
             }
         }
 
