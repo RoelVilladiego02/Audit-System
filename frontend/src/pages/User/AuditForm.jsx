@@ -458,6 +458,17 @@ const AuditForm = () => {
             const formData = new FormData();
             formData.append('proof_image', file);
 
+            // ✅ DEBUG: Verify file is in FormData
+            console.log('📸 FormData Debug:', {
+                questionId,
+                answerId,
+                fileName: file.name,
+                fileType: file.type,
+                fileSize: file.size,
+                formDataHasFile: formData.has('proof_image'),
+                formDataEntries: Array.from(formData.entries()).map(([k, v]) => [k, v instanceof File ? `File: ${v.name}` : v])
+            });
+
             // Log for debugging
             console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
 

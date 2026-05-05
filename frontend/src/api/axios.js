@@ -90,7 +90,8 @@ const ensureCsrfToken = async () => {
 const instance = axios.create({
     baseURL: API_URL, // Using environment config instead of process.env
     headers: {
-        'Content-Type': 'application/json',
+        // ⚠️ DO NOT set Content-Type here - it prevents FormData from working correctly!
+        // The request interceptor will set it appropriately for each request
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
     },
@@ -111,6 +112,12 @@ instance.interceptors.request.use(
         // (browser must set multipart/form-data + boundary automatically)
         const isFormData = config.data instanceof FormData;
         
+        // ✅ DEBUG: Log FormData detection
+        if (isFormData && DEBUG) {
+            console.log('📤 FormData detected - browser will set multipart/form-data boundary automatically');
+            console.log('FormData entries:', Array.from(config.data.entries()).map(([k, v]) => [k, v instanceof File ? `File(${v.name}, ${v.type}, ${v.size}b)` : v]));
+        }
+        
         config.headers = {
             // Only set Content-Type for non-FormData requests
             ...(!isFormData && { 'Content-Type': 'application/json' }),
@@ -123,6 +130,9 @@ instance.interceptors.request.use(
         // For FormData, explicitly delete Content-Type so browser sets it with boundary
         if (isFormData) {
             delete config.headers['Content-Type'];
+            if (DEBUG) {
+                console.log('✅ Content-Type deleted for FormData - browser will auto-set multipart/form-data');
+            }
         }
         
         // Log token usage for debugging (only in development)
