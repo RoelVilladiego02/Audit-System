@@ -1512,7 +1512,7 @@ const AuditForm = () => {
                                                         </label>
                                                     </div>
                                                     <p className="text-muted small mb-3">
-                                                        Since you answered "Yes", please upload a proof image that validates your answer. Use a descriptive filename (e.g., "firewall_config.jpg", "access_control_audit.png").
+                                                        Since you answered "Yes", please upload a proof image that validates your answer.
                                                     </p>
 
                                                     {/* Error message for image upload */}
