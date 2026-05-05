@@ -114,6 +114,8 @@ const customTransformRequest = (data, headers) => {
         // Make sure headers is an object we can modify
         if (headers && typeof headers === 'object') {
             delete headers['Content-Type'];
+            // Also remove any encoding-related headers
+            delete headers['Content-Encoding'];
         }
         return data;
     }
@@ -127,6 +129,21 @@ const customTransformRequest = (data, headers) => {
 // Override BOTH default and instance transformRequest
 axios.defaults.transformRequest = [customTransformRequest];
 instance.defaults.transformRequest = [customTransformRequest];
+
+// ✅ ADDITIONAL: Block axios from auto-setting Content-Type for FormData
+// by overriding the request adapter to check before sending
+const originalAdapter = instance.defaults.adapter;
+instance.defaults.adapter = async (config) => {
+    if (config.data instanceof FormData) {
+        // ✅ CRITICAL: Ensure no Content-Type for FormData requests
+        delete config.headers['Content-Type'];
+        if (DEBUG) {
+            console.log('🔒 Adapter: Deleted Content-Type for FormData request');
+        }
+    }
+    // Call original adapter
+    return originalAdapter(config);
+};
 
 // Single request interceptor to handle all authentication and CSRF
 instance.interceptors.request.use(
@@ -373,6 +390,56 @@ instance.resetAuth = () => {
             document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
         }
     });
+};
+
+// ✅ DIRECT FILE UPLOAD using Fetch API (avoids axios FormData issues)
+export const uploadProofImage = async (answerId, formData) => {
+    const token = localStorage.getItem('token');
+    const url = `${API_URL}/audit-answers/${answerId}/proof-image`;
+    
+    if (DEBUG) {
+        console.log('📤 Uploading proof image via Fetch API');
+        console.log('   URL:', url);
+        console.log('   Answer ID:', answerId);
+        console.log('   FormData entries:', Array.from(formData.entries()).map(([k, v]) => [k, v instanceof File ? `File(${v.name}, ${v.size}b)` : v]));
+    }
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            // ✅ CRITICAL: Do NOT set Content-Type - browser will set multipart/form-data with boundary
+        },
+        body: formData,  // FormData will be sent as multipart/form-data automatically
+        credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+        if (DEBUG) {
+            console.error('❌ Upload failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                data: data
+            });
+        }
+        throw {
+            response: {
+                status: response.status,
+                statusText: response.statusText,
+                data: data
+            }
+        };
+    }
+    
+    if (DEBUG) {
+        console.log('✅ Upload successful:', data);
+    }
+    
+    return { data };
 };
 
 // Draft API methods

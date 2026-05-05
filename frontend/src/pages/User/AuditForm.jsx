@@ -472,11 +472,9 @@ const AuditForm = () => {
             // Log for debugging
             console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
 
-            // Upload image using the correct answer ID
-            // Backend will validate answer ownership and return proper error if not found
-            // Do NOT set Content-Type manually — let the browser set it with the
-            // correct boundary for multipart/form-data automatically
-            const response = await api.post(`audit-answers/${answerId}/proof-image`, formData);
+            // ✅ Use Fetch API directly for file uploads (avoids axios FormData issues)
+            const { uploadProofImage } = await import('../../api/axios');
+            const response = await uploadProofImage(answerId, formData);
 
             if (response.data.success) {
                 // Start AI analysis simulation
