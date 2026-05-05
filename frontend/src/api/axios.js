@@ -97,6 +97,27 @@ const instance = axios.create({
     },
     timeout: 30000,
     withCredentials: true,
+    // ✅ CRITICAL FIX: transformRequest handler to properly handle FormData
+    transformRequest: [
+        (data, headers) => {
+            // For FormData, browser MUST set multipart/form-data with correct boundary
+            // If we leave Content-Type, axios will use application/x-www-form-urlencoded (wrong!)
+            if (data instanceof FormData) {
+                // Remove Content-Type so browser can set it with the proper boundary
+                delete headers['Content-Type'];
+                if (DEBUG) {
+                    console.log('🔄 transformRequest: FormData detected, Content-Type deleted to allow browser to set multipart/form-data');
+                }
+                return data;
+            }
+            
+            // For regular JSON requests, stringify the data
+            if (data && typeof data === 'object') {
+                return JSON.stringify(data);
+            }
+            return data;
+        }
+    ]
 });
 
 // Single request interceptor to handle all authentication and CSRF
@@ -114,25 +135,33 @@ instance.interceptors.request.use(
         
         // ✅ DEBUG: Log FormData detection
         if (isFormData && DEBUG) {
-            console.log('📤 FormData detected - browser will set multipart/form-data boundary automatically');
+            console.log('📤 Request Interceptor: FormData detected');
             console.log('FormData entries:', Array.from(config.data.entries()).map(([k, v]) => [k, v instanceof File ? `File(${v.name}, ${v.type}, ${v.size}b)` : v]));
         }
         
-        config.headers = {
-            // Only set Content-Type for non-FormData requests
-            ...(!isFormData && { 'Content-Type': 'application/json' }),
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-            ...config.headers,  // ✅ Always spread existing headers
-        };
-        
-        // For FormData, explicitly delete Content-Type so browser sets it with boundary
+        // ✅ CRITICAL: For FormData, ensure no Content-Type is set so browser can set multipart
         if (isFormData) {
+            config.headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+                ...config.headers,  // ✅ Always spread existing headers
+            };
+            // ✅ EXPLICIT: Delete Content-Type for FormData after merging headers
             delete config.headers['Content-Type'];
             if (DEBUG) {
-                console.log('✅ Content-Type deleted for FormData - browser will auto-set multipart/form-data');
+                console.log('✅ Request Interceptor: Content-Type explicitly deleted for FormData');
+                console.log('📤 Final headers for FormData request:', config.headers);
             }
+        } else {
+            // For non-FormData requests, set Content-Type to JSON
+            config.headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+                ...config.headers,  // ✅ Always spread existing headers
+            };
         }
         
         // Log token usage for debugging (only in development)
