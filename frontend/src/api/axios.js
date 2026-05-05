@@ -117,8 +117,7 @@ instance.interceptors.request.use(
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...(token && { 'Authorization': `Bearer ${token}` }),
-            // Preserve any caller-provided headers EXCEPT Content-Type for FormData
-            ...(config.headers && !isFormData ? config.headers : {}),
+            ...config.headers,  // ✅ Always spread existing headers
         };
         
         // For FormData, explicitly delete Content-Type so browser sets it with boundary
