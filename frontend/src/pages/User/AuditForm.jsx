@@ -511,6 +511,34 @@ const AuditForm = () => {
             [questionId]: null
         }));
 
+        // Helper: run the AI analysis animation then show failure error
+        const runFailureAnimation = async (errorMessage) => {
+            setUploadingImages(prev => ({ ...prev, [questionId]: false }));
+            setAnalyzingImages(prev => ({ ...prev, [questionId]: true }));
+            setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
+
+            const failureInterval = setInterval(() => {
+                setAnalysisProgress(prev => {
+                    const currentProgress = prev[questionId] || 0;
+                    const newProgress = Math.min(currentProgress + Math.random() * 22 + 8, 95);
+                    return { ...prev, [questionId]: newProgress };
+                });
+            }, 350);
+
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            clearInterval(failureInterval);
+            setAnalysisProgress(prev => ({ ...prev, [questionId]: 100 }));
+            await new Promise(resolve => setTimeout(resolve, 700));
+            setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
+
+            setImageErrors(prev => ({ ...prev, [questionId]: errorMessage }));
+            if (fileInputRefs.current[questionId]) {
+                fileInputRefs.current[questionId].value = '';
+            }
+        };
+
+        let animationHandled = false;
+
         try {
             const formData = new FormData();
             formData.append('proof_image', file);
@@ -597,35 +625,9 @@ const AuditForm = () => {
 
                 setError(null);
             } else {
-                // Upload failed — run AI analysis animation before showing the failure
-                setAnalyzingImages(prev => ({ ...prev, [questionId]: true }));
-                setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
-
-                const failureInterval = setInterval(() => {
-                    setAnalysisProgress(prev => {
-                        const currentProgress = prev[questionId] || 0;
-                        const newProgress = Math.min(currentProgress + Math.random() * 25, 95);
-                        return { ...prev, [questionId]: newProgress };
-                    });
-                }, 400);
-
-                await new Promise(resolve => setTimeout(resolve, 2500));
-                clearInterval(failureInterval);
-                setAnalysisProgress(prev => ({ ...prev, [questionId]: 100 }));
-                await new Promise(resolve => setTimeout(resolve, 800));
-
-                setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
-
+                animationHandled = true;
                 const errorMsg = response.data.message || 'Upload failed';
-                setImageErrors(prev => ({
-                    ...prev,
-                    [questionId]: errorMsg
-                }));
-
-                // Reset the file input so user can upload again
-                if (fileInputRefs.current[questionId]) {
-                    fileInputRefs.current[questionId].value = '';
-                }
+                await runFailureAnimation(errorMsg);
             }
         } catch (err) {
             // 🔴 COMPREHENSIVE ERROR LOGGING
@@ -680,21 +682,16 @@ const AuditForm = () => {
             } else {
                 errorMessage += 'Please try again.';
             }
-            
-            setImageErrors(prev => ({
-                ...prev,
-                [questionId]: errorMessage
-            }));
 
-            // Reset the file input so user can upload again
-            if (fileInputRefs.current[questionId]) {
-                fileInputRefs.current[questionId].value = '';
-            }
+            animationHandled = true;
+            await runFailureAnimation(errorMessage);
         } finally {
-            setUploadingImages(prev => ({
-                ...prev,
-                [questionId]: false
-            }));
+            if (!animationHandled) {
+                setUploadingImages(prev => ({
+                    ...prev,
+                    [questionId]: false
+                }));
+            }
         }
     };
 
