@@ -40,6 +40,7 @@ const AuditForm = () => {
     const [analysisProgress, setAnalysisProgress] = useState({}); // { questionId: 0-100 }
     const [analysisResults, setAnalysisResults] = useState({}); // { questionId: { confidence, status, details } }
     const [answerIdMap, setAnswerIdMap] = useState({}); // { questionId: answerId } - map to track actual answer IDs
+    const [expandedImageUrl, setExpandedImageUrl] = useState(null); // Track which image is expanded in lightbox
     const fileInputRefs = useRef({});
 
     const fetchQuestionnaireSets = React.useCallback(async () => {
@@ -372,6 +373,18 @@ const AuditForm = () => {
             observer.disconnect();
         };
     }, [questions]);
+
+    // Handle ESC key to close image lightbox
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && expandedImageUrl) {
+                setExpandedImageUrl(null);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [expandedImageUrl]);
 
     const scrollToNextUnansweredQuestion = (currentQuestionId) => {
         const currentIndex = questions.findIndex(q => q.id === currentQuestionId);
@@ -1875,15 +1888,47 @@ const AuditForm = () => {
                                                             </div>
 
                                                             {proofImages[question.id].url && (
-                                                                <a 
-                                                                    href={proofImages[question.id].url} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer"
-                                                                    className="btn btn-sm btn-outline-primary mb-3"
-                                                                >
-                                                                    <i className="bi bi-arrow-up-right me-1"></i>
-                                                                    View Image
-                                                                </a>
+                                                                <div className="mb-3">
+                                                                    <h6 className="text-muted small fw-semibold mb-2">
+                                                                        <i className="bi bi-image me-1"></i>
+                                                                        Image Preview
+                                                                    </h6>
+                                                                    <div 
+                                                                        className="border rounded p-2" 
+                                                                        style={{ 
+                                                                            backgroundColor: '#f8f9fa',
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.2s ease',
+                                                                            opacity: 1
+                                                                        }}
+                                                                        onMouseEnter={(e) => {
+                                                                            e.currentTarget.style.opacity = '0.85';
+                                                                            e.currentTarget.style.boxShadow = '0 0 0 2px #0d6efd';
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            e.currentTarget.style.opacity = '1';
+                                                                            e.currentTarget.style.boxShadow = 'none';
+                                                                        }}
+                                                                        onClick={() => setExpandedImageUrl(proofImages[question.id].url)}
+                                                                    >
+                                                                        <img 
+                                                                            src={proofImages[question.id].url} 
+                                                                            alt="Proof image preview"
+                                                                            style={{
+                                                                                maxWidth: '100%',
+                                                                                maxHeight: '400px',
+                                                                                display: 'block',
+                                                                                margin: '0 auto',
+                                                                                borderRadius: '0.25rem',
+                                                                                objectFit: 'contain'
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                    <small className="text-muted d-block mt-2">
+                                                                        <i className="bi bi-zoom-in me-1"></i>
+                                                                        Click to view fullscreen
+                                                                    </small>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     )}
@@ -2006,6 +2051,84 @@ const AuditForm = () => {
                                 >
                                     <i className="bi bi-chevron-down" aria-hidden="true"></i>
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Image Lightbox Modal */}
+                    {expandedImageUrl && (
+                        <div 
+                            className="position-fixed"
+                            style={{
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                zIndex: 9999,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '20px'
+                            }}
+                            onClick={() => setExpandedImageUrl(null)}
+                        >
+                            <div 
+                                style={{
+                                    position: 'relative',
+                                    maxWidth: '90vw',
+                                    maxHeight: '90vh',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <img 
+                                    src={expandedImageUrl} 
+                                    alt="Full size proof image"
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '100%',
+                                        borderRadius: '0.5rem',
+                                        objectFit: 'contain',
+                                        boxShadow: '0 0 30px rgba(255, 255, 255, 0.2)'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedImageUrl(null)}
+                                    className="btn-close btn-close-white"
+                                    style={{
+                                        position: 'absolute',
+                                        top: '15px',
+                                        right: '15px',
+                                        width: '50px',
+                                        height: '50px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '1.5rem',
+                                        cursor: 'pointer'
+                                    }}
+                                    aria-label="Close image"
+                                />
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: '20px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        color: 'white',
+                                        fontSize: '0.875rem',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                        padding: '8px 16px',
+                                        borderRadius: '0.25rem',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    Click outside or press ESC to close
+                                </div>
                             </div>
                         </div>
                     )}
