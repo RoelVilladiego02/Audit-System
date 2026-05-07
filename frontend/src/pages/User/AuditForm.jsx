@@ -454,6 +454,17 @@ const AuditForm = () => {
             return;
         }
 
+        // Additional validation: ensure submission ID exists
+        if (!currentDraftId) {
+            console.error('Current submission ID is missing!', { questionId, answerId });
+            const errorMsg = 'Current submission ID is missing. Please refresh the page and try again.';
+            setImageErrors(prev => ({
+                ...prev,
+                [questionId]: errorMsg
+            }));
+            return;
+        }
+
         setUploadingImages(prev => ({
             ...prev,
             [questionId]: true
@@ -471,9 +482,12 @@ const AuditForm = () => {
             console.log('📸 FormData Debug:', {
                 questionId,
                 answerId,
+                currentSubmissionId: currentDraftId,
                 fileName: file.name,
                 fileType: file.type,
                 fileSize: file.size,
+                answerIdMapKeys: Object.keys(answerIdMap),
+                answerIdMapValues: Object.values(answerIdMap),
                 formDataHasFile: formData.has('proof_image'),
                 formDataEntries: Array.from(formData.entries()).map(([k, v]) => [k, v instanceof File ? `File: ${v.name}` : v])
             });
@@ -593,7 +607,15 @@ const AuditForm = () => {
             
             let errorMessage = 'Failed to upload proof image. ';
             if (err.response?.status === 404) {
-                errorMessage += 'The answer was not found. Try saving your draft again.';
+                errorMessage = `Answer ID ${answerId} not found or doesn't belong to submission ${currentDraftId}. `;
+                errorMessage += 'This usually means the answer record wasn\'t properly saved. ';
+                errorMessage += 'Please save your draft again and try uploading the image.';
+                console.error('🔴 404 NOT FOUND - Answer ID mismatch', {
+                    requestedAnswerId: answerId,
+                    currentSubmissionId: currentDraftId,
+                    answerIdMap: answerIdMap,
+                    backendMessage: err.response?.data?.message
+                });
             } else if (err.response?.status === 403) {
                 errorMessage += 'You do not have permission to upload for this answer.';
             } else if (err.response?.status === 500) {
