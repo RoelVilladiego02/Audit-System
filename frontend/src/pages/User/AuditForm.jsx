@@ -580,8 +580,8 @@ const AuditForm = () => {
                 setProofImages(prev => ({
                     ...prev,
                     [questionId]: {
-                        filename: response.data.data.filename,
-                        path: response.data.data.path,
+                        filename: response.data.data?.filename || response.data.filename || file.name,
+                        path: response.data.data?.path || response.data.path || '',
                         url: urlResponse.data.url,
                         validated: urlResponse.data.image_data?.validated || false,
                         validationError: urlResponse.data.image_data?.validation_error
@@ -1825,6 +1825,7 @@ const AuditForm = () => {
                                                             )}
 
                                                             {/* Image Display */}
+                                                            {proofImages[question.id]?.filename && (
                                                             <div className="d-flex align-items-center p-3 bg-white border rounded mb-3">
                                                                 <div className="flex-grow-1">
                                                                     <div className="d-flex align-items-center mb-2">
@@ -1870,8 +1871,9 @@ const AuditForm = () => {
                                                                     )}
                                                                 </button>
                                                             </div>
+                                                            )} {/* end proofImages filename guard */}
 
-                                                            {proofImages[question.id].url && (
+                                                            {proofImages[question.id]?.url && (
                                                                 <div className="mb-3">
                                                                     <h6 className="text-muted small fw-semibold mb-2">
                                                                         <i className="bi bi-image me-1"></i>
