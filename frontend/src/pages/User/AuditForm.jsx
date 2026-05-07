@@ -193,9 +193,27 @@ const AuditForm = () => {
                 console.log('Loaded draft answers into map:', questionToAnswerId);
             }
             
+            // Restore proof images from draft submission
+            const restoredProofImages = {};
+            if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
+                draftSubmission.answers.forEach(answer => {
+                    if (answer.proof_image_path && answer.proof_image_name) {
+                        restoredProofImages[answer.id] = {
+                            filename: answer.proof_image_name,
+                            path: answer.proof_image_path,
+                            validated: answer.proof_image_validated ?? false,
+                            validationError: answer.proof_image_validation_error ?? null,
+                            url: null
+                        };
+                    }
+                });
+            }
+            console.log('Restored proof images:', restoredProofImages);
+            
             setAnswerIdMap(questionToAnswerId);
             setAnswers(initialAnswers);
             setCustomAnswers(initialCustomAnswers);
+            setProofImages(restoredProofImages);
             setCurrentDraftId(draftId);
             localStorage.setItem('currentDraftId', draftId.toString());
             
@@ -435,6 +453,20 @@ const AuditForm = () => {
     // Proof image upload handler
     const handleImageUpload = async (questionId, file) => {
         if (!file) return;
+
+        // Check if there are unsaved changes or a save is in progress
+        if (hasUnsavedChanges || savingDraft) {
+            const errorMsg = 'Please wait for the draft to finish saving before uploading images.';
+            setImageErrors(prev => ({
+                ...prev,
+                [questionId]: errorMsg
+            }));
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                clearImageError(questionId);
+            }, 5000);
+            return;
+        }
 
         // Check if we have the actual answer ID from the map
         let answerId = answerIdMap[questionId];
