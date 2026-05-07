@@ -198,7 +198,7 @@ const AuditForm = () => {
             if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
                 draftSubmission.answers.forEach(answer => {
                     if (answer.proof_image_path && answer.proof_image_name) {
-                        restoredProofImages[answer.id] = {
+                        restoredProofImages[answer.audit_question_id] = {
                             filename: answer.proof_image_name,
                             path: answer.proof_image_path,
                             validated: answer.proof_image_validated ?? false,
@@ -617,7 +617,7 @@ const AuditForm = () => {
 
                 setProofImages(prev => ({
                     ...prev,
-                    [answerId]: {
+                    [questionId]: {
                         filename: response.data.data.filename,
                         path: response.data.data.path,
                         url: urlResponse.data.url,
@@ -735,7 +735,7 @@ const AuditForm = () => {
             if (response.data.success) {
                 setProofImages(prev => {
                     const updated = { ...prev };
-                    delete updated[actualAnswerId];
+                    delete updated[questionId];
                     return updated;
                 });
                 // Clear analysis results
