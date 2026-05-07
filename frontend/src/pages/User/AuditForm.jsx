@@ -507,15 +507,44 @@ const AuditForm = () => {
         }));
 
         try {
+            // ✅ Generate descriptive filename for backend validation
+            // The backend has a blacklist that rejects purely numeric filenames
+            // We rename files to format: {question_or_category}_{timestamp}.{extension}
+            const getDescriptiveFilename = (originalFile, questionObj) => {
+                const fileExtension = originalFile.name.split('.').pop();
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[-:]/g, '').slice(0, 15); // e.g., 20260507T153610Z
+                
+                // Use question text (first 20 chars) or category as base for filename
+                let nameBase = 'audit_proof';
+                if (questionObj?.category) {
+                    // Use category, lowercase, replace spaces with underscores, trim special chars
+                    nameBase = questionObj.category
+                        .toLowerCase()
+                        .replace(/\s+/g, '_')
+                        .replace(/[^a-z0-9_]/g, '')
+                        .slice(0, 20);
+                }
+                
+                return `${nameBase}_${timestamp}.${fileExtension}`;
+            };
+            
+            const descriptiveFilename = getDescriptiveFilename(file, questions.find(q => q.id === questionId));
+            
+            // Create a new File object with the descriptive name
+            // This is needed because File.name is read-only in most browsers
+            const renamedFile = new File([file], descriptiveFilename, { type: file.type });
+            
             const formData = new FormData();
-            formData.append('proof_image', file);
+            formData.append('proof_image', renamedFile);
 
-            // ✅ DEBUG: Verify file is in FormData
+            // ✅ DEBUG: Verify file is in FormData with new name
             console.log('📸 FormData Debug:', {
                 questionId,
                 answerId,
                 currentSubmissionId: currentDraftId,
-                fileName: file.name,
+                originalFileName: file.name,
+                renamedFileName: descriptiveFilename,
                 fileType: file.type,
                 fileSize: file.size,
                 answerIdMapKeys: Object.keys(answerIdMap),
@@ -525,7 +554,7 @@ const AuditForm = () => {
             });
 
             // Log for debugging
-            console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
+            console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId, 'File renamed from:', file.name, 'to:', descriptiveFilename);
 
             // ✅ Use Fetch API directly for file uploads (avoids axios FormData issues)
             const { uploadProofImage } = await import('../../api/axios');
