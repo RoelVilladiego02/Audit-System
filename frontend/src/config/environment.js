@@ -53,6 +53,11 @@ export const isDevelopment = () => ENV === 'development';
 // Helper function to check if we're in production
 export const isProduction = () => ENV === 'production';
 
+// Vite-based environment configuration (fallback support)
+export const VITE_API_URL = import.meta.env.VITE_API_URL || API_URL || '/api';
+export const VITE_BASE_URL = import.meta.env.VITE_BASE_URL || BASE_URL || window.location.origin;
+export const VITE_DEBUG = import.meta.env.VITE_DEBUG === 'true' || DEBUG || false;
+
 // Log current configuration (only in development or if DEBUG is true)
 if (DEBUG) {
   console.log('🔧 Environment Configuration:', {
