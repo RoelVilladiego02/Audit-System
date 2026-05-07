@@ -659,6 +659,10 @@ const AuditForm = () => {
                 console.error('Backend response data:', err.response?.data);
                 console.error('Backend response status:', err.response?.status);
                 console.error('Backend response headers:', err.response?.headers);
+                // Log debug details from backend
+                if (err.response?.data?.debug) {
+                    console.error('Backend Debug Info:', err.response.data.debug);
+                }
             }
             if (err.response?.status === 422) {
                 console.error('🟡 422 Unprocessable Entity - Validation failed');
@@ -680,7 +684,12 @@ const AuditForm = () => {
             } else if (err.response?.status === 403) {
                 errorMessage += 'You do not have permission to upload for this answer.';
             } else if (err.response?.status === 500) {
-                errorMessage += 'Server error. Check browser console for details.';
+                // Include backend debug info in error message if available
+                if (err.response?.data?.debug?.error_message) {
+                    errorMessage += `Server error: ${err.response.data.debug.error_message}`;
+                } else {
+                    errorMessage += 'Server error. Check browser console for details.';
+                }
             } else if (err.response?.status === 422) {
                 errorMessage += 'Validation failed. Check browser console for details.';
             } else if (err.response?.data?.message) {
