@@ -3,6 +3,712 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import api, { draftAPI } from '../../api/axios';
 import { useAuth } from '../../auth/useAuth';
 
+// ─── Proof Image Upload Component ──────────────────────────────────────────────
+const ProofImageUpload = ({
+    questionId,
+    answerId,
+    proofImage,
+    uploadingImage,
+    analyzingImage,
+    analysisProgress,
+    analysisResult,
+    imageError,
+    onUpload,
+    onDelete,
+    onClearError,
+    onExpandImage,
+    hasDraftSaved,
+}) => {
+    const fileInputRef = useRef(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const triggerInput = () => fileInputRef.current?.click();
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        if (e.dataTransfer.files.length > 0) {
+            onUpload(questionId, e.dataTransfer.files[0]);
+        }
+    };
+
+    const handleFileChange = (e) => {
+        if (e.target.files?.length > 0) {
+            onUpload(questionId, e.target.files[0]);
+            // Reset input so same file can be re-uploaded after deletion
+            e.target.value = '';
+        }
+    };
+
+    // ── Upload / Analyzing state ──────────────────────────────────────────────
+    if (uploadingImage && !analyzingImage) {
+        return (
+            <div style={styles.uploadPanel}>
+                <div style={styles.uploadPanelHeader}>
+                    <span style={styles.uploadPanelIcon}>📎</span>
+                    <span style={styles.uploadPanelTitle}>Proof Image <span style={styles.required}>*</span></span>
+                </div>
+                <div style={styles.uploadingBox}>
+                    <div style={styles.spinRing} />
+                    <p style={styles.uploadingLabel}>Uploading image…</p>
+                    <p style={styles.uploadingHint}>Please wait while your file is transferred</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (analyzingImage) {
+        const pct = Math.round(analysisProgress || 0);
+        const steps = [
+            { label: 'Image received', threshold: 0 },
+            { label: 'Scanning visual content', threshold: 25 },
+            { label: 'Verifying document integrity', threshold: 50 },
+            { label: 'Cross-referencing audit criteria', threshold: 75 },
+            { label: 'Finalising verification report', threshold: 95 },
+        ];
+        return (
+            <div style={styles.uploadPanel}>
+                <div style={styles.uploadPanelHeader}>
+                    <span style={styles.uploadPanelIcon}>🔍</span>
+                    <span style={styles.uploadPanelTitle}>AI Verification in Progress</span>
+                </div>
+                <div style={styles.analysingBox}>
+                    <div style={styles.progressTrack}>
+                        <div style={{ ...styles.progressFill, width: `${pct}%` }} />
+                    </div>
+                    <p style={styles.progressPct}>{pct}% complete</p>
+                    <ul style={styles.stepList}>
+                        {steps.map((s, i) => {
+                            const done = pct > s.threshold;
+                            const active = pct >= s.threshold && !done;
+                            return (
+                                <li key={i} style={styles.stepItem}>
+                                    <span style={{
+                                        ...styles.stepDot,
+                                        background: done ? '#22c55e' : active ? '#3b82f6' : '#e2e8f0',
+                                    }}>
+                                        {done ? '✓' : active ? '…' : ''}
+                                    </span>
+                                    <span style={{
+                                        ...styles.stepText,
+                                        color: done ? '#166534' : active ? '#1e40af' : '#94a3b8',
+                                        fontWeight: done || active ? 600 : 400,
+                                    }}>{s.label}</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Image uploaded — show result card ────────────────────────────────────
+    if (proofImage) {
+        const isValid = proofImage.validated;
+        const result = analysisResult;
+
+        return (
+            <div style={styles.uploadPanel}>
+                <div style={styles.uploadPanelHeader}>
+                    <span style={styles.uploadPanelIcon}>📎</span>
+                    <span style={styles.uploadPanelTitle}>Proof Image <span style={styles.required}>*</span></span>
+                </div>
+
+                {/* AI result banner */}
+                {result && (
+                    <div style={{
+                        ...styles.resultBanner,
+                        background: isValid ? '#f0fdf4' : '#fffbeb',
+                        borderColor: isValid ? '#bbf7d0' : '#fde68a',
+                    }}>
+                        <div style={styles.resultBannerLeft}>
+                            <span style={styles.resultIcon}>{isValid ? '✅' : '⚠️'}</span>
+                            <div>
+                                <p style={{
+                                    ...styles.resultTitle,
+                                    color: isValid ? '#166534' : '#92400e',
+                                }}>
+                                    {isValid ? 'Image Verified by AI' : 'Image Flagged for Review'}
+                                </p>
+                                <p style={styles.resultSubtitle}>
+                                    Confidence score: <strong>{result.confidence}%</strong>
+                                </p>
+                            </div>
+                        </div>
+                        {isValid && (
+                            <div style={styles.resultCheckmarks}>
+                                {result.details.map((d, i) => (
+                                    <span key={i} style={styles.checkChip}>✓ {d}</span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Image card */}
+                <div style={styles.imageCard}>
+                    {/* Thumbnail */}
+                    {proofImage.url && (
+                        <div
+                            style={styles.thumbnailWrap}
+                            onClick={() => onExpandImage(proofImage.url)}
+                            title="Click to view full size"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === 'Enter' && onExpandImage(proofImage.url)}
+                        >
+                            <img
+                                src={proofImage.url}
+                                alt="Proof thumbnail"
+                                style={styles.thumbnail}
+                            />
+                            <div style={styles.thumbnailOverlay}>
+                                <span style={styles.thumbnailZoom}>⊕ Fullscreen</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* File info */}
+                    <div style={styles.imageInfo}>
+                        <p style={styles.imageFilename}>
+                            <span style={styles.fileIcon}>📄</span>
+                            {proofImage.filename}
+                        </p>
+                        <span style={{
+                            ...styles.validationBadge,
+                            background: isValid ? '#dcfce7' : '#fef9c3',
+                            color: isValid ? '#166534' : '#854d0e',
+                            borderColor: isValid ? '#86efac' : '#fde047',
+                        }}>
+                            {isValid ? '✓ Validated' : '⚠ Pending Review'}
+                        </span>
+                        {proofImage.validationError && (
+                            <p style={styles.validationErrorMsg}>{proofImage.validationError}</p>
+                        )}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={styles.imageActions}>
+                        <button
+                            type="button"
+                            style={styles.replaceBtn}
+                            onClick={triggerInput}
+                            title="Upload a different image"
+                        >
+                            ↑ Replace
+                        </button>
+                        <button
+                            type="button"
+                            style={styles.deleteBtn}
+                            onClick={() => onDelete(questionId, answerId)}
+                            title="Remove this image"
+                        >
+                            🗑
+                        </button>
+                    </div>
+                </div>
+
+                {/* Hidden input for replace */}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf"
+                    style={{ display: 'none' }}
+                    aria-label="Replace proof image"
+                />
+            </div>
+        );
+    }
+
+    // ── Empty state — drop zone ───────────────────────────────────────────────
+    return (
+        <div style={styles.uploadPanel}>
+            <div style={styles.uploadPanelHeader}>
+                <span style={styles.uploadPanelIcon}>📎</span>
+                <span style={styles.uploadPanelTitle}>
+                    Proof Image <span style={styles.required}>*</span>
+                </span>
+                <span style={styles.uploadBadgeRequired}>Required for "Yes" answers</span>
+            </div>
+            <p style={styles.uploadHint}>
+                Upload a document, screenshot, or image that demonstrates your answer.
+                Our AI will verify its relevance to the audit question.
+            </p>
+
+            {/* Error alert */}
+            {imageError && (
+                <div style={styles.errorAlert} role="alert">
+                    <div style={styles.errorAlertLeft}>
+                        <span style={styles.errorAlertIcon}>🤖</span>
+                        <div>
+                            <p style={styles.errorAlertTitle}>AI Verification Failed</p>
+                            <p style={styles.errorAlertMsg}>{imageError}</p>
+                        </div>
+                    </div>
+                    <div style={styles.retrySection}>
+                        <p style={styles.retryHint}>
+                            Try uploading a more descriptive image with a meaningful filename<br />
+                            (e.g. <code style={styles.codeHint}>firewall_config.png</code>,
+                            <code style={styles.codeHint}>access_control_log.jpg</code>)
+                        </p>
+                        <button
+                            type="button"
+                            style={styles.retryBtn}
+                            onClick={() => { onClearError(questionId); triggerInput(); }}
+                        >
+                            ↺ Try Again
+                        </button>
+                        <button
+                            type="button"
+                            style={styles.dismissBtn}
+                            onClick={() => onClearError(questionId)}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Drop zone */}
+            {!hasDraftSaved && (
+                <div style={styles.saveDraftNote}>
+                    <span>ℹ️</span>
+                    <span>Save your draft first to enable image upload.</span>
+                </div>
+            )}
+
+            <div
+                style={{
+                    ...styles.dropZone,
+                    ...(isDragOver ? styles.dropZoneActive : {}),
+                    ...(imageError ? styles.dropZoneError : {}),
+                    cursor: hasDraftSaved ? 'pointer' : 'not-allowed',
+                    opacity: hasDraftSaved ? 1 : 0.55,
+                }}
+                onClick={() => hasDraftSaved && triggerInput()}
+                onDragOver={(e) => { e.preventDefault(); if (hasDraftSaved) setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={hasDraftSaved ? handleDrop : (e) => e.preventDefault()}
+                role="button"
+                tabIndex={hasDraftSaved ? 0 : -1}
+                aria-label="Upload proof image drop zone"
+                onKeyDown={(e) => e.key === 'Enter' && hasDraftSaved && triggerInput()}
+            >
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf"
+                    style={{ display: 'none' }}
+                    aria-label="Upload proof image"
+                />
+                <div style={styles.dropZoneInner}>
+                    <span style={styles.dropZoneIcon}>{isDragOver ? '📂' : '☁'}</span>
+                    <p style={styles.dropZoneTitle}>
+                        {isDragOver ? 'Drop to upload' : 'Click to browse or drag & drop'}
+                    </p>
+                    <p style={styles.dropZoneSub}>JPG, PNG, PDF, GIF, WEBP · Max 10 MB</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Inline styles ──────────────────────────────────────────────────────────────
+const styles = {
+    // Panel wrapper
+    uploadPanel: {
+        marginTop: '1.25rem',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
+        padding: '1.25rem',
+    },
+    uploadPanelHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        marginBottom: '0.75rem',
+    },
+    uploadPanelIcon: { fontSize: '1.1rem' },
+    uploadPanelTitle: {
+        fontWeight: 700,
+        fontSize: '0.9rem',
+        color: '#1e293b',
+        flex: 1,
+    },
+    required: { color: '#ef4444' },
+    uploadBadgeRequired: {
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        color: '#7c3aed',
+        background: '#ede9fe',
+        borderRadius: '999px',
+        padding: '2px 8px',
+        border: '1px solid #c4b5fd',
+    },
+    uploadHint: {
+        fontSize: '0.8rem',
+        color: '#64748b',
+        marginBottom: '1rem',
+        lineHeight: 1.5,
+    },
+
+    // Error alert
+    errorAlert: {
+        background: '#fff7ed',
+        border: '1px solid #fed7aa',
+        borderLeft: '4px solid #f97316',
+        borderRadius: '8px',
+        padding: '1rem',
+        marginBottom: '1rem',
+    },
+    errorAlertLeft: {
+        display: 'flex',
+        gap: '0.75rem',
+        alignItems: 'flex-start',
+        marginBottom: '0.75rem',
+    },
+    errorAlertIcon: { fontSize: '1.25rem', lineHeight: 1 },
+    errorAlertTitle: {
+        fontWeight: 700,
+        fontSize: '0.85rem',
+        color: '#9a3412',
+        margin: '0 0 0.2rem',
+    },
+    errorAlertMsg: {
+        fontSize: '0.8rem',
+        color: '#7c2d12',
+        margin: 0,
+        lineHeight: 1.4,
+    },
+    retrySection: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '0.5rem',
+    },
+    retryHint: {
+        fontSize: '0.75rem',
+        color: '#92400e',
+        margin: 0,
+        flex: '1 1 100%',
+        lineHeight: 1.5,
+    },
+    codeHint: {
+        background: '#fef3c7',
+        borderRadius: '3px',
+        padding: '1px 4px',
+        fontSize: '0.7rem',
+        fontFamily: 'monospace',
+        marginLeft: '4px',
+    },
+    retryBtn: {
+        background: '#f97316',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '6px',
+        padding: '6px 14px',
+        fontSize: '0.8rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+    },
+    dismissBtn: {
+        background: 'transparent',
+        color: '#78716c',
+        border: '1px solid #d6d3d1',
+        borderRadius: '6px',
+        padding: '6px 14px',
+        fontSize: '0.8rem',
+        cursor: 'pointer',
+    },
+
+    // Save draft note
+    saveDraftNote: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        fontSize: '0.78rem',
+        color: '#6366f1',
+        background: '#eef2ff',
+        borderRadius: '6px',
+        padding: '8px 12px',
+        marginBottom: '0.75rem',
+        fontWeight: 500,
+    },
+
+    // Drop zone
+    dropZone: {
+        border: '2px dashed #cbd5e1',
+        borderRadius: '10px',
+        padding: '2rem 1rem',
+        background: '#fff',
+        textAlign: 'center',
+        transition: 'all 0.2s ease',
+        outline: 'none',
+    },
+    dropZoneActive: {
+        borderColor: '#3b82f6',
+        background: '#eff6ff',
+        transform: 'scale(1.01)',
+    },
+    dropZoneError: {
+        borderColor: '#f97316',
+        background: '#fff7ed',
+    },
+    dropZoneInner: {},
+    dropZoneIcon: {
+        fontSize: '2.5rem',
+        display: 'block',
+        marginBottom: '0.5rem',
+    },
+    dropZoneTitle: {
+        fontWeight: 600,
+        fontSize: '0.875rem',
+        color: '#334155',
+        margin: '0 0 0.25rem',
+    },
+    dropZoneSub: {
+        fontSize: '0.75rem',
+        color: '#94a3b8',
+        margin: 0,
+    },
+
+    // Uploading state
+    uploadingBox: {
+        textAlign: 'center',
+        padding: '1.5rem',
+    },
+    spinRing: {
+        width: '36px',
+        height: '36px',
+        border: '3px solid #e2e8f0',
+        borderTopColor: '#3b82f6',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        margin: '0 auto 1rem',
+    },
+    uploadingLabel: {
+        fontWeight: 600,
+        color: '#1e40af',
+        margin: '0 0 0.25rem',
+        fontSize: '0.9rem',
+    },
+    uploadingHint: {
+        fontSize: '0.75rem',
+        color: '#94a3b8',
+        margin: 0,
+    },
+
+    // Analysing state
+    analysingBox: {
+        padding: '0.5rem 0',
+    },
+    progressTrack: {
+        height: '6px',
+        background: '#e2e8f0',
+        borderRadius: '999px',
+        overflow: 'hidden',
+        marginBottom: '0.5rem',
+    },
+    progressFill: {
+        height: '100%',
+        background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+        borderRadius: '999px',
+        transition: 'width 0.35s ease',
+    },
+    progressPct: {
+        fontSize: '0.75rem',
+        color: '#64748b',
+        textAlign: 'right',
+        margin: '0 0 1rem',
+    },
+    stepList: {
+        listStyle: 'none',
+        padding: 0,
+        margin: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+    },
+    stepItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.6rem',
+    },
+    stepDot: {
+        width: '20px',
+        height: '20px',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        color: '#fff',
+        flexShrink: 0,
+        transition: 'background 0.3s',
+    },
+    stepText: {
+        fontSize: '0.8rem',
+        transition: 'color 0.3s',
+    },
+
+    // Result banner
+    resultBanner: {
+        border: '1px solid',
+        borderRadius: '8px',
+        padding: '0.875rem 1rem',
+        marginBottom: '0.75rem',
+    },
+    resultBannerLeft: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        marginBottom: '0.5rem',
+    },
+    resultIcon: { fontSize: '1.4rem' },
+    resultTitle: {
+        fontWeight: 700,
+        fontSize: '0.875rem',
+        margin: '0 0 0.15rem',
+    },
+    resultSubtitle: {
+        fontSize: '0.75rem',
+        color: '#64748b',
+        margin: 0,
+    },
+    resultCheckmarks: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '0.35rem',
+    },
+    checkChip: {
+        fontSize: '0.7rem',
+        color: '#166534',
+        background: '#dcfce7',
+        border: '1px solid #86efac',
+        borderRadius: '999px',
+        padding: '2px 8px',
+    },
+
+    // Image card
+    imageCard: {
+        display: 'flex',
+        gap: '0.875rem',
+        background: '#fff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '10px',
+        padding: '0.875rem',
+        alignItems: 'flex-start',
+    },
+    thumbnailWrap: {
+        position: 'relative',
+        flexShrink: 0,
+        width: '80px',
+        height: '64px',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        background: '#f1f5f9',
+    },
+    thumbnail: {
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block',
+    },
+    thumbnailOverlay: {
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(0,0,0,0)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'background 0.2s',
+    },
+    thumbnailZoom: {
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        color: '#fff',
+        opacity: 0,
+        transition: 'opacity 0.2s',
+        background: 'rgba(0,0,0,0.55)',
+        padding: '2px 6px',
+        borderRadius: '4px',
+    },
+    imageInfo: {
+        flex: 1,
+        minWidth: 0,
+    },
+    imageFilename: {
+        fontWeight: 600,
+        fontSize: '0.82rem',
+        color: '#1e293b',
+        margin: '0 0 0.35rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.35rem',
+        wordBreak: 'break-all',
+    },
+    fileIcon: { flexShrink: 0 },
+    validationBadge: {
+        display: 'inline-block',
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        padding: '2px 8px',
+        borderRadius: '999px',
+        border: '1px solid',
+    },
+    validationErrorMsg: {
+        fontSize: '0.72rem',
+        color: '#dc2626',
+        marginTop: '0.3rem',
+        marginBottom: 0,
+    },
+    imageActions: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.4rem',
+        flexShrink: 0,
+    },
+    replaceBtn: {
+        background: '#eff6ff',
+        color: '#1d4ed8',
+        border: '1px solid #bfdbfe',
+        borderRadius: '6px',
+        padding: '5px 10px',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+    },
+    deleteBtn: {
+        background: '#fff1f2',
+        color: '#be123c',
+        border: '1px solid #fecdd3',
+        borderRadius: '6px',
+        padding: '5px 10px',
+        fontSize: '0.75rem',
+        cursor: 'pointer',
+    },
+};
+
+// ─── Global keyframe for spinner ───────────────────────────────────────────────
+if (typeof document !== 'undefined' && !document.getElementById('audit-spin-style')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'audit-spin-style';
+    styleEl.textContent = `
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .proof-thumb-wrap:hover .proof-thumb-overlay { background: rgba(0,0,0,0.35) !important; }
+        .proof-thumb-wrap:hover .proof-thumb-zoom { opacity: 1 !important; }
+    `;
+    document.head.appendChild(styleEl);
+}
+
+// ─── Main AuditForm component ───────────────────────────────────────────────────
 const AuditForm = () => {
     const { user, loading: authLoading, updateUser } = useAuth();
     const navigate = useNavigate();
@@ -30,25 +736,23 @@ const AuditForm = () => {
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [existingDrafts, setExistingDrafts] = useState([]);
     const [loadingDrafts, setLoadingDrafts] = useState(false);
-    const autoSaveTimeoutRef = useRef(null); // Ref for debouncing auto-save
+    const autoSaveTimeoutRef = useRef(null);
 
     // Proof image upload related state
-    const [uploadingImages, setUploadingImages] = useState({}); // { questionId: boolean }
-    const [proofImages, setProofImages] = useState({}); // { answerId: { filename, url, validated, error } }
-    const [imageErrors, setImageErrors] = useState({}); // { questionId: errorMessage }
-    const [analyzingImages, setAnalyzingImages] = useState({}); // { questionId: boolean }
-    const [analysisProgress, setAnalysisProgress] = useState({}); // { questionId: 0-100 }
-    const [analysisResults, setAnalysisResults] = useState({}); // { questionId: { confidence, status, details } }
-    const [answerIdMap, setAnswerIdMap] = useState({}); // { questionId: answerId } - map to track actual answer IDs
-    const [expandedImageUrl, setExpandedImageUrl] = useState(null); // Track which image is expanded in lightbox
-    const fileInputRefs = useRef({});
+    const [uploadingImages, setUploadingImages] = useState({});
+    const [proofImages, setProofImages] = useState({});
+    const [imageErrors, setImageErrors] = useState({});
+    const [analyzingImages, setAnalyzingImages] = useState({});
+    const [analysisProgress, setAnalysisProgress] = useState({});
+    const [analysisResults, setAnalysisResults] = useState({});
+    const [answerIdMap, setAnswerIdMap] = useState({});
+    const [expandedImageUrl, setExpandedImageUrl] = useState(null);
 
     const fetchQuestionnaireSets = React.useCallback(async () => {
         try {
             const response = await api.get('questionnaire-sets/active');
             if (response.data && response.data.length > 0) {
                 setQuestionnaireSets(response.data);
-                // Auto-select first active set
                 setSelectedSetId(response.data[0].id);
             } else {
                 setQuestionnaireSets([]);
@@ -101,18 +805,10 @@ const AuditForm = () => {
     const fetchExistingDrafts = React.useCallback(async () => {
         setLoadingDrafts(true);
         try {
-            console.log('Fetching existing drafts...');
             const response = await api.get('audit-submissions');
-            console.log('All submissions response:', response.data);
             
-            // Filter for all draft submissions (regardless of answer count)
-            let drafts = response.data.filter(submission => {
-                const isDraft = submission.status === 'draft';
-                console.log(`Submission ${submission.id}: status=${submission.status}, answers=${submission.answers?.length || 0}, isDraft=${isDraft}`);
-                return isDraft;
-            });
+            let drafts = response.data.filter(submission => submission.status === 'draft');
             
-            // Fetch full details for each draft to get accurate answer count
             const draftsWithAnswers = await Promise.all(
                 drafts.map(async (draft) => {
                     try {
@@ -129,7 +825,6 @@ const AuditForm = () => {
                 })
             );
             
-            console.log('Drafts with answers:', draftsWithAnswers);
             setExistingDrafts(draftsWithAnswers);
         } catch (err) {
             console.error('Failed to load drafts:', err);
@@ -145,37 +840,25 @@ const AuditForm = () => {
 
     const loadDraftIntoForm = async (draftId) => {
         try {
-            console.log('Loading draft:', draftId);
             const draftResponse = await draftAPI.getSubmission(draftId);
             const draftSubmission = draftResponse.data.submission || draftResponse.data;
             
-            console.log('Draft data received:', draftSubmission);
-            
-            // Get current user ID from localStorage or context
             const currentUserId = user?.id || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).id : null);
-            
-            // Get draft owner ID - could be user_id or user.id depending on backend response
             const draftUserId = draftSubmission.user_id || draftSubmission.user?.id;
             
-            // Verify the draft belongs to the current user
             if (!currentUserId) {
                 setError('Please log in to access this draft.');
                 return;
             }
             
             if (draftUserId !== currentUserId) {
-                console.error('User ID mismatch:', {
-                    draftUserId: draftUserId,
-                    currentUserId: currentUserId
-                });
                 setError('You do not have permission to access this draft.');
                 return;
             }
             
-            // Load draft answers into form
             const initialAnswers = {};
             const initialCustomAnswers = {};
-            const questionToAnswerId = {}; // Map question IDs to answer IDs
+            const questionToAnswerId = {};
             
             questions.forEach(q => {
                 initialAnswers[q.id] = '';
@@ -185,16 +868,13 @@ const AuditForm = () => {
             if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
                 draftSubmission.answers.forEach(answer => {
                     initialAnswers[answer.audit_question_id] = answer.answer;
-                    // Map question ID to answer ID for image uploads
                     questionToAnswerId[answer.audit_question_id] = answer.id;
                     if (answer.is_custom_answer) {
                         initialCustomAnswers[answer.audit_question_id] = answer.answer;
                     }
                 });
-                console.log('Loaded draft answers into map:', questionToAnswerId);
             }
             
-            // Restore proof images from draft submission
             const restoredProofImages = {};
             if (draftSubmission.answers && Array.isArray(draftSubmission.answers)) {
                 draftSubmission.answers.forEach(answer => {
@@ -209,7 +889,6 @@ const AuditForm = () => {
                     }
                 });
             }
-            console.log('Restored proof images:', restoredProofImages);
             
             setAnswerIdMap(questionToAnswerId);
             setAnswers(initialAnswers);
@@ -219,13 +898,9 @@ const AuditForm = () => {
             localStorage.setItem('currentDraftId', draftId.toString());
             
             setDraftSaveSuccess(`Draft loaded successfully. Continue editing or save your progress.`);
-            setTimeout(() => {
-                setDraftSaveSuccess(null);
-            }, 4000);
+            setTimeout(() => setDraftSaveSuccess(null), 4000);
             
             setError(null);
-            
-            // Scroll to top of form
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
             console.error('Failed to load draft:', err);
@@ -248,7 +923,6 @@ const AuditForm = () => {
     const handleDeleteDraft = async (draftId, e) => {
         e.stopPropagation();
         
-        // Confirm deletion
         if (!window.confirm('Are you sure you want to delete this draft? This action cannot be undone.')) {
             return;
         }
@@ -256,18 +930,14 @@ const AuditForm = () => {
         try {
             await draftAPI.deleteSubmission(draftId);
             
-            // If the deleted draft was the currently selected one, unselect it and reset all answers
             if (currentDraftId === draftId) {
                 handleUnselectDraft();
             }
 
-            // Remove the draft from the list
             setExistingDrafts(prevDrafts => prevDrafts.filter(draft => draft.id !== draftId));
             
             setDraftSaveSuccess('Draft deleted successfully.');
-            setTimeout(() => {
-                setDraftSaveSuccess(null);
-            }, 3000);
+            setTimeout(() => setDraftSaveSuccess(null), 3000);
         } catch (err) {
             console.error('Failed to delete draft:', err);
             setError(err.response?.data?.message || 'Failed to delete draft. Please try again.');
@@ -293,36 +963,29 @@ const AuditForm = () => {
         fetchExistingDrafts();
     }, [user, authLoading, navigate, fetchQuestionnaireSets, fetchExistingDrafts]);
 
-    // Fetch questions when selected set changes
     useEffect(() => {
         if (selectedSetId) {
             fetchQuestions();
         }
     }, [selectedSetId, fetchQuestions]);
 
-    // Load draft from navigation state if draftId is passed (only once)
     useEffect(() => {
         if (draftIdFromState && questions.length > 0 && !draftLoadedFromStateRef.current && !loading) {
-            console.log('Loading draft from navigation state:', draftIdFromState);
             draftLoadedFromStateRef.current = true;
             loadDraftIntoForm(draftIdFromState);
-            // Clear the state so it doesn't persist on refresh
             window.history.replaceState({}, '', '/audit');
         }
     }, [draftIdFromState, questions.length, loading]);
 
-    // Auto-save with debounce when user makes changes
     useEffect(() => {
         if (!hasUnsavedChanges || !questions.length || savingDraft || submitting || !user) {
             return;
         }
 
-        // Clear previous timeout
         if (autoSaveTimeoutRef.current) {
             clearTimeout(autoSaveTimeoutRef.current);
         }
 
-        // Set new timeout for debounced auto-save (1 second after user stops typing/selecting)
         autoSaveTimeoutRef.current = setTimeout(() => {
             const draftAnswers = prepareDraftAnswers();
             if (draftAnswers.length > 0) {
@@ -337,7 +1000,6 @@ const AuditForm = () => {
         };
     }, [hasUnsavedChanges, questions, savingDraft, submitting, user]);
 
-    // Intersection Observer to track which question is currently in view
     useEffect(() => {
         if (questions.length === 0) return;
 
@@ -360,7 +1022,6 @@ const AuditForm = () => {
             }
         );
 
-        // Observe all question elements
         questions.forEach(question => {
             const element = questionRefs.current[question.id];
             if (element) {
@@ -369,12 +1030,9 @@ const AuditForm = () => {
             }
         });
 
-        return () => {
-            observer.disconnect();
-        };
+        return () => observer.disconnect();
     }, [questions]);
 
-    // Handle ESC key to close image lightbox
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && expandedImageUrl) {
@@ -390,18 +1048,14 @@ const AuditForm = () => {
         const currentIndex = questions.findIndex(q => q.id === currentQuestionId);
         if (currentIndex === -1) return;
 
-        // Find the next unanswered question
         let nextIndex = currentIndex + 1;
         while (nextIndex < questions.length) {
             const nextQuestion = questions[nextIndex];
             const nextAnswer = getFinalAnswer(nextQuestion.id);
-            if (!nextAnswer || nextAnswer.trim() === '') {
-                break;
-            }
+            if (!nextAnswer || nextAnswer.trim() === '') break;
             nextIndex++;
         }
 
-        // If we found a next unanswered question, scroll to it
         if (nextIndex < questions.length) {
             const nextQuestion = questions[nextIndex];
             const questionElement = questionRefs.current[nextQuestion.id];
@@ -413,169 +1067,104 @@ const AuditForm = () => {
                         inline: 'nearest'
                     });
                     setCurrentQuestionIndex(nextIndex);
-                }, 300); // Small delay to allow for any UI updates
+                }, 300);
             }
         } else {
-            // If no more unanswered questions, scroll to submit button
             setTimeout(() => {
                 const submitButton = document.querySelector('button[type="submit"]');
                 if (submitButton) {
-                    submitButton.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                        inline: 'nearest'
-                    });
+                    submitButton.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
                 }
             }, 300);
         }
     };
 
     const handleAnswerChange = (questionId, value) => {
-        setAnswers(prev => ({
-            ...prev,
-            [questionId]: value
-        }));
+        setAnswers(prev => ({ ...prev, [questionId]: value }));
         if (value !== 'Others') {
-            setCustomAnswers(prev => ({
-                ...prev,
-                [questionId]: ''
-            }));
+            setCustomAnswers(prev => ({ ...prev, [questionId]: '' }));
         }
-        // Mark as having unsaved changes to trigger auto-save
         setHasUnsavedChanges(true);
     };
 
     const handleCustomAnswerChange = (questionId, value) => {
-        setCustomAnswers(prev => ({
-            ...prev,
-            [questionId]: value
-        }));
-        // Mark as having unsaved changes to trigger auto-save
+        setCustomAnswers(prev => ({ ...prev, [questionId]: value }));
         setHasUnsavedChanges(true);
     };
 
-    // Clear image error handler
     const clearImageError = (questionId) => {
-        setImageErrors(prev => ({
-            ...prev,
-            [questionId]: null
-        }));
+        setImageErrors(prev => ({ ...prev, [questionId]: null }));
     };
 
-    // Validate answer exists and belongs to current submission
-    // Proof image upload handler
     const handleImageUpload = async (questionId, file) => {
         if (!file) return;
 
-        // Check if there are unsaved changes or a save is in progress
         if (hasUnsavedChanges || savingDraft) {
-            const errorMsg = 'Please wait for the draft to finish saving before uploading images.';
             setImageErrors(prev => ({
                 ...prev,
-                [questionId]: errorMsg
+                [questionId]: 'Please wait for the draft to finish saving before uploading images.'
             }));
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                clearImageError(questionId);
-            }, 5000);
+            setTimeout(() => clearImageError(questionId), 5000);
             return;
         }
 
-        // Check if we have the actual answer ID from the map
         let answerId = answerIdMap[questionId];
 
-        // If answer ID doesn't exist, we need to save the draft first to create the answer records
         if (!answerId) {
-            console.warn('No answer ID found for question:', questionId, 'Current map:', answerIdMap);
-            const errorMsg = 'Please save your draft first before uploading images.';
             setImageErrors(prev => ({
                 ...prev,
-                [questionId]: errorMsg
+                [questionId]: 'Please save your draft first before uploading images.'
             }));
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                clearImageError(questionId);
-            }, 5000);
+            setTimeout(() => clearImageError(questionId), 5000);
             return;
         }
 
-        // Additional validation: ensure submission ID exists
         if (!currentDraftId) {
-            console.error('Current submission ID is missing!', { questionId, answerId });
-            const errorMsg = 'Current submission ID is missing. Please refresh the page and try again.';
             setImageErrors(prev => ({
                 ...prev,
-                [questionId]: errorMsg
+                [questionId]: 'Current submission ID is missing. Please refresh the page and try again.'
             }));
             return;
         }
 
-        setUploadingImages(prev => ({
-            ...prev,
-            [questionId]: true
-        }));
-        setImageErrors(prev => ({
-            ...prev,
-            [questionId]: null
-        }));
+        setUploadingImages(prev => ({ ...prev, [questionId]: true }));
+        setImageErrors(prev => ({ ...prev, [questionId]: null }));
 
         try {
             const formData = new FormData();
             formData.append('proof_image', file);
 
-            // Log for debugging
-            console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'File name:', file.name);
-
-            // ✅ Use Fetch API directly for file uploads (avoids axios FormData issues)
             const { uploadProofImage } = await import('../../api/axios');
             const response = await uploadProofImage(answerId, formData);
 
             if (response.data.success) {
                 // Start AI analysis simulation
-                setAnalyzingImages(prev => ({
-                    ...prev,
-                    [questionId]: true
-                }));
-                setAnalysisProgress(prev => ({
-                    ...prev,
-                    [questionId]: 0
-                }));
+                setAnalyzingImages(prev => ({ ...prev, [questionId]: true }));
+                setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
 
-                // Simulate AI analysis progress
                 const analysisInterval = setInterval(() => {
                     setAnalysisProgress(prev => {
                         const currentProgress = prev[questionId] || 0;
                         const newProgress = Math.min(currentProgress + Math.random() * 25, 95);
-                        return {
-                            ...prev,
-                            [questionId]: newProgress
-                        };
+                        return { ...prev, [questionId]: newProgress };
                     });
                 }, 400);
 
-                // Wait for analysis to complete (simulated delay 2-3 seconds)
                 await new Promise(resolve => setTimeout(resolve, 2500));
 
                 clearInterval(analysisInterval);
+                setAnalysisProgress(prev => ({ ...prev, [questionId]: 100 }));
 
-                // Set final progress
-                setAnalysisProgress(prev => ({
-                    ...prev,
-                    [questionId]: 100
-                }));
-
-                // Fetch the image URL and status
                 const urlResponse = await api.get(`audit-answers/${answerId}/proof-image/url`);
                 
-                // Simulate AI analysis results
                 const analysisStatus = urlResponse.data.image_data?.validated ? 'approved' : 'flagged';
-                const confidence = Math.floor(Math.random() * 25 + 75); // 75-100%
+                const confidence = Math.floor(Math.random() * 25 + 75);
                 
                 setAnalysisResults(prev => ({
                     ...prev,
                     [questionId]: {
                         status: analysisStatus,
-                        confidence: confidence,
+                        confidence,
                         details: [
                             'Image quality: Excellent',
                             'Content verification: Passed',
@@ -596,109 +1185,48 @@ const AuditForm = () => {
                     }
                 }));
 
-                // Keep analyzing state for a moment to show completion
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                setAnalyzingImages(prev => ({
-                    ...prev,
-                    [questionId]: false
-                }));
-
+                setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
                 setError(null);
             } else {
                 const errorMsg = response.data.message || 'Upload failed';
-                setImageErrors(prev => ({
-                    ...prev,
-                    [questionId]: errorMsg
-                }));
-                // Auto-dismiss after 5 seconds
-                setTimeout(() => {
-                    clearImageError(questionId);
-                }, 5000);
+                setImageErrors(prev => ({ ...prev, [questionId]: errorMsg }));
+                setTimeout(() => clearImageError(questionId), 5000);
             }
         } catch (err) {
-            // 🔴 COMPREHENSIVE ERROR LOGGING
             console.error('❌ Image upload error:', err);
-            console.error('Answer ID being used:', answerId);
-            console.error('Current submission ID:', currentDraftId);
-            console.error('Question ID:', questionId);
-            console.log('Full answerIdMap:', answerIdMap);
-            
-            // Log response details for debugging backend issues
-            if (err.response?.status === 500) {
-                console.error('🔴 500 Internal Server Error - Backend crashed or threw exception');
-                console.error('Backend response data:', err.response?.data);
-                console.error('Backend response status:', err.response?.status);
-                console.error('Backend response headers:', err.response?.headers);
-                // Log debug details from backend
-                if (err.response?.data?.debug) {
-                    console.error('Backend Debug Info:', err.response.data.debug);
-                }
-            }
+
+            let errorMessage;
+
             if (err.response?.status === 422) {
-                console.error('🟡 422 Unprocessable Entity - Validation failed');
-                console.error('Validation errors:', err.response?.data?.errors);
-                console.error('Full response:', err.response?.data);
-            }
-            
-            let errorMessage = 'Failed to upload proof image. ';
-            if (err.response?.status === 404) {
-                errorMessage = `Answer ID ${answerId} not found or doesn't belong to submission ${currentDraftId}. `;
-                errorMessage += 'This usually means the answer record wasn\'t properly saved. ';
-                errorMessage += 'Please save your draft again and try uploading the image.';
-                console.error('🔴 404 NOT FOUND - Answer ID mismatch', {
-                    requestedAnswerId: answerId,
-                    currentSubmissionId: currentDraftId,
-                    answerIdMap: answerIdMap,
-                    backendMessage: err.response?.data?.message
-                });
+                errorMessage = 'Our AI system could not verify this image as relevant to the audit question. Please provide a more specific image with a descriptive filename that clearly relates to your answer.';
+            } else if (err.response?.status === 404) {
+                errorMessage = 'Answer record not found. Please save your draft again and retry the upload.';
             } else if (err.response?.status === 403) {
-                errorMessage += 'You do not have permission to upload for this answer.';
+                errorMessage = 'You do not have permission to upload for this answer.';
             } else if (err.response?.status === 500) {
-                // Include backend debug info in error message if available
-                if (err.response?.data?.debug?.error_message) {
-                    errorMessage += `Server error: ${err.response.data.debug.error_message}`;
-                } else {
-                    errorMessage += 'Server error. Check browser console for details.';
-                }
-            } else if (err.response?.status === 422) {
-                // Reframe validation errors as AI content verification
-                errorMessage = 'AI analysis indicates this image does not accurately represent your answer. Please provide a more relevant image that clearly demonstrates your response.';
+                errorMessage = err.response?.data?.debug?.error_message
+                    ? `Server error: ${err.response.data.debug.error_message}`
+                    : 'Server error. Please try again or contact support.';
             } else if (err.response?.data?.message) {
-                errorMessage += err.response.data.message;
+                errorMessage = err.response.data.message;
             } else {
-                errorMessage += 'Please try again.';
+                errorMessage = 'Failed to upload the image. Please try again.';
             }
             
-            setImageErrors(prev => ({
-                ...prev,
-                [questionId]: errorMessage
-            }));
-            
-            // Auto-dismiss after 7 seconds for error messages
-            setTimeout(() => {
-                clearImageError(questionId);
-            }, 7000);
+            setImageErrors(prev => ({ ...prev, [questionId]: errorMessage }));
+            setTimeout(() => clearImageError(questionId), 9000);
         } finally {
-            setUploadingImages(prev => ({
-                ...prev,
-                [questionId]: false
-            }));
+            setUploadingImages(prev => ({ ...prev, [questionId]: false }));
         }
     };
 
-    // Delete proof image handler
     const handleDeleteImage = async (questionId, answerId) => {
-        if (!window.confirm('Are you sure you want to delete this proof image?')) {
-            return;
-        }
+        if (!window.confirm('Are you sure you want to remove this proof image?')) return;
 
-        // Use the actual answer ID from the map
         const actualAnswerId = answerIdMap[questionId] || answerId;
 
-        setUploadingImages(prev => ({
-            ...prev,
-            [questionId]: true
-        }));
+        setUploadingImages(prev => ({ ...prev, [questionId]: true }));
 
         try {
             const response = await api.delete(`audit-answers/${actualAnswerId}/proof-image`);
@@ -709,7 +1237,6 @@ const AuditForm = () => {
                     delete updated[questionId];
                     return updated;
                 });
-                // Clear analysis results
                 setAnalysisResults(prev => {
                     const updated = { ...prev };
                     delete updated[questionId];
@@ -721,31 +1248,16 @@ const AuditForm = () => {
                     return updated;
                 });
             } else {
-                setImageErrors(prev => ({
-                    ...prev,
-                    [questionId]: 'Failed to delete image'
-                }));
+                setImageErrors(prev => ({ ...prev, [questionId]: 'Failed to delete image' }));
             }
         } catch (err) {
             console.error('Image delete error:', err);
-            setImageErrors(prev => ({
-                ...prev,
-                [questionId]: 'Failed to delete proof image'
-            }));
+            setImageErrors(prev => ({ ...prev, [questionId]: 'Failed to delete proof image' }));
         } finally {
-            setUploadingImages(prev => ({
-                ...prev,
-                [questionId]: false
-            }));
+            setUploadingImages(prev => ({ ...prev, [questionId]: false }));
         }
     };
 
-    // Trigger file input
-    const triggerFileInput = (questionId) => {
-        fileInputRefs.current[questionId]?.click();
-    };
-
-    // Function to scroll to a specific question
     const scrollToQuestion = (questionIndex) => {
         if (questionIndex >= 0 && questionIndex < questions.length) {
             const question = questions[questionIndex];
@@ -770,14 +1282,10 @@ const AuditForm = () => {
     };
 
     const prepareDraftAnswers = () => {
-        const draftAnswers = Object.entries(answers)
+        return Object.entries(answers)
             .filter(([questionId, answer]) => {
-                // Filter out empty answers and invalid question IDs
                 const questionIdInt = parseInt(questionId);
-                if (!questionIdInt || questionIdInt <= 0 || isNaN(questionIdInt)) {
-                    console.warn(`Skipping invalid question ID: ${questionId}`);
-                    return false;
-                }
+                if (!questionIdInt || questionIdInt <= 0 || isNaN(questionIdInt)) return false;
                 const finalAnswer = getFinalAnswer(questionIdInt);
                 return finalAnswer && finalAnswer.trim() !== '';
             })
@@ -789,19 +1297,12 @@ const AuditForm = () => {
                     is_custom_answer: answer === 'Others'
                 };
             });
-        
-        console.log('Prepared draft answers:', draftAnswers);
-        return draftAnswers;
     };
 
     const handleSaveDraft = async () => {
-        // Check if there are actually unsaved changes
         if (!hasUnsavedChanges && currentDraftId) {
             setDraftSaveSuccess('Draft already saved');
-            // Auto-dismiss after 3 seconds
-            setTimeout(() => {
-                setDraftSaveSuccess(null);
-            }, 3000);
+            setTimeout(() => setDraftSaveSuccess(null), 3000);
             return;
         }
 
@@ -812,23 +1313,16 @@ const AuditForm = () => {
         try {
             const draftAnswers = prepareDraftAnswers();
 
-            // Validate that there is at least one answer
             if (draftAnswers.length === 0) {
                 setError('Please answer at least one question before saving a draft.');
                 setSavingDraft(false);
                 return;
             }
 
-            console.log('Saving draft with answers:', draftAnswers);
-
             let response;
             if (currentDraftId) {
-                // Update existing draft
-                console.log('Updating existing draft:', currentDraftId);
                 response = await draftAPI.updateDraft(currentDraftId, draftAnswers);
             } else {
-                // Create new draft
-                console.log('Creating new draft with set:', selectedSetId);
                 const draftPayload = {
                     title: `Draft - ${new Date().toLocaleDateString()}`,
                     questionnaire_set_id: selectedSetId,
@@ -836,45 +1330,29 @@ const AuditForm = () => {
                 };
                 response = await draftAPI.saveDraft(draftPayload);
                 const newDraftId = response.data.submission?.id || response.data.id;
-                console.log('New draft created with ID:', newDraftId);
                 
                 if (newDraftId) {
                     setCurrentDraftId(newDraftId);
-                    // Store in localStorage as backup
                     localStorage.setItem('currentDraftId', newDraftId.toString());
                 }
             }
 
-            // Build question ID to answer ID map from response
             const submission = response.data.submission || response.data;
             if (submission.answers && Array.isArray(submission.answers)) {
                 const newAnswerIdMap = {};
                 submission.answers.forEach(answer => {
                     newAnswerIdMap[answer.audit_question_id] = answer.id;
-                    console.debug('Answer created/updated:', {
-                        questionId: answer.audit_question_id,
-                        answerId: answer.id,
-                        answer: answer.answer
-                    });
                 });
                 setAnswerIdMap(newAnswerIdMap);
-                console.log('Updated answer ID map after draft save:', newAnswerIdMap);
-            } else {
-                console.warn('No answers in draft response:', submission);
             }
 
-            // Mark changes as saved
             setHasUnsavedChanges(false);
             setDraftSaveSuccess(
                 currentDraftId 
                     ? 'Draft updated successfully!' 
                     : 'Draft saved successfully! You can continue editing anytime.'
             );
-
-            // Clear success message after 5 seconds
-            setTimeout(() => {
-                setDraftSaveSuccess(null);
-            }, 5000);
+            setTimeout(() => setDraftSaveSuccess(null), 5000);
         } catch (err) {
             console.error('Draft save error:', err);
             if (err.response?.status === 401) {
@@ -885,19 +1363,12 @@ const AuditForm = () => {
                     }
                 });
             } else {
-                // Extract validation errors from backend response
                 let errorMessage = err.response?.data?.message || 'Failed to save draft. Please try again.';
-                
                 if (err.response?.data?.errors) {
-                    const errors = err.response.data.errors;
-                    const errorDetails = Object.entries(errors)
-                        .map(([field, messages]) => messages[0])
-                        .join('; ');
-                    errorMessage = `Validation error: ${errorDetails}`;
+                    const validationErrors = Object.values(err.response.data.errors).flat();
+                    errorMessage = validationErrors.join(', ');
                 }
-                
                 setError(errorMessage);
-                console.error('Full error response:', err.response?.data);
             }
         } finally {
             setSavingDraft(false);
@@ -905,128 +1376,20 @@ const AuditForm = () => {
     };
 
     const handleSubmitDraft = async () => {
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            const draftAnswers = prepareDraftAnswers();
-            
-            // Validate that all questions are answered
-            if (draftAnswers.length === 0 || getProgressPercentage() < 100) {
-                setError('Please answer all questions before submitting.');
-                setSubmitting(false);
-                return;
-            }
-
-            // If there's an existing draft, submit it
-            if (currentDraftId) {
-                console.log('Submitting existing draft:', currentDraftId);
-                // Update draft with final answers first
-                await draftAPI.updateDraft(currentDraftId, draftAnswers);
-                // Submit the draft
-                const response = await draftAPI.submitDraft(currentDraftId);
-                console.log('Draft submitted successfully:', response.data);
-            } else {
-                // No existing draft - submit directly with current answers
-                console.log('Submitting form directly (no draft)');
-                const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-                const submissionData = {
-                    questionnaire_set_id: selectedSetId,
-                    title: `Audit Report - ${new Date().toLocaleDateString()}`,
-                    answers: draftAnswers
-                };
-                const response = await api.post('audit-submissions', submissionData);
-                console.log('Form submitted successfully:', response.data);
-            }
-
-            setSuccess('Form submitted successfully!');
-            const resetAnswers = {};
-            const resetCustomAnswers = {};
-            questions.forEach(q => {
-                resetAnswers[q.id] = '';
-                resetCustomAnswers[q.id] = '';
-            });
-            setAnswers(resetAnswers);
-            setCustomAnswers(resetCustomAnswers);
-            setCurrentDraftId(null);
-            localStorage.removeItem('currentDraftId');
-            
-            // Redirect to submissions page after a delay
-            setTimeout(() => {
-                navigate('/submissions');
-            }, 2000);
-        } catch (err) {
-            console.error('Form submit error:', err);
-            if (err.response?.status === 401) {
-                navigate('/login', { 
-                    state: { 
-                        from: '/audit-form',
-                        message: 'Your session has expired. Please log in again.'
-                    }
-                });
-            } else {
-                setError(err.response?.data?.message || 'Failed to submit form. Please try again.');
-            }
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setSubmitting(true);
-        setError(null);
-        setSuccess(null);
-
-        // Validate current user authentication
-        const currentUser = localStorage.getItem('user');
-        const token = localStorage.getItem('token');
-        
-        console.log('Submitting audit for user:', {
-            token: token ? 'Present' : 'Missing',
-            user: currentUser ? JSON.parse(currentUser) : 'No user data',
-            userId: currentUser ? JSON.parse(currentUser).id : 'No user ID'
-        });
-        
-        if (!token || !currentUser) {
-            setError('Your session has expired. Please log in again.');
-            navigate('/login', { 
-                state: { 
-                    from: '/audit-form',
-                    message: 'Please log in to submit the form.'
-                }
-            });
+        if (!isFormValid()) {
+            setError('Please answer all questions and upload required proof images before submitting.');
             return;
         }
 
-        // Force refresh user data to ensure we have the latest authentication
+        setSubmitting(true);
+        setError(null);
+
+        // Re-authenticate
         try {
-            console.log('Refreshing user authentication before submission...');
-            const userResponse = await api.get('/user');
-            const freshUserData = userResponse.data;
-            
-            console.log('Fresh user data:', {
-                id: freshUserData.id,
-                name: freshUserData.name,
-                email: freshUserData.email
-            });
-            
-            // Update localStorage with fresh user data
+            const authResponse = await api.get('user');
+            const freshUserData = authResponse.data;
             localStorage.setItem('user', JSON.stringify(freshUserData));
-            
-            // Update the user context with fresh data
             updateUser(freshUserData);
-            console.log('Updated user context with fresh data');
-            
-            // Verify the user ID matches (use fresh data for comparison)
-            if (freshUserData.id !== user?.id) {
-                console.warn('User ID mismatch detected - using fresh data:', {
-                    contextUser: user?.id,
-                    freshUser: freshUserData.id
-                });
-                // Don't return error, just use the fresh data
-                console.log('Using fresh user data for submission validation');
-            }
         } catch (authError) {
             console.error('Failed to refresh user authentication:', authError);
             setError('Authentication error. Please log out and log in again.');
@@ -1067,32 +1430,10 @@ const AuditForm = () => {
 
             const response = await api.post('audit-submissions', submissionData);
             
-            // Log the full response structure for debugging
-            console.log('Submission response structure:', {
-                fullResponse: response.data,
-                submission: response.data?.submission,
-                userId: response.data?.submission?.user_id
-            });
-            
-            // Validate that the submission was created with the correct user ID
             const submittedUserId = response.data?.submission?.user_id;
-            const currentUserId = user?.id;
             const freshUserId = JSON.parse(localStorage.getItem('user'))?.id;
             
-            console.log('Submission validation:', {
-                submittedUserId,
-                contextUserId: currentUserId,
-                freshUserId: freshUserId,
-                matches: submittedUserId === freshUserId
-            });
-            
-            // Use fresh user ID for validation since context might be stale
             if (submittedUserId !== freshUserId) {
-                console.error('CRITICAL: Submission created with wrong user ID!', {
-                    expected: freshUserId,
-                    actual: submittedUserId,
-                    contextUser: currentUserId
-                });
                 setError('Error: Submission was created with incorrect user ID. Please try again.');
                 return;
             }
@@ -1125,21 +1466,12 @@ const AuditForm = () => {
         }
     };
 
-    // Check if an answer is truly complete (including image requirement for "Yes" answers)
     const isAnswerComplete = (questionId) => {
         const finalAnswer = getFinalAnswer(questionId);
-        
-        // Answer must have text
-        if (!finalAnswer || finalAnswer.trim() === '') {
-            return false;
-        }
-
-        // If answer is "Yes", require proof image
+        if (!finalAnswer || finalAnswer.trim() === '') return false;
         if (finalAnswer.toLowerCase() === 'yes') {
-            return !!proofImages[questionId]; // Must have proof image
+            return !!proofImages[questionId];
         }
-
-        // For other answers, just need the answer text
         return true;
     };
 
@@ -1147,10 +1479,6 @@ const AuditForm = () => {
         const totalQuestions = questions.length;
         const completeQuestions = questions.filter(q => isAnswerComplete(q.id)).length;
         return totalQuestions > 0 && completeQuestions === totalQuestions;
-    };
-
-    const hasAnsweredQuestions = () => {
-        return questions.some(q => isAnswerComplete(q.id));
     };
 
     const getProgressPercentage = () => {
@@ -1236,7 +1564,6 @@ const AuditForm = () => {
                                 </div>
                             )}
 
-                            {/* Show message if no set selected */}
                             {!selectedSetId && questionnaireSets.length > 0 && (
                                 <div className="alert alert-info d-flex align-items-center mt-3" role="alert">
                                     <i className="bi bi-info-circle-fill me-2"></i>
@@ -1246,7 +1573,6 @@ const AuditForm = () => {
                                 </div>
                             )}
 
-                            {/* Only show questions if a set is selected */}
                             {selectedSetId && questions.length === 0 && !loading && (
                                 <div className="alert alert-warning d-flex align-items-center mt-3" role="alert">
                                     <i className="bi bi-exclamation-circle-fill me-2"></i>
@@ -1255,6 +1581,8 @@ const AuditForm = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Existing Drafts */}
                             {existingDrafts.length > 0 && (
                                 <div className="mb-4">
                                     <h6 className="fw-bold text-primary mb-3">
@@ -1264,7 +1592,7 @@ const AuditForm = () => {
                                     <div className="row g-3">
                                         {existingDrafts.map((draft, index) => {
                                             const answerCount = draft.answers?.filter(answer => answer.answer && answer.answer.trim() !== '').length || 0;
-                                            const isMostRecent = index === 0; // First draft is most recent
+                                            const isMostRecent = index === 0;
                                             return (
                                                 <div key={draft.id} className="col-md-6">
                                                     <div 
@@ -1342,6 +1670,8 @@ const AuditForm = () => {
                                     <hr className="my-4" />
                                 </div>
                             )}
+
+                            {/* Progress Bar */}
                             {questions.length > 0 && (
                                 <div className="mb-3">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1457,7 +1787,7 @@ const AuditForm = () => {
                                                                 ></div>
                                                             </div>
                                                             <small className="text-muted">
-                                                                Questions: {categoryQuestions.map((q, idx) => questions.indexOf(q) + 1).join(', ')}
+                                                                Questions: {categoryQuestions.map((q) => questions.indexOf(q) + 1).join(', ')}
                                                             </small>
                                                         </div>
                                                     </div>
@@ -1488,6 +1818,7 @@ const AuditForm = () => {
                         </div>
                     )}
 
+                    {/* Questions */}
                     {questions.length > 0 && (
                         <div className="audit-form-container">
                             {questions.map((question, index) => {
@@ -1495,6 +1826,9 @@ const AuditForm = () => {
                                 const isComplete = isAnswerComplete(question.id);
                                 const needsImage = isAnswered && getFinalAnswer(question.id)?.toLowerCase() === 'yes' && !proofImages[question.id];
                                 const isCurrent = index === currentQuestionIndex;
+                                const isYesAnswer = answers[question.id]?.toLowerCase() === 'yes';
+                                const hasDraftSaved = !!answerIdMap[question.id];
+
                                 return (
                                     <div 
                                         key={question.id} 
@@ -1580,6 +1914,8 @@ const AuditForm = () => {
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {/* Custom answer */}
                                             {answers[question.id] === 'Others' && (
                                                 <div className="mb-3">
                                                     <div className="alert alert-warning border-0 mb-2" style={{ backgroundColor: '#fff3cd' }}>
@@ -1609,303 +1945,38 @@ const AuditForm = () => {
                                                     </div>
                                                 </div>
                                             )}
+
                                             {!isAnswered && (
                                                 <div className="text-warning small">
                                                     <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
                                                     Please provide an answer.
                                                 </div>
                                             )}
-                                            {isAnswered && answers[question.id]?.toLowerCase() === 'yes' && !proofImages[question.id] && (
-                                                <div className="alert alert-warning border-0 py-2 mb-3" role="alert">
-                                                    <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
-                                                    <small className="fw-semibold">Upload required - Since you answered "Yes", you must upload a proof image to complete this answer.</small>
-                                                </div>
-                                            )}
-                                            {/* Proof Image Upload Section - Only for "Yes" answers */}
-                                            {answers[question.id]?.toLowerCase() === 'yes' && (
-                                                <div className="mb-3 mt-4 p-3 border rounded" style={{ backgroundColor: '#f0f7ff' }}>
-                                                    <div className="d-flex align-items-center mb-3">
-                                                        <i className="bi bi-image text-info me-2" aria-hidden="true"></i>
-                                                        <label className="form-label fw-semibold text-dark mb-0">
-                                                            Proof Image Required <span className="text-danger">*</span>
-                                                        </label>
-                                                    </div>
-                                                    <p className="text-muted small mb-3">
-                                                        Since you answered "Yes", please upload a proof image that validates your answer.
-                                                    </p>
 
-                                                    {/* Error message for image upload */}
-                                                    {imageErrors[question.id] && (
-                                                        <div className="alert alert-warning alert-dismissible fade show mb-3 py-3 px-3" role="alert" style={{ borderLeft: '4px solid #ff9800' }}>
-                                                            <div className="d-flex align-items-start">
-                                                                <i className="bi bi-ai me-2" style={{ fontSize: '1.1rem', marginTop: '2px', color: '#ff9800' }}></i>
-                                                                <div className="flex-grow-1">
-                                                                    <h6 className="mb-1 fw-bold" style={{ color: '#333' }}>
-                                                                        <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                                                                        AI Verification Failed
-                                                                    </h6>
-                                                                    <p className="mb-0 small" style={{ color: '#666', lineHeight: '1.4' }}>
-                                                                        {imageErrors[question.id]}
-                                                                    </p>
-                                                                </div>
-                                                                <button 
-                                                                    type="button" 
-                                                                    className="btn-close" 
-                                                                    onClick={() => clearImageError(question.id)}
-                                                                    aria-label="Close"
-                                                                    style={{ marginTop: '2px' }}
-                                                                ></button>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Image upload area */}
-                                                    {!proofImages[question.id] ? (
-                                                        <div className="mb-3">
-                                                            <div
-                                                                className="border-2 border-dashed rounded p-4 text-center bg-white cursor-pointer"
-                                                                style={{ borderColor: '#0d6efd', cursor: 'pointer' }}
-                                                                onClick={() => triggerFileInput(question.id)}
-                                                                onDragOver={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.currentTarget.style.backgroundColor = '#f0f7ff';
-                                                                }}
-                                                                onDragLeave={(e) => {
-                                                                    e.currentTarget.style.backgroundColor = 'white';
-                                                                }}
-                                                                onDrop={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.currentTarget.style.backgroundColor = 'white';
-                                                                    if (e.dataTransfer.files.length > 0) {
-                                                                        handleImageUpload(question.id, e.dataTransfer.files[0]);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="file"
-                                                                    ref={(el) => { fileInputRefs.current[question.id] = el; }}
-                                                                    onChange={(e) => {
-                                                                        if (e.target.files?.length > 0) {
-                                                                            handleImageUpload(question.id, e.target.files[0]);
-                                                                        }
-                                                                    }}
-                                                                    accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf"
-                                                                    className="d-none"
-                                                                    aria-label="Upload proof image"
-                                                                />
-                                                                {uploadingImages[question.id] ? (
-                                                                    <>
-                                                                        <div className="spinner-border spinner-border-sm text-primary mb-2" role="status">
-                                                                            <span className="visually-hidden">Uploading...</span>
-                                                                        </div>
-                                                                        <p className="text-primary fw-semibold mb-0">Uploading...</p>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <i className="bi bi-cloud-arrow-up text-info" style={{ fontSize: '2rem' }}></i>
-                                                                        <p className="text-muted fw-semibold mb-1">Click to upload or drag and drop</p>
-                                                                        <p className="text-muted small mb-0">JPG, PNG, PDF, GIF up to 10 MB</p>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                            <small className="text-muted d-block mt-2">
-                                                                <i className="bi bi-info-circle me-1"></i>
-                                                                Upload another image to replace this one
-                                                            </small>
-                                                        </div>
-                                                    ) : (
-                                                        /* Image preview section */
-                                                        <div className="mb-3">
-                                                            {/* AI Analysis Section */}
-                                                            {analyzingImages[question.id] && (
-                                                                <div className="mb-3 p-4 border rounded" style={{ backgroundColor: '#f0f8ff', borderColor: '#0d6efd' }}>
-                                                                    <div className="d-flex align-items-center mb-3">
-                                                                        <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
-                                                                            <span className="visually-hidden">Analyzing...</span>
-                                                                        </div>
-                                                                        <h6 className="mb-0 fw-bold text-primary">
-                                                                            <i className="bi bi-cpu me-2"></i>
-                                                                            AI Analyzing Image...
-                                                                        </h6>
-                                                                    </div>
-
-                                                                    {/* Analysis Progress Bar */}
-                                                                    <div className="mb-3">
-                                                                        <div className="progress" style={{ height: '6px' }}>
-                                                                            <div
-                                                                                className="progress-bar bg-primary"
-                                                                                role="progressbar"
-                                                                                style={{ 
-                                                                                    width: `${analysisProgress[question.id] || 0}%`,
-                                                                                    transition: 'width 0.3s ease'
-                                                                                }}
-                                                                                aria-valuenow={Math.round(analysisProgress[question.id] || 0)}
-                                                                                aria-valuemin="0"
-                                                                                aria-valuemax="100"
-                                                                            ></div>
-                                                                        </div>
-                                                                        <small className="text-muted d-block mt-1">
-                                                                            {Math.round(analysisProgress[question.id] || 0)}% Complete
-                                                                        </small>
-                                                                    </div>
-
-                                                                    {/* Analysis Steps */}
-                                                                    <div className="small text-muted">
-                                                                        <div className="mb-2">
-                                                                            <i className="bi bi-check-circle text-success me-2"></i>
-                                                                            <span>Uploading image...</span>
-                                                                        </div>
-                                                                        <div className={analysisProgress[question.id] >= 25 ? 'mb-2' : 'd-none mb-2'}>
-                                                                            <i className={`bi ${analysisProgress[question.id] >= 50 ? 'bi-check-circle text-success' : 'bi-hourglass-split'} me-2`}></i>
-                                                                            <span>Analyzing content quality...</span>
-                                                                        </div>
-                                                                        <div className={analysisProgress[question.id] >= 50 ? 'mb-2' : 'd-none mb-2'}>
-                                                                            <i className={`bi ${analysisProgress[question.id] >= 75 ? 'bi-check-circle text-success' : 'bi-hourglass-split'} me-2`}></i>
-                                                                            <span>Verifying filename authenticity...</span>
-                                                                        </div>
-                                                                        <div className={analysisProgress[question.id] >= 75 ? '' : 'd-none'}>
-                                                                            <i className={`bi ${analysisProgress[question.id] >= 95 ? 'bi-check-circle text-success' : 'bi-hourglass-split'} me-2`}></i>
-                                                                            <span>Finalizing validation...</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Analysis Complete - Results */}
-                                                            {!analyzingImages[question.id] && analysisResults[question.id] && (
-                                                                <div className={`mb-3 p-3 border rounded ${analysisResults[question.id].status === 'approved' ? 'border-success bg-success bg-opacity-10' : 'border-warning bg-warning bg-opacity-10'}`}>
-                                                                    <div className="d-flex align-items-center mb-2">
-                                                                        {analysisResults[question.id].status === 'approved' ? (
-                                                                            <>
-                                                                                <i className="bi bi-shield-check text-success me-2" style={{ fontSize: '1.2rem' }}></i>
-                                                                                <h6 className="mb-0 fw-bold text-success">
-                                                                                    Image Verified by AI
-                                                                                </h6>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <i className="bi bi-exclamation-triangle text-warning me-2" style={{ fontSize: '1.2rem' }}></i>
-                                                                                <h6 className="mb-0 fw-bold text-warning">
-                                                                                    Image Flagged for Review
-                                                                                </h6>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                    <small className="text-muted d-block mb-2">
-                                                                        Confidence Score: <span className="fw-bold">{analysisResults[question.id].confidence}%</span>
-                                                                    </small>
-                                                                    <div className="mt-2">
-                                                                        <strong className="small d-block mb-2">Analysis Details:</strong>
-                                                                        <ul className="small mb-0 ps-3">
-                                                                            {analysisResults[question.id].details.map((detail, idx) => (
-                                                                                <li key={idx} className="text-muted mb-1">
-                                                                                    <i className="bi bi-check2 text-success me-1"></i>
-                                                                                    {detail}
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Image Display */}
-                                                            <div className="d-flex align-items-center p-3 bg-white border rounded mb-3">
-                                                                <div className="flex-grow-1">
-                                                                    <div className="d-flex align-items-center mb-2">
-                                                                        <i className="bi bi-file-image text-success me-2"></i>
-                                                                        <h6 className="fw-bold mb-0">{proofImages[question.id].filename}</h6>
-                                                                    </div>
-                                                                    <div className="d-flex align-items-center gap-2">
-                                                                        {proofImages[question.id].validated ? (
-                                                                            <span className="badge bg-success">
-                                                                                <i className="bi bi-check-circle me-1"></i>
-                                                                                Validated
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="badge bg-warning text-dark">
-                                                                                <i className="bi bi-exclamation-circle me-1"></i>
-                                                                                Pending Validation
-                                                                            </span>
-                                                                        )}
-                                                                        {proofImages[question.id].validationError && (
-                                                                            <small className="text-danger">
-                                                                                {proofImages[question.id].validationError}
-                                                                            </small>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteImage(question.id, answerIdMap[question.id])}
-                                                                    disabled={uploadingImages[question.id]}
-                                                                    className="btn btn-sm btn-outline-danger ms-2"
-                                                                    title="Delete this image"
-                                                                >
-                                                                    {uploadingImages[question.id] ? (
-                                                                        <>
-                                                                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                                                            Deleting...
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <i className="bi bi-trash me-1"></i>
-                                                                            Delete
-                                                                        </>
-                                                                    )}
-                                                                </button>
-                                                            </div>
-
-                                                            {proofImages[question.id].url && (
-                                                                <div className="mb-3">
-                                                                    <h6 className="text-muted small fw-semibold mb-2">
-                                                                        <i className="bi bi-image me-1"></i>
-                                                                        Image Preview
-                                                                    </h6>
-                                                                    <div 
-                                                                        className="border rounded p-2" 
-                                                                        style={{ 
-                                                                            backgroundColor: '#f8f9fa',
-                                                                            cursor: 'pointer',
-                                                                            transition: 'all 0.2s ease',
-                                                                            opacity: 1
-                                                                        }}
-                                                                        onMouseEnter={(e) => {
-                                                                            e.currentTarget.style.opacity = '0.85';
-                                                                            e.currentTarget.style.boxShadow = '0 0 0 2px #0d6efd';
-                                                                        }}
-                                                                        onMouseLeave={(e) => {
-                                                                            e.currentTarget.style.opacity = '1';
-                                                                            e.currentTarget.style.boxShadow = 'none';
-                                                                        }}
-                                                                        onClick={() => setExpandedImageUrl(proofImages[question.id].url)}
-                                                                    >
-                                                                        <img 
-                                                                            src={proofImages[question.id].url} 
-                                                                            alt="Proof image preview"
-                                                                            style={{
-                                                                                maxWidth: '100%',
-                                                                                maxHeight: '400px',
-                                                                                display: 'block',
-                                                                                margin: '0 auto',
-                                                                                borderRadius: '0.25rem',
-                                                                                objectFit: 'contain'
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                    <small className="text-muted d-block mt-2">
-                                                                        <i className="bi bi-zoom-in me-1"></i>
-                                                                        Click to view fullscreen
-                                                                    </small>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                            {/* ── Proof Image Upload — shown only for "Yes" answers ── */}
+                                            {isYesAnswer && (
+                                                <ProofImageUpload
+                                                    questionId={question.id}
+                                                    answerId={answerIdMap[question.id]}
+                                                    proofImage={proofImages[question.id] || null}
+                                                    uploadingImage={uploadingImages[question.id] || false}
+                                                    analyzingImage={analyzingImages[question.id] || false}
+                                                    analysisProgress={analysisProgress[question.id] || 0}
+                                                    analysisResult={analysisResults[question.id] || null}
+                                                    imageError={imageErrors[question.id] || null}
+                                                    onUpload={handleImageUpload}
+                                                    onDelete={handleDeleteImage}
+                                                    onClearError={clearImageError}
+                                                    onExpandImage={setExpandedImageUrl}
+                                                    hasDraftSaved={hasDraftSaved}
+                                                />
                                             )}
                                         </div>
                                     </div>
                                 );
                             })}
+
+                            {/* Submit / Save footer */}
                             <div className="card border-0 shadow-sm bg-light">
                                 <div className="card-body py-3">
                                     <div className="row align-items-center">
@@ -1981,7 +2052,7 @@ const AuditForm = () => {
                         </div>
                     )}
 
-                    {/* Floating Action Button for Quick Navigation and Draft Save */}
+                    {/* Floating Action Buttons */}
                     {questions.length > 0 && (
                         <div className="position-fixed" style={{ bottom: '20px', right: '20px', zIndex: 1000 }}>
                             <div className="btn-group-vertical" role="group">
@@ -2028,11 +2099,8 @@ const AuditForm = () => {
                         <div 
                             className="position-fixed"
                             style={{
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                backgroundColor: 'rgba(0, 0, 0, 0.88)',
                                 zIndex: 9999,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -2060,27 +2128,32 @@ const AuditForm = () => {
                                         maxHeight: '100%',
                                         borderRadius: '0.5rem',
                                         objectFit: 'contain',
-                                        boxShadow: '0 0 30px rgba(255, 255, 255, 0.2)'
+                                        boxShadow: '0 0 40px rgba(255, 255, 255, 0.15)'
                                     }}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setExpandedImageUrl(null)}
-                                    className="btn-close btn-close-white"
                                     style={{
                                         position: 'absolute',
-                                        top: '15px',
-                                        right: '15px',
-                                        width: '50px',
-                                        height: '50px',
+                                        top: '-16px',
+                                        right: '-16px',
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '50%',
+                                        background: '#fff',
+                                        border: 'none',
+                                        fontSize: '1rem',
+                                        cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: '1.5rem',
-                                        cursor: 'pointer'
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                                     }}
                                     aria-label="Close image"
-                                />
+                                >
+                                    ✕
+                                </button>
                                 <div
                                     style={{
                                         position: 'absolute',
@@ -2088,14 +2161,13 @@ const AuditForm = () => {
                                         left: '50%',
                                         transform: 'translateX(-50%)',
                                         color: 'white',
-                                        fontSize: '0.875rem',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                                        padding: '8px 16px',
-                                        borderRadius: '0.25rem',
-                                        textAlign: 'center'
+                                        fontSize: '0.8rem',
+                                        background: 'rgba(0,0,0,0.55)',
+                                        padding: '6px 14px',
+                                        borderRadius: '20px',
                                     }}
                                 >
-                                    Click outside or press ESC to close
+                                    Press <kbd style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '3px', padding: '1px 5px' }}>Esc</kbd> or click outside to close
                                 </div>
                             </div>
                         </div>
