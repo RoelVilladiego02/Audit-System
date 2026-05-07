@@ -482,7 +482,7 @@ const AuditForm = () => {
             console.log('Uploading image for answer ID:', answerId, 'Question ID:', questionId, 'Current submission ID:', currentDraftId);
 
             // ✅ Use Fetch API directly for file uploads (avoids axios FormData issues)
-            const { uploadProofImage } = await import('../../api/axios');
+            const { uploadProofImage } = await import('./axios');
             const response = await uploadProofImage(answerId, formData);
 
             if (response.data.success) {
