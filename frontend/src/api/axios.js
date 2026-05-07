@@ -376,9 +376,9 @@ instance.resetAuth = () => {
 };
 
 // ✅ DIRECT FILE UPLOAD using Fetch API (avoids axios FormData issues)
-export const uploadProofImage = async (answerId, formData) => {
+export const uploadProofImage = async (submissionId, answerId, formData) => {
     const token = localStorage.getItem('token');
-    const url = `${API_URL}/audit-answers/${answerId}/proof-image`;
+    const url = `${API_URL}/audit-submissions/${submissionId}/answers/${answerId}/proof-image`;
     
     if (DEBUG) {
         console.log('📤 Uploading proof image via Fetch API');

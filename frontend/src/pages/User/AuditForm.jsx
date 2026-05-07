@@ -483,7 +483,7 @@ const AuditForm = () => {
 
             // ✅ Use Fetch API directly for file uploads (avoids axios FormData issues)
             const { uploadProofImage } = await import('../../api/axios');
-            const response = await uploadProofImage(answerId, formData);
+            const response = await uploadProofImage(currentDraftId, answerId, formData);
 
             if (response.data.success) {
                 // Start AI analysis simulation
