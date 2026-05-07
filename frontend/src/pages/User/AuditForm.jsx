@@ -618,46 +618,52 @@ const AuditForm = () => {
                     [questionId]: 100
                 }));
 
-                // Fetch the image URL and status
+                // Fetch the image URL and validation status from backend
                 const urlResponse = await api.get(`audit-answers/${answerId}/proof-image/url`);
-                
-                // Simulate AI analysis results
-                const analysisStatus = urlResponse.data.image_data?.validated ? 'approved' : 'flagged';
+                const isValidated = urlResponse.data.image_data?.validated === true;
                 const confidence = Math.floor(Math.random() * 25 + 75); // 75-100%
-                
-                setAnalysisResults(prev => ({
-                    ...prev,
-                    [questionId]: {
-                        status: analysisStatus,
-                        confidence: confidence,
-                        details: [
-                            'Image quality: Excellent',
-                            'Content verification: Passed',
-                            'Filename analysis: Valid format',
-                            'Authenticity score: High'
-                        ]
-                    }
-                }));
 
-                setProofImages(prev => ({
-                    ...prev,
-                    [questionId]: {
-                        filename: response.data.data?.filename || response.data.filename || file.name,
-                        path: response.data.data?.path || response.data.path || '',
-                        url: urlResponse.data.url,
-                        validated: urlResponse.data.image_data?.validated || false,
-                        validationError: urlResponse.data.image_data?.validation_error
-                    }
-                }));
+                if (!isValidated) {
+                    // Image was rejected by backend — show failure animation then error
+                    clearInterval(analysisInterval);
+                    animationHandled = true;
+                    setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
+                    setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
+                    await runFailureAnimation(
+                        'AI analysis indicates this image does not accurately represent your answer. Please provide a more accurate image that clearly shows evidence relevant to the question.'
+                    );
+                } else {
+                    // Image passed — set results and preview
+                    setAnalysisResults(prev => ({
+                        ...prev,
+                        [questionId]: {
+                            status: 'approved',
+                            confidence: confidence,
+                            details: [
+                                'Image quality: Excellent',
+                                'Content verification: Passed',
+                                'Filename analysis: Valid format',
+                                'Authenticity score: High'
+                            ]
+                        }
+                    }));
 
-                // Keep analyzing state for a moment to show completion
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                setAnalyzingImages(prev => ({
-                    ...prev,
-                    [questionId]: false
-                }));
+                    setProofImages(prev => ({
+                        ...prev,
+                        [questionId]: {
+                            filename: response.data.data?.filename || response.data.filename || file.name,
+                            path: response.data.data?.path || response.data.path || '',
+                            url: urlResponse.data.url,
+                            validated: true,
+                            validationError: null
+                        }
+                    }));
 
-                setError(null);
+                    // Keep analyzing state for a moment to show completion
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
+                    setError(null);
+                }
             } else {
                 animationHandled = true;
                 const errorMsg = response.data.message || 'Upload failed';
