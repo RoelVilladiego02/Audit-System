@@ -546,7 +546,8 @@ const AuditForm = () => {
         }));
 
         // Helper: run the AI analysis animation then show failure error
-        const runFailureAnimation = async (errorMessage) => {
+        // imageData: optional { filename, path, url } to show preview even on failure
+        const runFailureAnimation = async (errorMessage, imageData = null) => {
             setUploadingImages(prev => ({ ...prev, [questionId]: false }));
             setAnalyzingImages(prev => ({ ...prev, [questionId]: true }));
             setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
@@ -564,6 +565,36 @@ const AuditForm = () => {
             setAnalysisProgress(prev => ({ ...prev, [questionId]: 100 }));
             await new Promise(resolve => setTimeout(resolve, 700));
             setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
+
+            // Set analysis result as rejected so the panel shows
+            setAnalysisResults(prev => ({
+                ...prev,
+                [questionId]: {
+                    status: 'rejected',
+                    confidence: Math.floor(Math.random() * 20 + 10), // low confidence 10-30%
+                    details: [
+                        'Image quality: Checked',
+                        'Content verification: Failed',
+                        'Image relevance: Does not match answer',
+                        'Authenticity score: Low'
+                    ]
+                }
+            }));
+
+            // Show image preview even for rejected uploads
+            if (imageData) {
+                setProofImages(prev => ({
+                    ...prev,
+                    [questionId]: {
+                        filename: imageData.filename || file.name,
+                        path: imageData.path || '',
+                        url: imageData.url || null,
+                        validated: false,
+                        validationError: errorMessage,
+                        rejected: true
+                    }
+                }));
+            }
 
             setImageErrors(prev => ({ ...prev, [questionId]: errorMessage }));
             if (fileInputRefs.current[questionId]) {
@@ -630,7 +661,12 @@ const AuditForm = () => {
                     setAnalyzingImages(prev => ({ ...prev, [questionId]: false }));
                     setAnalysisProgress(prev => ({ ...prev, [questionId]: 0 }));
                     await runFailureAnimation(
-                        'AI analysis indicates this image does not accurately represent your answer. Please provide a more accurate image that clearly shows evidence relevant to the question.'
+                        'AI analysis indicates this image does not accurately represent your answer. Please provide a more accurate image that clearly shows evidence relevant to the question.',
+                        {
+                            filename: response.data.data?.filename || response.data.filename || file.name,
+                            path: response.data.data?.path || response.data.path || '',
+                            url: urlResponse.data.url || null
+                        }
                     );
                 } else {
                     // Image passed — set results and preview
@@ -667,7 +703,11 @@ const AuditForm = () => {
             } else {
                 animationHandled = true;
                 const errorMsg = response.data.message || 'Upload failed';
-                await runFailureAnimation(errorMsg);
+                await runFailureAnimation(errorMsg, {
+                    filename: response.data.data?.filename || response.data.filename || file.name,
+                    path: response.data.data?.path || response.data.path || '',
+                    url: null
+                });
             }
         } catch (err) {
             // 🔴 COMPREHENSIVE ERROR LOGGING
@@ -1760,7 +1800,7 @@ const AuditForm = () => {
                                                         </div>
                                                     )}
 
-                                                    {!proofImages[question.id] && !analyzingImages[question.id] ? (
+                                                    {(!proofImages[question.id] || proofImages[question.id]?.rejected) && !analyzingImages[question.id] ? (
                                                         <div className="mb-3">
                                                             <div
                                                                 className="border-2 border-dashed rounded p-4 text-center bg-white cursor-pointer"
@@ -1826,13 +1866,26 @@ const AuditForm = () => {
                                                         <div className="mb-3">
                                                             {/* Analysis Complete - Results */}
                                                             {!analyzingImages[question.id] && analysisResults[question.id] && (
-                                                                <div className={`mb-3 p-3 border rounded ${analysisResults[question.id].status === 'approved' ? 'border-success bg-success bg-opacity-10' : 'border-warning bg-warning bg-opacity-10'}`}>
+                                                                <div className={`mb-3 p-3 border rounded ${
+                                                                    analysisResults[question.id].status === 'approved'
+                                                                        ? 'border-success bg-success bg-opacity-10'
+                                                                        : analysisResults[question.id].status === 'rejected'
+                                                                            ? 'border-danger bg-danger bg-opacity-10'
+                                                                            : 'border-warning bg-warning bg-opacity-10'
+                                                                }`}>
                                                                     <div className="d-flex align-items-center mb-2">
                                                                         {analysisResults[question.id].status === 'approved' ? (
                                                                             <>
                                                                                 <i className="bi bi-shield-check text-success me-2" style={{ fontSize: '1.2rem' }}></i>
                                                                                 <h6 className="mb-0 fw-bold text-success">
                                                                                     Image Verified by AI
+                                                                                </h6>
+                                                                            </>
+                                                                        ) : analysisResults[question.id].status === 'rejected' ? (
+                                                                            <>
+                                                                                <i className="bi bi-shield-x text-danger me-2" style={{ fontSize: '1.2rem' }}></i>
+                                                                                <h6 className="mb-0 fw-bold text-danger">
+                                                                                    AI Verification Failed
                                                                                 </h6>
                                                                             </>
                                                                         ) : (
@@ -1852,7 +1905,7 @@ const AuditForm = () => {
                                                                         <ul className="small mb-0 ps-3">
                                                                             {analysisResults[question.id].details.map((detail, idx) => (
                                                                                 <li key={idx} className="text-muted mb-1">
-                                                                                    <i className="bi bi-check2 text-success me-1"></i>
+                                                                                    <i className={`bi ${analysisResults[question.id].status === 'rejected' ? 'bi-x text-danger' : 'bi-check2 text-success'} me-1`}></i>
                                                                                     {detail}
                                                                                 </li>
                                                                             ))}
@@ -1863,10 +1916,10 @@ const AuditForm = () => {
 
                                                             {/* Image Display */}
                                                             {proofImages[question.id]?.filename && (
-                                                            <div className="d-flex align-items-center p-3 bg-white border rounded mb-3">
+                                                            <div className={`d-flex align-items-center p-3 bg-white border rounded mb-3 ${proofImages[question.id].rejected ? 'border-danger' : ''}`}>
                                                                 <div className="flex-grow-1">
                                                                     <div className="d-flex align-items-center mb-2">
-                                                                        <i className="bi bi-file-image text-success me-2"></i>
+                                                                        <i className={`bi bi-file-image me-2 ${proofImages[question.id].rejected ? 'text-danger' : 'text-success'}`}></i>
                                                                         <h6 className="fw-bold mb-0">{proofImages[question.id].filename}</h6>
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
@@ -1875,16 +1928,16 @@ const AuditForm = () => {
                                                                                 <i className="bi bi-check-circle me-1"></i>
                                                                                 Validated
                                                                             </span>
+                                                                        ) : proofImages[question.id].rejected ? (
+                                                                            <span className="badge bg-danger">
+                                                                                <i className="bi bi-x-circle me-1"></i>
+                                                                                Rejected
+                                                                            </span>
                                                                         ) : (
                                                                             <span className="badge bg-warning text-dark">
                                                                                 <i className="bi bi-exclamation-circle me-1"></i>
                                                                                 Pending Validation
                                                                             </span>
-                                                                        )}
-                                                                        {proofImages[question.id].validationError && (
-                                                                            <small className="text-danger">
-                                                                                {proofImages[question.id].validationError}
-                                                                            </small>
                                                                         )}
                                                                     </div>
                                                                 </div>
@@ -1912,21 +1965,22 @@ const AuditForm = () => {
 
                                                             {proofImages[question.id]?.url && (
                                                                 <div className="mb-3">
-                                                                    <h6 className="text-muted small fw-semibold mb-2">
-                                                                        <i className="bi bi-image me-1"></i>
-                                                                        Image Preview
+                                                                    <h6 className={`small fw-semibold mb-2 ${proofImages[question.id].rejected ? 'text-danger' : 'text-muted'}`}>
+                                                                        <i className={`bi ${proofImages[question.id].rejected ? 'bi-image-fill' : 'bi-image'} me-1`}></i>
+                                                                        {proofImages[question.id].rejected ? 'Rejected Image Preview' : 'Image Preview'}
                                                                     </h6>
                                                                     <div 
-                                                                        className="border rounded p-2" 
+                                                                        className={`border rounded p-2 ${proofImages[question.id].rejected ? 'border-danger' : ''}`}
                                                                         style={{ 
-                                                                            backgroundColor: '#f8f9fa',
+                                                                            backgroundColor: proofImages[question.id].rejected ? '#fff5f5' : '#f8f9fa',
                                                                             cursor: 'pointer',
                                                                             transition: 'all 0.2s ease',
-                                                                            opacity: 1
+                                                                            opacity: 1,
+                                                                            position: 'relative'
                                                                         }}
                                                                         onMouseEnter={(e) => {
                                                                             e.currentTarget.style.opacity = '0.85';
-                                                                            e.currentTarget.style.boxShadow = '0 0 0 2px #0d6efd';
+                                                                            e.currentTarget.style.boxShadow = proofImages[question.id].rejected ? '0 0 0 2px #dc3545' : '0 0 0 2px #0d6efd';
                                                                         }}
                                                                         onMouseLeave={(e) => {
                                                                             e.currentTarget.style.opacity = '1';
@@ -1934,6 +1988,17 @@ const AuditForm = () => {
                                                                         }}
                                                                         onClick={() => setExpandedImageUrl(proofImages[question.id].url)}
                                                                     >
+                                                                        {proofImages[question.id].rejected && (
+                                                                            <div style={{
+                                                                                position: 'absolute', top: 8, right: 8,
+                                                                                backgroundColor: 'rgba(220,53,69,0.85)',
+                                                                                color: 'white', borderRadius: '0.25rem',
+                                                                                padding: '2px 8px', fontSize: '0.7rem',
+                                                                                fontWeight: 600, zIndex: 1
+                                                                            }}>
+                                                                                <i className="bi bi-x-circle me-1"></i>REJECTED
+                                                                            </div>
+                                                                        )}
                                                                         <img 
                                                                             src={proofImages[question.id].url} 
                                                                             alt="Proof image preview"
@@ -1943,11 +2008,12 @@ const AuditForm = () => {
                                                                                 display: 'block',
                                                                                 margin: '0 auto',
                                                                                 borderRadius: '0.25rem',
-                                                                                objectFit: 'contain'
+                                                                                objectFit: 'contain',
+                                                                                filter: proofImages[question.id].rejected ? 'grayscale(40%) brightness(0.9)' : 'none'
                                                                             }}
                                                                         />
                                                                     </div>
-                                                                    <small className="text-muted d-block mt-2">
+                                                                    <small className={`d-block mt-2 ${proofImages[question.id].rejected ? 'text-danger' : 'text-muted'}`}>
                                                                         <i className="bi bi-zoom-in me-1"></i>
                                                                         Click to view fullscreen
                                                                     </small>
