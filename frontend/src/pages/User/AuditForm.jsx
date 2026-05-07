@@ -27,10 +27,10 @@ const AuditForm = () => {
     const [currentDraftId, setCurrentDraftId] = useState(null);
     const [savingDraft, setSavingDraft] = useState(false);
     const [draftSaveSuccess, setDraftSaveSuccess] = useState(null);
-    const [autosaveEnabled] = useState(true);
-    const [lastAutoSave, setLastAutoSave] = useState(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [existingDrafts, setExistingDrafts] = useState([]);
     const [loadingDrafts, setLoadingDrafts] = useState(false);
+    const autoSaveTimeoutRef = useRef(null); // Ref for debouncing auto-save
 
     // Proof image upload related state
     const [uploadingImages, setUploadingImages] = useState({}); // { questionId: boolean }
@@ -292,26 +292,31 @@ const AuditForm = () => {
         }
     }, [draftIdFromState, questions.length, loading]);
 
-    // Autosave effect - saves draft every 30 seconds if there are answers
+    // Auto-save with debounce when user makes changes
     useEffect(() => {
-        if (!autosaveEnabled || !questions.length || savingDraft || submitting || !user) {
+        if (!hasUnsavedChanges || !questions.length || savingDraft || submitting || !user) {
             return;
         }
 
-        const autosaveInterval = setInterval(() => {
-            const draftAnswers = prepareDraftAnswers();
-            
-            // Only autosave if there are answers and enough time has passed since last save
-            if (draftAnswers.length > 0) {
-                const now = new Date();
-                if (!lastAutoSave || (now - lastAutoSave) > 30000) { // 30 seconds
-                    handleSaveDraft();
-                }
-            }
-        }, 30000); // Check every 30 seconds
+        // Clear previous timeout
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
 
-        return () => clearInterval(autosaveInterval);
-    }, [autosaveEnabled, questions, answers, customAnswers, savingDraft, submitting, user, lastAutoSave]);
+        // Set new timeout for debounced auto-save (1 second after user stops typing/selecting)
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            const draftAnswers = prepareDraftAnswers();
+            if (draftAnswers.length > 0) {
+                handleSaveDraft();
+            }
+        }, 1000);
+
+        return () => {
+            if (autoSaveTimeoutRef.current) {
+                clearTimeout(autoSaveTimeoutRef.current);
+            }
+        };
+    }, [hasUnsavedChanges, questions, savingDraft, submitting, user]);
 
     // Intersection Observer to track which question is currently in view
     useEffect(() => {
@@ -405,6 +410,8 @@ const AuditForm = () => {
                 [questionId]: ''
             }));
         }
+        // Mark as having unsaved changes to trigger auto-save
+        setHasUnsavedChanges(true);
     };
 
     const handleCustomAnswerChange = (questionId, value) => {
@@ -412,6 +419,8 @@ const AuditForm = () => {
             ...prev,
             [questionId]: value
         }));
+        // Mark as having unsaved changes to trigger auto-save
+        setHasUnsavedChanges(true);
     };
 
     // Clear image error handler
@@ -723,6 +732,16 @@ const AuditForm = () => {
     };
 
     const handleSaveDraft = async () => {
+        // Check if there are actually unsaved changes
+        if (!hasUnsavedChanges && currentDraftId) {
+            setDraftSaveSuccess('Draft already saved');
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => {
+                setDraftSaveSuccess(null);
+            }, 3000);
+            return;
+        }
+
         setSavingDraft(true);
         setError(null);
         setDraftSaveSuccess(null);
@@ -781,7 +800,8 @@ const AuditForm = () => {
                 console.warn('No answers in draft response:', submission);
             }
 
-            setLastAutoSave(new Date());
+            // Mark changes as saved
+            setHasUnsavedChanges(false);
             setDraftSaveSuccess(
                 currentDraftId 
                     ? 'Draft updated successfully!' 
@@ -1811,10 +1831,10 @@ const AuditForm = () => {
                                                 <button
                                                     type="button"
                                                     onClick={handleSaveDraft}
-                                                    disabled={savingDraft || submitting || !hasAnsweredQuestions()}
-                                                    className={`btn btn-sm ${hasAnsweredQuestions() ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+                                                    disabled={savingDraft || submitting}
+                                                    className="btn btn-sm btn-outline-primary"
                                                     aria-label="Save draft"
-                                                    title={!hasAnsweredQuestions() ? 'Answer at least one question to save draft' : 'Save your progress'}
+                                                    title="Save your progress"
                                                 >
                                                     {savingDraft ? (
                                                         <>
@@ -1860,22 +1880,20 @@ const AuditForm = () => {
                     {questions.length > 0 && (
                         <div className="position-fixed" style={{ bottom: '20px', right: '20px', zIndex: 1000 }}>
                             <div className="btn-group-vertical" role="group">
-                                {hasAnsweredQuestions() && (
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveDraft}
-                                        disabled={savingDraft || submitting}
-                                        className="btn btn-success btn-sm rounded-circle mb-2"
-                                        style={{ width: '50px', height: '50px' }}
-                                        title="Save draft"
-                                    >
-                                        {savingDraft ? (
-                                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                        ) : (
-                                            <i className="bi bi-download" aria-hidden="true"></i>
-                                        )}
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleSaveDraft}
+                                    disabled={savingDraft || submitting}
+                                    className="btn btn-success btn-sm rounded-circle mb-2"
+                                    style={{ width: '50px', height: '50px' }}
+                                    title="Save draft"
+                                >
+                                    {savingDraft ? (
+                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    ) : (
+                                        <i className="bi bi-download" aria-hidden="true"></i>
+                                    )}
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => scrollToQuestion(currentQuestionIndex - 1)}
