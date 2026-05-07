@@ -233,8 +233,18 @@ const AuditForm = () => {
                             url: urlResponse.data.url || null
                         };
                         // Rebuild analysis result based on validated status
-                        restoredAnalysisResults[questionId] = {
-                            status: imageData.validated ? 'approved' : 'flagged',
+                        const isRejected = !imageData.validated;
+                        restoredAnalysisResults[questionId] = isRejected ? {
+                            status: 'rejected',
+                            confidence: Math.floor(Math.random() * 20 + 10), // low 10-30%
+                            details: [
+                                'Image quality: Checked',
+                                'Content verification: Failed',
+                                'Image relevance: Does not match answer',
+                                'Authenticity score: Low'
+                            ]
+                        } : {
+                            status: 'approved',
                             confidence: Math.floor(Math.random() * 15 + 83), // 83-98%
                             details: [
                                 'Image quality: Excellent',
@@ -243,6 +253,14 @@ const AuditForm = () => {
                                 'Authenticity score: High'
                             ]
                         };
+
+                        // Also mark rejected images in proofImagesWithUrls
+                        if (isRejected) {
+                            proofImagesWithUrls[questionId] = {
+                                ...proofImagesWithUrls[questionId],
+                                rejected: true
+                            };
+                        }
                     } catch (err) {
                         console.warn(`Failed to fetch URL for question ${questionId}:`, err);
                     }
