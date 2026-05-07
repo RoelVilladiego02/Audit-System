@@ -1818,7 +1818,7 @@ const AuditForm = () => {
                                                         </div>
                                                     )}
 
-                                                    {(!proofImages[question.id] || proofImages[question.id]?.rejected) && !analyzingImages[question.id] ? (
+                                                    {(!proofImages[question.id] || proofImages[question.id]?.rejected) && !analyzingImages[question.id] && (
                                                         <div className="mb-3">
                                                             <div
                                                                 className="border-2 border-dashed rounded p-4 text-center bg-white cursor-pointer"
@@ -1858,7 +1858,7 @@ const AuditForm = () => {
                                                                         </div>
                                                                         <p className="text-primary fw-semibold mb-0">Uploading...</p>
                                                                     </>
-                                                                ) : imageErrors[question.id] ? (
+                                                                ) : (imageErrors[question.id] || proofImages[question.id]?.rejected) ? (
                                                                     <>
                                                                         <i className="bi bi-arrow-repeat text-danger" style={{ fontSize: '2rem' }}></i>
                                                                         <p className="text-danger fw-semibold mb-1">Click to upload a more accurate image</p>
@@ -1879,8 +1879,10 @@ const AuditForm = () => {
                                                                     : 'Upload another image to replace this one'}
                                                             </small>
                                                         </div>
-                                                    ) : (
-                                                        /* Image preview section */
+                                                    )}
+
+                                                    {/* Image preview + analysis — shown for both approved and rejected */}
+                                                    {proofImages[question.id] && !analyzingImages[question.id] && (
                                                         <div className="mb-3">
                                                             {/* Analysis Complete - Results */}
                                                             {!analyzingImages[question.id] && analysisResults[question.id] && (
