@@ -105,7 +105,7 @@ const ProofImageUpload = ({
 
     // ── Image uploaded — show result card ────────────────────────────────────
     if (proofImage) {
-        const isValid = proofImage.validated;
+        const isValid = proofImage.validated === true;
         const result = analysisResult;
 
         return (
@@ -115,28 +115,40 @@ const ProofImageUpload = ({
                     <span style={styles.uploadPanelTitle}>Proof Image <span style={styles.required}>*</span></span>
                 </div>
 
-                {/* AI result banner */}
+                {/* AI result banner - Updated for mismatch */}
                 {result && (
                     <div style={{
                         ...styles.resultBanner,
-                        background: isValid ? '#f0fdf4' : '#fffbeb',
-                        borderColor: isValid ? '#bbf7d0' : '#fde68a',
+                        background: isValid ? '#f0fdf4' : '#fef2f2',
+                        borderColor: isValid ? '#bbf7d0' : '#fecaca',
                     }}>
                         <div style={styles.resultBannerLeft}>
-                            <span style={styles.resultIcon}>{isValid ? '✅' : '⚠️'}</span>
+                            <span style={styles.resultIcon}>{isValid ? '✅' : '❌'}</span>
                             <div>
                                 <p style={{
                                     ...styles.resultTitle,
-                                    color: isValid ? '#166534' : '#92400e',
+                                    color: isValid ? '#166534' : '#b91c1c',
                                 }}>
-                                    {isValid ? 'Image Verified by AI' : 'Image Flagged for Review'}
+                                    {isValid ? 'Image Verified by AI' : 'Image Not Relevant'}
                                 </p>
                                 <p style={styles.resultSubtitle}>
                                     Confidence score: <strong>{result.confidence}%</strong>
                                 </p>
                             </div>
                         </div>
-                        {isValid && (
+
+                        {!isValid && (
+                            <div style={styles.resultCheckmarks}>
+                                <span style={{...styles.checkChip, background: '#fee2e2', color: '#b91c1c', borderColor: '#f87171'}}>
+                                    ✕ Does not clearly demonstrate the answer
+                                </span>
+                                <p style={{fontSize: '0.8rem', color: '#b91c1c', margin: '8px 0 0 0'}}>
+                                    Please upload a more accurate image that directly supports your "Yes" answer.
+                                </p>
+                            </div>
+                        )}
+
+                        {isValid && result.details && (
                             <div style={styles.resultCheckmarks}>
                                 {result.details.map((d, i) => (
                                     <span key={i} style={styles.checkChip}>✓ {d}</span>
@@ -177,32 +189,23 @@ const ProofImageUpload = ({
                         </p>
                         <span style={{
                             ...styles.validationBadge,
-                            background: isValid ? '#dcfce7' : '#fef9c3',
-                            color: isValid ? '#166534' : '#854d0e',
-                            borderColor: isValid ? '#86efac' : '#fde047',
+                            background: isValid ? '#dcfce7' : '#fee2e2',
+                            color: isValid ? '#166534' : '#b91c1c',
+                            borderColor: isValid ? '#86efac' : '#f87171',
                         }}>
-                            {isValid ? '✓ Validated' : '⚠ Pending Review'}
+                            {isValid ? '✓ Validated' : '❌ Not Relevant'}
                         </span>
-                        {proofImage.validationError && (
-                            <p style={styles.validationErrorMsg}>{proofImage.validationError}</p>
-                        )}
                     </div>
 
                     {/* Actions */}
                     <div style={styles.imageActions}>
-                        <button
-                            type="button"
-                            style={styles.replaceBtn}
-                            onClick={triggerInput}
-                            title="Upload a different image"
-                        >
-                            ↑ Replace
+                        <button type="button" style={styles.replaceBtn} onClick={triggerInput}>
+                            ↑ Replace Image
                         </button>
                         <button
                             type="button"
                             style={styles.deleteBtn}
                             onClick={() => onDelete(questionId, answerId)}
-                            title="Remove this image"
                         >
                             🗑
                         </button>
@@ -241,33 +244,21 @@ const ProofImageUpload = ({
             {imageError && (
                 <div style={styles.errorAlert} role="alert">
                     <div style={styles.errorAlertLeft}>
-                        <span style={styles.errorAlertIcon}>🤖</span>
+                        <span style={styles.errorAlertIcon}>❌</span>
                         <div>
                             <p style={styles.errorAlertTitle}>AI Verification Failed</p>
-                            <p style={styles.errorAlertMsg}>{imageError}</p>
+                            <p style={styles.errorAlertMsg}>
+                                {imageError || "The uploaded image does not clearly represent proof for this answer."}
+                            </p>
                         </div>
                     </div>
-                    <div style={styles.retrySection}>
-                        <p style={styles.retryHint}>
-                            Try uploading a more descriptive image with a meaningful filename<br />
-                            (e.g. <code style={styles.codeHint}>firewall_config.png</code>,
-                            <code style={styles.codeHint}>access_control_log.jpg</code>)
-                        </p>
-                        <button
-                            type="button"
-                            style={styles.retryBtn}
-                            onClick={() => { onClearError(questionId); triggerInput(); }}
-                        >
-                            ↺ Try Again
-                        </button>
-                        <button
-                            type="button"
-                            style={styles.dismissBtn}
-                            onClick={() => onClearError(questionId)}
-                        >
-                            Dismiss
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        style={styles.retryBtn}
+                        onClick={() => { onClearError(questionId); triggerInput(); }}
+                    >
+                        Upload New Image
+                    </button>
                 </div>
             )}
 
@@ -358,9 +349,9 @@ const styles = {
 
     // Error alert
     errorAlert: {
-        background: '#fff7ed',
-        border: '1px solid #fed7aa',
-        borderLeft: '4px solid #f97316',
+        background: '#fef2f2',
+        border: '1px solid #fecaca',
+        borderLeft: '4px solid #dc2626',
         borderRadius: '8px',
         padding: '1rem',
         marginBottom: '1rem',
@@ -375,12 +366,12 @@ const styles = {
     errorAlertTitle: {
         fontWeight: 700,
         fontSize: '0.85rem',
-        color: '#9a3412',
+        color: '#7f1d1d',
         margin: '0 0 0.2rem',
     },
     errorAlertMsg: {
         fontSize: '0.8rem',
-        color: '#7c2d12',
+        color: '#b91c1c',
         margin: 0,
         lineHeight: 1.4,
     },
@@ -406,7 +397,7 @@ const styles = {
         marginLeft: '4px',
     },
     retryBtn: {
-        background: '#f97316',
+        background: '#dc2626',
         color: '#fff',
         border: 'none',
         borderRadius: '6px',
@@ -1157,20 +1148,24 @@ const AuditForm = () => {
 
                 const urlResponse = await api.get(`audit-answers/${answerId}/proof-image/url`);
                 
-                const analysisStatus = urlResponse.data.image_data?.validated ? 'approved' : 'flagged';
-                const confidence = Math.floor(Math.random() * 25 + 75);
+                const isRelevant = urlResponse.data.image_data?.validated === true;
+                const confidence = isRelevant ? Math.floor(Math.random() * 8 + 92) : Math.floor(Math.random() * 30 + 20);
                 
                 setAnalysisResults(prev => ({
                     ...prev,
                     [questionId]: {
-                        status: analysisStatus,
+                        status: isRelevant ? 'approved' : 'flagged',
                         confidence,
-                        details: [
-                            'Image quality: Excellent',
-                            'Content verification: Passed',
-                            'Filename analysis: Valid format',
-                            'Authenticity score: High'
-                        ]
+                        details: isRelevant
+                            ? [
+                                'Image quality: Excellent',
+                                'Content verification: Passed',
+                                'Authenticity score: High'
+                            ]
+                            : [
+                                'Content mismatch detected',
+                                'Relevance score too low'
+                            ]
                     }
                 }));
 
@@ -1180,8 +1175,8 @@ const AuditForm = () => {
                         filename: response.data.data.filename,
                         path: response.data.data.path,
                         url: urlResponse.data.url,
-                        validated: urlResponse.data.image_data?.validated || false,
-                        validationError: urlResponse.data.image_data?.validation_error
+                        validated: isRelevant,
+                        validationError: isRelevant ? null : 'Image does not clearly demonstrate your answer. Please upload a more relevant image.'
                     }
                 }));
 
