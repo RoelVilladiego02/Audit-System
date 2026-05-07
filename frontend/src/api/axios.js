@@ -375,6 +375,56 @@ instance.resetAuth = () => {
     });
 };
 
+// ✅ DIRECT FILE UPLOAD using Fetch API (avoids axios FormData issues)
+export const uploadProofImage = async (answerId, formData) => {
+    const token = localStorage.getItem('token');
+    const url = `${API_URL}/audit-answers/${answerId}/proof-image`;
+    
+    if (DEBUG) {
+        console.log('📤 Uploading proof image via Fetch API');
+        console.log('   URL:', url);
+        console.log('   Answer ID:', answerId);
+        console.log('   FormData entries:', Array.from(formData.entries()).map(([k, v]) => [k, v instanceof File ? `File(${v.name}, ${v.size}b)` : v]));
+    }
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            // ✅ CRITICAL: Do NOT set Content-Type - browser will set multipart/form-data with boundary
+        },
+        body: formData,  // FormData will be sent as multipart/form-data automatically
+        credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+        if (DEBUG) {
+            console.error('❌ Upload failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                data: data
+            });
+        }
+        throw {
+            response: {
+                status: response.status,
+                statusText: response.statusText,
+                data: data
+            }
+        };
+    }
+    
+    if (DEBUG) {
+        console.log('✅ Upload successful:', data);
+    }
+    
+    return { data };
+};
+
 // Draft API methods
 export const draftAPI = {
     // Save a new draft submission
