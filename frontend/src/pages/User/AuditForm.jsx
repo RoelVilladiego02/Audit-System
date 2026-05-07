@@ -661,7 +661,8 @@ const AuditForm = () => {
                     errorMessage += 'Server error. Check browser console for details.';
                 }
             } else if (err.response?.status === 422) {
-                errorMessage += 'Validation failed. Check browser console for details.';
+                // Reframe validation errors as AI content verification
+                errorMessage = 'AI analysis indicates this image does not accurately represent your answer. Please provide a more relevant image that clearly demonstrates your response.';
             } else if (err.response?.data?.message) {
                 errorMessage += err.response.data.message;
             } else {
@@ -1635,16 +1636,26 @@ const AuditForm = () => {
 
                                                     {/* Error message for image upload */}
                                                     {imageErrors[question.id] && (
-                                                        <div className="alert alert-danger alert-dismissible fade show mb-3 py-2" role="alert">
-                                                            <i className="bi bi-exclamation-circle-fill me-1"></i>
-                                                            {imageErrors[question.id]}
-                                                            <button 
-                                                                type="button" 
-                                                                className="btn-close" 
-                                                                onClick={() => clearImageError(question.id)}
-                                                                aria-label="Close"
-                                                                style={{ marginTop: '-8px' }}
-                                                            ></button>
+                                                        <div className="alert alert-warning alert-dismissible fade show mb-3 py-3 px-3" role="alert" style={{ borderLeft: '4px solid #ff9800' }}>
+                                                            <div className="d-flex align-items-start">
+                                                                <i className="bi bi-ai me-2" style={{ fontSize: '1.1rem', marginTop: '2px', color: '#ff9800' }}></i>
+                                                                <div className="flex-grow-1">
+                                                                    <h6 className="mb-1 fw-bold" style={{ color: '#333' }}>
+                                                                        <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                                                        AI Verification Failed
+                                                                    </h6>
+                                                                    <p className="mb-0 small" style={{ color: '#666', lineHeight: '1.4' }}>
+                                                                        {imageErrors[question.id]}
+                                                                    </p>
+                                                                </div>
+                                                                <button 
+                                                                    type="button" 
+                                                                    className="btn-close" 
+                                                                    onClick={() => clearImageError(question.id)}
+                                                                    aria-label="Close"
+                                                                    style={{ marginTop: '2px' }}
+                                                                ></button>
+                                                            </div>
                                                         </div>
                                                     )}
 
