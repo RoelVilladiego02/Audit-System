@@ -1917,11 +1917,11 @@ const AuditForm = () => {
                                                         <div className="mb-3">
                                                             {/* Image metadata and controls */}
                                                             {proofImages[question.id]?.filename && (
-                                                            <div className={`d-flex align-items-center p-3 bg-white border rounded mb-3 ${proofImages[question.id].rejected ? 'border-danger' : ''}`}>
-                                                                <div className="flex-grow-1">
-                                                                    <div className="d-flex align-items-center mb-2">
-                                                                        <i className={`bi bi-file-image me-2 ${proofImages[question.id].rejected ? 'text-danger' : 'text-success'}`}></i>
-                                                                        <h6 className="fw-bold mb-0">{proofImages[question.id].filename}</h6>
+                                                            <div className={`d-flex flex-wrap align-items-start justify-content-between gap-2 p-3 bg-white border rounded mb-3 ${proofImages[question.id].rejected ? 'border-danger' : ''}`}>
+                                                                <div className="flex-grow-1" style={{ minWidth: '0' }}>
+                                                                    <div className="d-flex align-items-flex-start mb-2">
+                                                                        <i className={`bi bi-file-image me-2 ${proofImages[question.id].rejected ? 'text-danger' : 'text-success'}`} style={{ flexShrink: 0 }}></i>
+                                                                        <h6 className="fw-bold mb-0" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{proofImages[question.id].filename}</h6>
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
                                                                         {proofImages[question.id].validated ? (
@@ -1946,18 +1946,19 @@ const AuditForm = () => {
                                                                     type="button"
                                                                     onClick={() => handleDeleteImage(question.id, answerIdMap[question.id])}
                                                                     disabled={uploadingImages[question.id]}
-                                                                    className="btn btn-sm btn-outline-danger ms-2"
+                                                                    className="btn btn-sm btn-outline-danger"
+                                                                    style={{ flexShrink: 0 }}
                                                                     title="Delete this image"
                                                                 >
                                                                     {uploadingImages[question.id] ? (
                                                                         <>
                                                                             <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                                                            Deleting...
+                                                                            <span className="d-none d-sm-inline">Deleting...</span>
                                                                         </>
                                                                     ) : (
                                                                         <>
                                                                             <i className="bi bi-trash me-1"></i>
-                                                                            Delete
+                                                                            <span className="d-none d-sm-inline">Delete</span>
                                                                         </>
                                                                     )}
                                                                 </button>
