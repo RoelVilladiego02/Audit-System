@@ -1241,9 +1241,21 @@ const AuditForm = () => {
             return false;
         }
 
-        // If answer is "Yes", require proof image
+        // If answer is "Yes", require proof image and it must be verified
         if (finalAnswer.toLowerCase() === 'yes') {
-            return !!proofImages[questionId]; // Must have proof image
+            // Must have proof image
+            if (!proofImages[questionId]) {
+                return false;
+            }
+            
+            // Check if image has failed AI verification
+            const analysisResult = analysisResults[questionId];
+            if (analysisResult && analysisResult.status === 'rejected') {
+                return false; // Image failed verification, mark as incomplete
+            }
+            
+            // Image must pass verification (approved status)
+            return analysisResult && analysisResult.status === 'approved';
         }
 
         // For other answers, just need the answer text
