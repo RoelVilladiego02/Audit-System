@@ -1851,13 +1851,13 @@ const AuditForm = () => {
                                                                     <>
                                                                         <i className="bi bi-arrow-repeat text-danger" style={{ fontSize: '2rem' }}></i>
                                                                         <p className="text-danger fw-semibold mb-1">Click to upload a more accurate image</p>
-                                                                        <p className="text-muted small mb-0">JPG, PNG, PDF, GIF up to 10 MB</p>
+                                                                        <p className="text-muted small mb-0">JPG, PNG, PDF up to 10 MB</p>
                                                                     </>
                                                                 ) : (
                                                                     <>
                                                                         <i className="bi bi-cloud-arrow-up text-info" style={{ fontSize: '2rem' }}></i>
                                                                         <p className="text-muted fw-semibold mb-1">Click to upload or drag and drop</p>
-                                                                        <p className="text-muted small mb-0">JPG, PNG, PDF, GIF up to 10 MB</p>
+                                                                        <p className="text-muted small mb-0">JPG, PNG, PDF up to 10 MB</p>
                                                                     </>
                                                                 )}
                                                             </div>
