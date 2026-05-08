@@ -1741,30 +1741,7 @@ const AuditForm = () => {
                                                         Since you answered "Yes", please upload a proof image that validates your answer.
                                                     </p>
 
-                                                    {/* Error message for image upload */}
-                                                    {imageErrors[question.id] && (
-                                                        <div className="alert alert-warning alert-dismissible fade show mb-3 py-3 px-3" role="alert" style={{ borderLeft: '4px solid #ff9800' }}>
-                                                            <div className="d-flex align-items-start">
-                                                                <i className="bi bi-ai me-2" style={{ fontSize: '1.1rem', marginTop: '2px', color: '#ff9800' }}></i>
-                                                                <div className="flex-grow-1">
-                                                                    <h6 className="mb-1 fw-bold" style={{ color: '#333' }}>
-                                                                        <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                                                                        AI Verification Failed
-                                                                    </h6>
-                                                                    <p className="mb-0 small" style={{ color: '#666', lineHeight: '1.4' }}>
-                                                                        {imageErrors[question.id]}
-                                                                    </p>
-                                                                </div>
-                                                                <button 
-                                                                    type="button" 
-                                                                    className="btn-close" 
-                                                                    onClick={() => clearImageError(question.id)}
-                                                                    aria-label="Close"
-                                                                    style={{ marginTop: '2px' }}
-                                                                ></button>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    {/* Placeholder - Error message will be integrated below with detailed analysis */}
 
                                                     {/* Image upload area */}
                                                     {/* AI Analysis in Progress - shown during both success and failure flows */}
@@ -1874,67 +1851,71 @@ const AuditForm = () => {
                                                             </div>
                                                             <small className={`d-block mt-2 ${imageErrors[question.id] ? 'text-danger' : 'text-muted'}`}>
                                                                 <i className={`bi ${imageErrors[question.id] ? 'bi-exclamation-circle' : 'bi-info-circle'} me-1`}></i>
-                                                                {imageErrors[question.id] 
-                                                                    ? 'Please provide a more accurate image that clearly shows evidence relevant to the question.'
-                                                                    : 'Upload another image to replace this one'}
+                                                                Upload another image to replace this one
                                                             </small>
                                                         </div>
                                                     )}
 
-                                                    {/* Image preview + analysis — shown for both approved and rejected */}
-                                                    {proofImages[question.id] && !analyzingImages[question.id] && (
-                                                        <div className="mb-3">
-                                                            {/* Analysis Complete - Results */}
-                                                            {!analyzingImages[question.id] && analysisResults[question.id] && (
-                                                                <div className={`mb-3 p-3 border rounded ${
-                                                                    analysisResults[question.id].status === 'approved'
-                                                                        ? 'border-success bg-success bg-opacity-10'
-                                                                        : analysisResults[question.id].status === 'rejected'
-                                                                            ? 'border-danger bg-danger bg-opacity-10'
-                                                                            : 'border-warning bg-warning bg-opacity-10'
-                                                                }`}>
-                                                                    <div className="d-flex align-items-center mb-2">
-                                                                        {analysisResults[question.id].status === 'approved' ? (
-                                                                            <>
-                                                                                <i className="bi bi-shield-check text-success me-2" style={{ fontSize: '1.2rem' }}></i>
-                                                                                <h6 className="mb-0 fw-bold text-success">
-                                                                                    Image Verified by AI
-                                                                                </h6>
-                                                                            </>
-                                                                        ) : analysisResults[question.id].status === 'rejected' ? (
-                                                                            <>
-                                                                                <i className="bi bi-shield-x text-danger me-2" style={{ fontSize: '1.2rem' }}></i>
-                                                                                <h6 className="mb-0 fw-bold text-danger">
-                                                                                    AI Verification Failed
-                                                                                </h6>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <i className="bi bi-exclamation-triangle text-warning me-2" style={{ fontSize: '1.2rem' }}></i>
-                                                                                <h6 className="mb-0 fw-bold text-warning">
-                                                                                    Image Flagged for Review
-                                                                                </h6>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                    <small className="text-muted d-block mb-2">
-                                                                        Confidence Score: <span className="fw-bold">{analysisResults[question.id].confidence}%</span>
-                                                                    </small>
-                                                                    <div className="mt-2">
-                                                                        <strong className="small d-block mb-2">Analysis Details:</strong>
-                                                                        <ul className="small mb-0 ps-3">
-                                                                            {analysisResults[question.id].details.map((detail, idx) => (
-                                                                                <li key={idx} className="text-muted mb-1">
-                                                                                    <i className={`bi ${analysisResults[question.id].status === 'rejected' ? 'bi-x text-danger' : 'bi-check2 text-success'} me-1`}></i>
-                                                                                    {detail}
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                    {/* Detailed Analysis Results - Show for rejected images */}
+                                                    {(imageErrors[question.id] || analysisResults[question.id]?.status === 'rejected') && analysisResults[question.id] && !analyzingImages[question.id] && (
+                                                        <div className={`mb-3 p-3 border rounded ${
+                                                            analysisResults[question.id].status === 'rejected'
+                                                                ? 'border-danger bg-danger bg-opacity-10'
+                                                                : 'border-warning bg-warning bg-opacity-10'
+                                                        }`}>
+                                                            <div className="d-flex align-items-center mb-2">
+                                                                <i className="bi bi-shield-x text-danger me-2" style={{ fontSize: '1.2rem' }}></i>
+                                                                <h6 className="mb-0 fw-bold text-danger">
+                                                                    AI Verification Failed
+                                                                </h6>
+                                                            </div>
+                                                            <small className="text-muted d-block mb-3">
+                                                                Confidence Score: <span className="fw-bold">{analysisResults[question.id].confidence}%</span>
+                                                            </small>
+                                                            <div className="mt-2">
+                                                                <strong className="small d-block mb-2">Analysis Details:</strong>
+                                                                <ul className="small mb-0 ps-3">
+                                                                    {analysisResults[question.id].details.map((detail, idx) => (
+                                                                        <li key={idx} className="text-muted mb-1">
+                                                                            <i className="bi bi-x text-danger me-1"></i>
+                                                                            {detail}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    )}
 
-                                                            {/* Image Display */}
+                                                    {/* Detailed Analysis Results - Show for approved images */}
+                                                    {analysisResults[question.id]?.status === 'approved' && proofImages[question.id]?.validated && !analyzingImages[question.id] && (
+                                                        <div className="mb-3 p-3 border rounded border-success bg-success bg-opacity-10">
+                                                            <div className="d-flex align-items-center mb-2">
+                                                                <i className="bi bi-shield-check text-success me-2" style={{ fontSize: '1.2rem' }}></i>
+                                                                <h6 className="mb-0 fw-bold text-success">
+                                                                    Image Verified by AI
+                                                                </h6>
+                                                            </div>
+                                                            <small className="text-muted d-block mb-3">
+                                                                Confidence Score: <span className="fw-bold">{analysisResults[question.id].confidence}%</span>
+                                                            </small>
+                                                            <div className="mt-2">
+                                                                <strong className="small d-block mb-2">Analysis Details:</strong>
+                                                                <ul className="small mb-0 ps-3">
+                                                                    {analysisResults[question.id].details.map((detail, idx) => (
+                                                                        <li key={idx} className="text-muted mb-1">
+                                                                            <i className="bi bi-check2 text-success me-1"></i>
+                                                                            {detail}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Image preview + metadata for uploaded images (including rejected) */}
+                                                    {(proofImages[question.id] || analysisResults[question.id]?.status === 'rejected') && !analyzingImages[question.id] && (
+                                                        <div className="mb-3">
+                                                            {/* Image metadata and controls */}
                                                             {proofImages[question.id]?.filename && (
                                                             <div className={`d-flex align-items-center p-3 bg-white border rounded mb-3 ${proofImages[question.id].rejected ? 'border-danger' : ''}`}>
                                                                 <div className="flex-grow-1">
