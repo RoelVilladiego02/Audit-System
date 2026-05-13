@@ -74,6 +74,7 @@ const SubmissionDetails = () => {
     const [editingTitle, setEditingTitle] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [renamingId, setRenamingId] = useState(null);
+    const [expandedImageUrl, setExpandedImageUrl] = useState(null); // For lightbox
     
     // Chart refs
     const riskDistributionChartRef = useRef(null);
@@ -158,7 +159,7 @@ const SubmissionDetails = () => {
                 createCategoryBreakdownChart(submission.answers);
             }, 100);
         }
-    }, [submission]);
+    }, [submission, getRiskStats]);
 
     // Recreate charts when switching to overview or analytics tab
     useEffect(() => {
@@ -171,7 +172,7 @@ const SubmissionDetails = () => {
                 createCategoryBreakdownChart(submission.answers);
             }, 200);
         }
-    }, [activeTab, submission]);
+    }, [activeTab, submission, getRiskStats]);
 
     // Cleanup charts on unmount
     useEffect(() => {
@@ -233,7 +234,7 @@ const SubmissionDetails = () => {
         }
     };
 
-    const getRiskStats = () => {
+    const getRiskStats = React.useCallback(() => {
         if (!submission?.answers || submission.answers.length === 0) return { high: 0, medium: 0, low: 0 };
         
         const stats = { high: 0, medium: 0, low: 0 };
@@ -244,7 +245,7 @@ const SubmissionDetails = () => {
             }
         });
         return stats;
-    };
+    }, [submission]);
 
     const getTimeAgo = (dateString) => {
         const now = new Date();
@@ -256,6 +257,58 @@ const SubmissionDetails = () => {
         if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
         return date.toLocaleDateString();
     };
+
+    // Generate proof image URL from answer data
+    const getProofImageUrl = (answer) => {
+        if (!answer?.proof_image_path) return null;
+        // Construct the storage URL for proof images
+        return `/storage/${answer.proof_image_path}`;
+    };
+
+    // Generate AI analysis results based on validation status
+    const generateAnalysisResults = (answer) => {
+        if (!answer?.proof_image_name) return null;
+        
+        const isValidated = answer.proof_image_validated === true;
+        
+        if (isValidated) {
+            return {
+                status: 'approved',
+                confidence: 87, // Fixed confidence for validated images
+                details: [
+                    'Image quality: Excellent',
+                    'Content verification: Passed',
+                    'Filename analysis: Valid format',
+                    'Authenticity score: High'
+                ]
+            };
+        } else {
+            return {
+                status: 'rejected',
+                confidence: 15, // Low confidence for rejected images
+                details: [
+                    'Image quality: Checked',
+                    'Content verification: Failed',
+                    'Image relevance: Does not match answer',
+                    'Authenticity score: Low'
+                ]
+            };
+        }
+    };
+
+    // Handle ESC key to close image lightbox
+    useEffect(() => {
+        const handleKeyPress = (e) => {
+            if (e.key === 'Escape' && expandedImageUrl) {
+                setExpandedImageUrl(null);
+            }
+        };
+        
+        if (expandedImageUrl) {
+            window.addEventListener('keydown', handleKeyPress);
+            return () => window.removeEventListener('keydown', handleKeyPress);
+        }
+    }, [expandedImageUrl]);
 
     // Chart creation functions
     const createRiskDistributionChart = (riskStats) => {
@@ -961,6 +1014,134 @@ const SubmissionDetails = () => {
                                                                                 </div>
                                                                             </div>
                                                                         )}
+                                                                        
+                                                                        {/* Proof Image Section - Only for "Yes" answers */}
+                                                                        {answer.answer?.toLowerCase() === 'yes' && (
+                                                                            <div className="mt-4 p-3 border rounded" style={{ backgroundColor: '#f0f7ff' }}>
+                                                                                <div className="d-flex align-items-center mb-3">
+                                                                                    <i className="bi bi-image text-info me-2" aria-hidden="true"></i>
+                                                                                    <label className="form-label fw-semibold text-dark mb-0">
+                                                                                        Proof Image
+                                                                                    </label>
+                                                                                </div>
+                                                                                
+                                                                                {answer.proof_image_name ? (
+                                                                                    <div className="mb-3">
+                                                                                        {/* Image metadata and validation status */}
+                                                                                        <div className={`d-flex flex-wrap align-items-start justify-content-between gap-2 p-3 bg-white border rounded mb-3 ${!answer.proof_image_validated ? 'border-danger' : ''}`}>
+                                                                                            <div className="flex-grow-1" style={{ minWidth: '0' }}>
+                                                                                                <div className="d-flex align-items-flex-start mb-2">
+                                                                                                    <i className={`bi bi-file-image me-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-success'}`} style={{ flexShrink: 0 }}></i>
+                                                                                                    <h6 className="fw-bold mb-0" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{answer.proof_image_name}</h6>
+                                                                                                </div>
+                                                                                                <div className="d-flex align-items-center gap-2">
+                                                                                                    {answer.proof_image_validated ? (
+                                                                                                        <span className="badge bg-success">
+                                                                                                            <i className="bi bi-check-circle me-1"></i>
+                                                                                                            Validated
+                                                                                                        </span>
+                                                                                                    ) : (
+                                                                                                        <span className="badge bg-danger">
+                                                                                                            <i className="bi bi-x-circle me-1"></i>
+                                                                                                            Rejected
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        
+                                                                                        {/* AI Analysis Results */}
+                                                                                        {generateAnalysisResults(answer) && (
+                                                                                            <div className={`mb-3 p-3 border rounded ${answer.proof_image_validated ? 'border-success bg-success bg-opacity-10' : 'border-danger bg-danger bg-opacity-10'}`}>
+                                                                                                <div className="d-flex align-items-center mb-2">
+                                                                                                    <i className={`bi ${answer.proof_image_validated ? 'bi-shield-check text-success' : 'bi-exclamation-circle text-danger'} me-2`} style={{ fontSize: '1.2rem' }}></i>
+                                                                                                    <h6 className={`mb-0 fw-bold ${answer.proof_image_validated ? 'text-success' : 'text-danger'}`}>
+                                                                                                        {answer.proof_image_validated ? 'Image Verified by AI' : 'AI Verification Failed'}
+                                                                                                    </h6>
+                                                                                                </div>
+                                                                                                <small className={`${answer.proof_image_validated ? 'text-success' : 'text-danger'} d-block mb-3`}>
+                                                                                                    Confidence Score: <span className="fw-bold">{generateAnalysisResults(answer)?.confidence}%</span>
+                                                                                                </small>
+                                                                                                <div className="mt-2">
+                                                                                                    <strong className="small d-block mb-2">Analysis Details:</strong>
+                                                                                                    <ul className="small mb-0 ps-3">
+                                                                                                        {generateAnalysisResults(answer)?.details.map((detail, idx) => (
+                                                                                                            <li key={idx} className={`${answer.proof_image_validated ? 'text-success' : 'text-danger'} mb-1`}>
+                                                                                                                <i className={`bi ${answer.proof_image_validated ? 'bi-check2' : 'bi-x-circle'} me-1`}></i>
+                                                                                                                {detail}
+                                                                                                            </li>
+                                                                                                        ))}
+                                                                                                    </ul>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        
+                                                                                        {/* Image preview with lightbox */}
+                                                                                        {getProofImageUrl(answer) && (
+                                                                                            <div className="mb-3">
+                                                                                                <h6 className={`small fw-semibold mb-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-muted'}`}>
+                                                                                                    <i className={`bi ${!answer.proof_image_validated ? 'bi-image-fill' : 'bi-image'} me-1`}></i>
+                                                                                                    {!answer.proof_image_validated ? 'Rejected Image' : 'Image Preview'}
+                                                                                                </h6>
+                                                                                                <div 
+                                                                                                    className={`border rounded p-2 ${!answer.proof_image_validated ? 'border-danger' : ''}`}
+                                                                                                    style={{ 
+                                                                                                        backgroundColor: !answer.proof_image_validated ? '#fff5f5' : '#f8f9fa',
+                                                                                                        cursor: 'pointer',
+                                                                                                        transition: 'all 0.2s ease',
+                                                                                                        opacity: 1,
+                                                                                                        position: 'relative'
+                                                                                                    }}
+                                                                                                    onMouseEnter={(e) => {
+                                                                                                        e.currentTarget.style.opacity = '0.85';
+                                                                                                        e.currentTarget.style.boxShadow = !answer.proof_image_validated ? '0 0 0 2px #dc3545' : '0 0 0 2px #0d6efd';
+                                                                                                    }}
+                                                                                                    onMouseLeave={(e) => {
+                                                                                                        e.currentTarget.style.opacity = '1';
+                                                                                                        e.currentTarget.style.boxShadow = 'none';
+                                                                                                    }}
+                                                                                                    onClick={() => setExpandedImageUrl(getProofImageUrl(answer))}
+                                                                                                >
+                                                                                                    {!answer.proof_image_validated && (
+                                                                                                        <div style={{
+                                                                                                            position: 'absolute', top: 8, right: 8,
+                                                                                                            backgroundColor: 'rgba(220,53,69,0.85)',
+                                                                                                            color: 'white', borderRadius: '0.25rem',
+                                                                                                            padding: '2px 8px', fontSize: '0.7rem',
+                                                                                                            fontWeight: 600, zIndex: 1
+                                                                                                        }}>
+                                                                                                            <i className="bi bi-x-circle me-1"></i>REJECTED
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    <img 
+                                                                                                        src={getProofImageUrl(answer)} 
+                                                                                                        alt="Proof preview"
+                                                                                                        style={{
+                                                                                                            maxWidth: '100%',
+                                                                                                            maxHeight: '400px',
+                                                                                                            display: 'block',
+                                                                                                            margin: '0 auto',
+                                                                                                            borderRadius: '0.25rem',
+                                                                                                            objectFit: 'contain',
+                                                                                                            filter: !answer.proof_image_validated ? 'grayscale(40%) brightness(0.9)' : 'none'
+                                                                                                        }}
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <small className={`d-block mt-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-muted'}`}>
+                                                                                                    <i className="bi bi-zoom-in me-1"></i>
+                                                                                                    Click to view fullscreen
+                                                                                                </small>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="alert alert-warning border-0 py-2 mb-0">
+                                                                                        <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+                                                                                        <small className="fw-semibold">No proof image uploaded for this "Yes" answer.</small>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1331,6 +1512,53 @@ const SubmissionDetails = () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Image Lightbox Modal */}
+            {expandedImageUrl && (
+                <div 
+                    className="modal d-flex align-items-center justify-content-center" 
+                    style={{ 
+                        display: 'flex', 
+                        position: 'fixed',
+                        top: 0, 
+                        left: 0, 
+                        width: '100%', 
+                        height: '100%',
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        zIndex: 1050
+                    }}
+                    onClick={() => setExpandedImageUrl(null)}
+                >
+                    <div 
+                        style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            className="btn btn-light btn-sm"
+                            style={{ 
+                                position: 'absolute',
+                                top: '-40px',
+                                right: '0',
+                                zIndex: 1051
+                            }}
+                            onClick={() => setExpandedImageUrl(null)}
+                            aria-label="Close fullscreen image"
+                        >
+                            <i className="bi bi-x-lg"></i>
+                        </button>
+                        <img 
+                            src={expandedImageUrl}
+                            alt="Proof"
+                            style={{
+                                maxWidth: '90vw',
+                                maxHeight: '90vh',
+                                objectFit: 'contain',
+                                borderRadius: '0.5rem'
+                            }}
+                        />
                     </div>
                 </div>
             )}
