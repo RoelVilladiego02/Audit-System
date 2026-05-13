@@ -75,6 +75,8 @@ const SubmissionDetails = () => {
     const [newTitle, setNewTitle] = useState('');
     const [renamingId, setRenamingId] = useState(null);
     const [expandedImageUrl, setExpandedImageUrl] = useState(null); // For lightbox
+    const [proofImageData, setProofImageData] = useState({}); // { answerId: imageData }
+    const [loadingImages, setLoadingImages] = useState({}); // { answerId: isLoading }
     
     // Chart refs
     const riskDistributionChartRef = useRef(null);
@@ -258,11 +260,28 @@ const SubmissionDetails = () => {
         return date.toLocaleDateString();
     };
 
-    // Generate proof image URL from answer data
-    const getProofImageUrl = (answer) => {
-        if (!answer?.proof_image_path) return null;
-        // Construct the storage URL for proof images
-        return `/storage/${answer.proof_image_path}`;
+    // Fetch proof image data for a single answer
+    const fetchProofImageData = React.useCallback(async (answerId) => {
+        try {
+            setLoadingImages(prev => ({ ...prev, [answerId]: true }));
+            const response = await api.get(`audit-answers/${answerId}/proof-image/url`);
+            if (response.data.success) {
+                setProofImageData(prev => ({ ...prev, [answerId]: response.data }));
+            }
+        } catch (err) {
+            console.error(`Failed to fetch proof image for answer ${answerId}:`, err);
+        } finally {
+            setLoadingImages(prev => ({ ...prev, [answerId]: false }));
+        }
+    }, []);
+
+    // Fetch proof image data when answers are expanded
+    const handleExpandAnswer = (answerId, answer) => {
+        toggleAnswerExpansion(answerId);
+        // Fetch image data if answer has proof image and we haven't fetched it yet
+        if (answer?.proof_image_name && !proofImageData[answerId]) {
+            fetchProofImageData(answerId);
+        }
     };
 
     // Generate AI analysis results based on validation status
@@ -907,7 +926,7 @@ const SubmissionDetails = () => {
                                                                         </span>
                                                                         <button
                                                                             className="btn btn-sm btn-outline-primary ms-2"
-                                                                            onClick={() => toggleAnswerExpansion(answer.id)}
+                                                                            onClick={() => handleExpandAnswer(answer.id, answer)}
                                                                             aria-label={isExpanded ? "Collapse answer details" : "Expand answer details"}
                                                                             title={isExpanded ? "Collapse" : "Expand"}
                                                                         >
@@ -1016,7 +1035,7 @@ const SubmissionDetails = () => {
                                                                         )}
                                                                         
                                                                         {/* Proof Image Section - Only for "Yes" answers */}
-                                                                        {answer.answer?.toLowerCase() === 'yes' && (
+                                                                        {answer.answer?.toLowerCase() === 'yes' && answer.proof_image_name && (
                                                                             <div className="mt-4 p-3 border rounded" style={{ backgroundColor: '#f0f7ff' }}>
                                                                                 <div className="d-flex align-items-center mb-3">
                                                                                     <i className="bi bi-image text-info me-2" aria-hidden="true"></i>
@@ -1025,119 +1044,88 @@ const SubmissionDetails = () => {
                                                                                     </label>
                                                                                 </div>
                                                                                 
-                                                                                {answer.proof_image_name ? (
-                                                                                    <div className="mb-3">
-                                                                                        {/* Image metadata and validation status */}
-                                                                                        <div className={`d-flex flex-wrap align-items-start justify-content-between gap-2 p-3 bg-white border rounded mb-3 ${!answer.proof_image_validated ? 'border-danger' : ''}`}>
-                                                                                            <div className="flex-grow-1" style={{ minWidth: '0' }}>
-                                                                                                <div className="d-flex align-items-flex-start mb-2">
-                                                                                                    <i className={`bi bi-file-image me-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-success'}`} style={{ flexShrink: 0 }}></i>
-                                                                                                    <h6 className="fw-bold mb-0" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{answer.proof_image_name}</h6>
+                                                                                {loadingImages[answer.id] ? (
+                                                                                    <div className="p-3 bg-light rounded text-center">
+                                                                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                                                                            <span className="visually-hidden">Loading image...</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : proofImageData[answer.id] ? (
+                                                                                    <div className="border rounded p-3 bg-white">
+                                                                                        {/* Image filename and validation status */}
+                                                                                        <div className="d-flex align-items-center justify-content-between mb-2">
+                                                                                            <div className="flex-grow-1">
+                                                                                                <div className="d-flex align-items-center mb-2">
+                                                                                                    <i className="bi bi-file-image text-primary me-2"></i>
+                                                                                                    <span className="fw-semibold">{proofImageData[answer.id].image_data?.filename || answer.proof_image_name}</span>
                                                                                                 </div>
                                                                                                 <div className="d-flex align-items-center gap-2">
-                                                                                                    {answer.proof_image_validated ? (
+                                                                                                    {proofImageData[answer.id].image_data?.validated ? (
                                                                                                         <span className="badge bg-success">
-                                                                                                            <i className="bi bi-check-circle me-1"></i>
+                                                                                                            <i className="bi bi-check-circle-fill me-1"></i>
                                                                                                             Validated
                                                                                                         </span>
                                                                                                     ) : (
-                                                                                                        <span className="badge bg-danger">
+                                                                                                        <span className="badge bg-warning text-dark">
+                                                                                                            <i className="bi bi-exclamation-circle me-1"></i>
+                                                                                                            Not Validated
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                    {proofImageData[answer.id].image_data?.validation_error && (
+                                                                                                        <span className="badge bg-danger text-white">
                                                                                                             <i className="bi bi-x-circle me-1"></i>
-                                                                                                            Rejected
+                                                                                                            {proofImageData[answer.id].image_data.validation_error}
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
                                                                                             </div>
+                                                                                            {proofImageData[answer.id].url && (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    className="btn btn-sm btn-outline-primary ms-2"
+                                                                                                    onClick={() => setExpandedImageUrl(proofImageData[answer.id].url)}
+                                                                                                    title="View proof image fullscreen"
+                                                                                                >
+                                                                                                    <i className="bi bi-zoom-in me-1"></i>
+                                                                                                    View
+                                                                                                </button>
+                                                                                            )}
                                                                                         </div>
                                                                                         
-                                                                                        {/* AI Analysis Results */}
-                                                                                        {generateAnalysisResults(answer) && (
-                                                                                            <div className={`mb-3 p-3 border rounded ${answer.proof_image_validated ? 'border-success bg-success bg-opacity-10' : 'border-danger bg-danger bg-opacity-10'}`}>
-                                                                                                <div className="d-flex align-items-center mb-2">
-                                                                                                    <i className={`bi ${answer.proof_image_validated ? 'bi-shield-check text-success' : 'bi-exclamation-circle text-danger'} me-2`} style={{ fontSize: '1.2rem' }}></i>
-                                                                                                    <h6 className={`mb-0 fw-bold ${answer.proof_image_validated ? 'text-success' : 'text-danger'}`}>
-                                                                                                        {answer.proof_image_validated ? 'Image Verified by AI' : 'AI Verification Failed'}
-                                                                                                    </h6>
-                                                                                                </div>
-                                                                                                <small className={`${answer.proof_image_validated ? 'text-success' : 'text-danger'} d-block mb-3`}>
-                                                                                                    Confidence Score: <span className="fw-bold">{generateAnalysisResults(answer)?.confidence}%</span>
-                                                                                                </small>
-                                                                                                <div className="mt-2">
-                                                                                                    <strong className="small d-block mb-2">Analysis Details:</strong>
-                                                                                                    <ul className="small mb-0 ps-3">
-                                                                                                        {generateAnalysisResults(answer)?.details.map((detail, idx) => (
-                                                                                                            <li key={idx} className={`${answer.proof_image_validated ? 'text-success' : 'text-danger'} mb-1`}>
-                                                                                                                <i className={`bi ${answer.proof_image_validated ? 'bi-check2' : 'bi-x-circle'} me-1`}></i>
-                                                                                                                {detail}
-                                                                                                            </li>
-                                                                                                        ))}
-                                                                                                    </ul>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        
-                                                                                        {/* Image preview with lightbox */}
-                                                                                        {getProofImageUrl(answer) && (
-                                                                                            <div className="mb-3">
-                                                                                                <h6 className={`small fw-semibold mb-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-muted'}`}>
-                                                                                                    <i className={`bi ${!answer.proof_image_validated ? 'bi-image-fill' : 'bi-image'} me-1`}></i>
-                                                                                                    {!answer.proof_image_validated ? 'Rejected Image' : 'Image Preview'}
-                                                                                                </h6>
-                                                                                                <div 
-                                                                                                    className={`border rounded p-2 ${!answer.proof_image_validated ? 'border-danger' : ''}`}
+                                                                                        {/* Image preview if available */}
+                                                                                        {proofImageData[answer.id].url && (
+                                                                                            <div className="mt-3">
+                                                                                                <img 
+                                                                                                    src={proofImageData[answer.id].url} 
+                                                                                                    alt="Proof image"
+                                                                                                    className="img-fluid rounded"
                                                                                                     style={{ 
-                                                                                                        backgroundColor: !answer.proof_image_validated ? '#fff5f5' : '#f8f9fa',
-                                                                                                        cursor: 'pointer',
-                                                                                                        transition: 'all 0.2s ease',
-                                                                                                        opacity: 1,
-                                                                                                        position: 'relative'
+                                                                                                        maxHeight: '300px',
+                                                                                                        maxWidth: '100%',
+                                                                                                        objectFit: 'contain'
                                                                                                     }}
-                                                                                                    onMouseEnter={(e) => {
-                                                                                                        e.currentTarget.style.opacity = '0.85';
-                                                                                                        e.currentTarget.style.boxShadow = !answer.proof_image_validated ? '0 0 0 2px #dc3545' : '0 0 0 2px #0d6efd';
-                                                                                                    }}
-                                                                                                    onMouseLeave={(e) => {
-                                                                                                        e.currentTarget.style.opacity = '1';
-                                                                                                        e.currentTarget.style.boxShadow = 'none';
-                                                                                                    }}
-                                                                                                    onClick={() => setExpandedImageUrl(getProofImageUrl(answer))}
-                                                                                                >
-                                                                                                    {!answer.proof_image_validated && (
-                                                                                                        <div style={{
-                                                                                                            position: 'absolute', top: 8, right: 8,
-                                                                                                            backgroundColor: 'rgba(220,53,69,0.85)',
-                                                                                                            color: 'white', borderRadius: '0.25rem',
-                                                                                                            padding: '2px 8px', fontSize: '0.7rem',
-                                                                                                            fontWeight: 600, zIndex: 1
-                                                                                                        }}>
-                                                                                                            <i className="bi bi-x-circle me-1"></i>REJECTED
-                                                                                                        </div>
-                                                                                                    )}
-                                                                                                    <img 
-                                                                                                        src={getProofImageUrl(answer)} 
-                                                                                                        alt="Proof preview"
-                                                                                                        style={{
-                                                                                                            maxWidth: '100%',
-                                                                                                            maxHeight: '400px',
-                                                                                                            display: 'block',
-                                                                                                            margin: '0 auto',
-                                                                                                            borderRadius: '0.25rem',
-                                                                                                            objectFit: 'contain',
-                                                                                                            filter: !answer.proof_image_validated ? 'grayscale(40%) brightness(0.9)' : 'none'
-                                                                                                        }}
-                                                                                                    />
-                                                                                                </div>
-                                                                                                <small className={`d-block mt-2 ${!answer.proof_image_validated ? 'text-danger' : 'text-muted'}`}>
-                                                                                                    <i className="bi bi-zoom-in me-1"></i>
-                                                                                                    Click to view fullscreen
-                                                                                                </small>
+                                                                                                />
                                                                                             </div>
                                                                                         )}
+
+                                                                                        {/* Validation details */}
+                                                                                        <div className="mt-3 pt-3 border-top">
+                                                                                            <small className="text-muted">
+                                                                                                <div className="mb-1">
+                                                                                                    <strong>Validation Status:</strong> {proofImageData[answer.id].image_data?.validated ? 'Passed' : 'Failed'}
+                                                                                                </div>
+                                                                                                {proofImageData[answer.id].image_data?.validation_error && (
+                                                                                                    <div>
+                                                                                                        <strong>Error:</strong> {proofImageData[answer.id].image_data.validation_error}
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </small>
+                                                                                        </div>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <div className="alert alert-warning border-0 py-2 mb-0">
-                                                                                        <i className="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
-                                                                                        <small className="fw-semibold">No proof image uploaded for this "Yes" answer.</small>
+                                                                                    <div className="p-3 bg-light rounded text-muted text-center">
+                                                                                        <i className="bi bi-exclamation-circle me-2"></i>
+                                                                                        Unable to load image data
                                                                                     </div>
                                                                                 )}
                                                                             </div>
