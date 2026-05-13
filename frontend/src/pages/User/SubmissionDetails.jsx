@@ -148,6 +148,19 @@ const SubmissionDetails = () => {
         fetchSubmissionDetails();
     }, [id, user, navigate, fetchSubmissionDetails]);
 
+    const getRiskStats = React.useCallback(() => {
+        if (!submission?.answers || submission.answers.length === 0) return { high: 0, medium: 0, low: 0 };
+        
+        const stats = { high: 0, medium: 0, low: 0 };
+        submission.answers.forEach(answer => {
+            const riskLevel = answer.admin_risk_level || answer.system_risk_level || 'low';
+            if (stats.hasOwnProperty(riskLevel)) {
+                stats[riskLevel]++;
+            }
+        });
+        return stats;
+    }, [submission]);
+
     // Initialize charts when submission data is loaded
     useEffect(() => {
         if (submission && submission.answers) {
@@ -233,19 +246,6 @@ const SubmissionDetails = () => {
             setRenamingId(null);
         }
     };
-
-    const getRiskStats = React.useCallback(() => {
-        if (!submission?.answers || submission.answers.length === 0) return { high: 0, medium: 0, low: 0 };
-        
-        const stats = { high: 0, medium: 0, low: 0 };
-        submission.answers.forEach(answer => {
-            const riskLevel = answer.admin_risk_level || answer.system_risk_level || 'low';
-            if (stats.hasOwnProperty(riskLevel)) {
-                stats[riskLevel]++;
-            }
-        });
-        return stats;
-    }, [submission]);
 
     const getTimeAgo = (dateString) => {
         const now = new Date();
